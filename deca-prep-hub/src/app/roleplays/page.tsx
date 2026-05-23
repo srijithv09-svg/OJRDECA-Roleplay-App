@@ -1,8 +1,7 @@
 import { FiltersPanel } from "@/components/resources/filters-panel";
-import { RoleplayCard } from "@/components/resources/roleplay-card";
+import { ResourceGrid } from "@/components/resources/resource-grid";
 import { PageHeader } from "@/components/ui/page-header";
 import { SearchField } from "@/components/ui/search-field";
-import { roleplayResources } from "@/lib/placeholder-data";
 
 const roleplayFilters = [
   {
@@ -40,11 +39,12 @@ export default function RoleplaysPage() {
         <FiltersPanel filters={roleplayFilters} title="Filters" />
         <div className="space-y-4">
           <SearchField placeholder="Search roleplays, indicators, events..." />
-          <div className="grid gap-4 xl:grid-cols-2">
-            {roleplayResources.map((roleplay) => (
-              <RoleplayCard key={roleplay.id} roleplay={roleplay} />
-            ))}
-          </div>
+          <ResourceGrid
+            actionLabel="Preview PDF"
+            emptyLabel="roleplays"
+            href="/roleplays"
+            resourceType="roleplay"
+          />
         </div>
       </section>
     </>

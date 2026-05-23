@@ -1,8 +1,8 @@
-import { ExamCard } from "@/components/resources/exam-card";
 import { FiltersPanel } from "@/components/resources/filters-panel";
+import { ResourceGrid } from "@/components/resources/resource-grid";
 import { PageHeader } from "@/components/ui/page-header";
 import { SearchField } from "@/components/ui/search-field";
-import { clusters, examResources } from "@/lib/placeholder-data";
+import { clusters } from "@/lib/placeholder-data";
 
 export default function ExamsPage() {
   return (
@@ -24,11 +24,12 @@ export default function ExamsPage() {
         />
         <div className="space-y-4">
           <SearchField placeholder="Search exams, clusters, years..." />
-          <div className="grid gap-4 xl:grid-cols-2">
-            {examResources.map((exam) => (
-              <ExamCard exam={exam} key={exam.id} />
-            ))}
-          </div>
+          <ResourceGrid
+            actionLabel="View exam"
+            emptyLabel="exams"
+            href="/exams"
+            resourceType="exam"
+          />
         </div>
       </section>
     </>
