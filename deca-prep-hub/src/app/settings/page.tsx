@@ -38,7 +38,7 @@ export default function SettingsPage() {
           <div className="space-y-3">
             {[
               ["Google authentication", "Planned"],
-              ["Supabase profiles", "Planned"],
+              ["Supabase profiles", "UI ready"],
               ["Resource approvals", "UI ready"],
               ["OpenAI feedback", "Future"],
             ].map(([label, status]) => (

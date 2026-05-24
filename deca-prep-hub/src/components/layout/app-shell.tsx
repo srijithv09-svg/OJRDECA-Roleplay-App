@@ -6,17 +6,20 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { DOMAIN_ERROR_MESSAGE, isAllowedSchoolEmail } from "@/lib/auth";
+import { getCurrentProfile } from "@/lib/services/profiles";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import type { Profile } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const navItems: Array<{ label: string; href: string; icon: IconName }> = [
+const navItems: Array<{ label: string; href: string; icon: IconName; adminOnly?: boolean }> = [
   { label: "Dashboard", href: "/dashboard", icon: "dashboard" },
   { label: "Roleplays", href: "/roleplays", icon: "roleplays" },
   { label: "Exams", href: "/exams", icon: "exams" },
   { label: "Analytics", href: "/analytics", icon: "analytics" },
   { label: "Calendar", href: "/calendar", icon: "calendar" },
-  { label: "Upload", href: "/upload", icon: "upload" },
-  { label: "Resources", href: "/resources", icon: "exams" },
+  { label: "Upload", href: "/upload", icon: "upload", adminOnly: true },
+  { label: "Admin Resources", href: "/admin/resources", icon: "exams", adminOnly: true },
+  { label: "Admin Analytics", href: "/admin/analytics", icon: "analytics", adminOnly: true },
   { label: "Settings", href: "/settings", icon: "settings" },
 ];
 
@@ -33,6 +36,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const isLoginPage = pathname === "/login";
   const [authState, setAuthState] = useState<"checking" | "allowed" | "blocked">("checking");
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const visibleNavItems = navItems.filter((item) => !item.adminOnly || profile?.role === "admin");
 
   useEffect(() => {
     let isActive = true;
@@ -71,6 +76,26 @@ export function AppShell({ children }: { children: ReactNode }) {
         return;
       }
 
+      try {
+        const nextProfile = await getCurrentProfile();
+
+        if (!isActive) {
+          return;
+        }
+
+        setProfile(nextProfile);
+      } catch {
+        if (!isActive) {
+          return;
+        }
+
+        await supabase.auth.signOut();
+        setProfile(null);
+        setAuthState(isLoginPage ? "allowed" : "blocked");
+        router.replace("/login");
+        return;
+      }
+
       setAuthState("allowed");
 
       if (isLoginPage) {
@@ -88,6 +113,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       }
 
       if (!session) {
+        setProfile(null);
         setAuthState(isLoginPage ? "allowed" : "blocked");
 
         if (!isLoginPage) {
@@ -100,6 +126,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       if (!isAllowedSchoolEmail(session.user.email)) {
         void supabase.auth.signOut().finally(() => {
           if (isActive) {
+            setProfile(null);
             setAuthState(isLoginPage ? "allowed" : "blocked");
             router.replace("/login?error=domain");
           }
@@ -107,11 +134,28 @@ export function AppShell({ children }: { children: ReactNode }) {
         return;
       }
 
-      setAuthState("allowed");
+      void getCurrentProfile()
+        .then((nextProfile) => {
+          if (!isActive) {
+            return;
+          }
 
-      if (isLoginPage) {
-        router.replace("/dashboard");
-      }
+          setProfile(nextProfile);
+          setAuthState("allowed");
+
+          if (isLoginPage) {
+            router.replace("/dashboard");
+          }
+        })
+        .catch(() => {
+          void supabase.auth.signOut().finally(() => {
+            if (isActive) {
+              setProfile(null);
+              setAuthState(isLoginPage ? "allowed" : "blocked");
+              router.replace("/login");
+            }
+          });
+        });
     });
 
     return () => {
@@ -156,7 +200,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </Link>
 
         <nav className="flex flex-1 flex-col gap-1 px-3 py-2">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const active = isActive(pathname, item.href);
 
             return (
@@ -205,8 +249,10 @@ export function AppShell({ children }: { children: ReactNode }) {
 
             <div className="flex items-center gap-3">
               <div className="hidden text-right sm:block">
-                <p className="text-sm font-semibold text-slate-950">Student Member</p>
-                <p className="text-xs text-slate-500">Marketing Cluster</p>
+                <p className="text-sm font-semibold text-slate-950">
+                  {profile?.email ?? "Student Member"}
+                </p>
+                <p className="text-xs capitalize text-slate-500">{profile?.role ?? "student"}</p>
               </div>
               <div className="grid h-10 w-10 place-items-center rounded-lg border border-blue-100 bg-blue-50 text-sm font-bold text-blue-700">
                 SM
@@ -215,7 +261,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
 
           <nav className="flex gap-2 overflow-x-auto border-t border-slate-100 px-4 py-2 lg:hidden">
-            {navItems.map((item) => {
+            {visibleNavItems.map((item) => {
               const active = isActive(pathname, item.href);
 
               return (
