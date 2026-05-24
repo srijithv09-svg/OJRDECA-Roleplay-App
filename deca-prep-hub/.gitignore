@@ -13,6 +13,9 @@
 # testing
 /coverage
 
+#raw pfs
+import_data/
+
 # next.js
 /.next/
 /out/

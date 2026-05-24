@@ -27,12 +27,16 @@ export function ResourceGrid({
 
     async function loadResources() {
       try {
-        const nextResources = await ResourcesService.listByType(resourceType);
+        const nextResources =
+          resourceType === "roleplay"
+            ? await ResourcesService.listApprovedRoleplays()
+            : await ResourcesService.listApprovedExams();
 
         if (!isActive) {
           return;
         }
 
+        console.log(`[ResourceGrid] Renderable ${resourceType} resources:`, nextResources);
         setResources(nextResources);
         setError(null);
       } catch (caughtError) {
@@ -40,6 +44,7 @@ export function ResourceGrid({
           return;
         }
 
+        console.error(`[ResourceGrid] Failed to load ${resourceType} resources:`, caughtError);
         setError(
           caughtError instanceof Error
             ? caughtError.message

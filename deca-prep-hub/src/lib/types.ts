@@ -1,6 +1,6 @@
 export type ResourceType = "Roleplay" | "Exam";
 
-export type SupabaseResourceType = "roleplay" | "exam";
+export type SupabaseResourceType = "roleplay" | "exam" | "reference" | "unknown";
 
 export type Difficulty = "Intro" | "Standard" | "Advanced";
 
@@ -12,6 +12,7 @@ export type ResourceListItem = {
   instructional_area: string | null;
   year: number | null;
   resource_type: SupabaseResourceType;
+  approval_status: "approved" | string | null;
 };
 
 export type Database = {
