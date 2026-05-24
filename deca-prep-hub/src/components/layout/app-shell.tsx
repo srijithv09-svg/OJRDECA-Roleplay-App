@@ -1,9 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { Icon, type IconName } from "@/components/ui/icon";
+import { DOMAIN_ERROR_MESSAGE, isAllowedSchoolEmail } from "@/lib/auth";
+import { getSupabaseClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
 const navItems: Array<{ label: string; href: string; icon: IconName }> = [
@@ -13,6 +16,7 @@ const navItems: Array<{ label: string; href: string; icon: IconName }> = [
   { label: "Analytics", href: "/analytics", icon: "analytics" },
   { label: "Calendar", href: "/calendar", icon: "calendar" },
   { label: "Upload", href: "/upload", icon: "upload" },
+  { label: "Resources", href: "/resources", icon: "exams" },
   { label: "Settings", href: "/settings", icon: "settings" },
 ];
 
@@ -26,6 +30,115 @@ function isActive(pathname: string, href: string) {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const isLoginPage = pathname === "/login";
+  const [authState, setAuthState] = useState<"checking" | "allowed" | "blocked">("checking");
+
+  useEffect(() => {
+    let isActive = true;
+    const supabase = getSupabaseClient();
+
+    async function validateSession() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!isActive) {
+        return;
+      }
+
+      if (!session) {
+        setAuthState(isLoginPage ? "allowed" : "blocked");
+
+        if (!isLoginPage) {
+          router.replace("/login");
+        }
+
+        return;
+      }
+
+      const email = session.user.email;
+
+      if (!isAllowedSchoolEmail(email)) {
+        await supabase.auth.signOut();
+
+        if (!isActive) {
+          return;
+        }
+
+        setAuthState(isLoginPage ? "allowed" : "blocked");
+        router.replace(`/login?error=domain`);
+        return;
+      }
+
+      setAuthState("allowed");
+
+      if (isLoginPage) {
+        router.replace("/dashboard");
+      }
+    }
+
+    void validateSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!isActive) {
+        return;
+      }
+
+      if (!session) {
+        setAuthState(isLoginPage ? "allowed" : "blocked");
+
+        if (!isLoginPage) {
+          router.replace("/login");
+        }
+
+        return;
+      }
+
+      if (!isAllowedSchoolEmail(session.user.email)) {
+        void supabase.auth.signOut().finally(() => {
+          if (isActive) {
+            setAuthState(isLoginPage ? "allowed" : "blocked");
+            router.replace("/login?error=domain");
+          }
+        });
+        return;
+      }
+
+      setAuthState("allowed");
+
+      if (isLoginPage) {
+        router.replace("/dashboard");
+      }
+    });
+
+    return () => {
+      isActive = false;
+      subscription.unsubscribe();
+    };
+  }, [isLoginPage, router]);
+
+  if (isLoginPage) {
+    return <>{children}</>;
+  }
+
+  if (authState !== "allowed") {
+    return (
+      <div className="grid min-h-screen place-items-center bg-slate-50 px-4">
+        <div className="rounded-lg border border-slate-200 bg-white p-6 text-center shadow-sm shadow-slate-200/60">
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-700">
+            DECA Prep Hub
+          </p>
+          <h1 className="mt-3 text-xl font-bold text-slate-950">Checking access</h1>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            {authState === "blocked" ? DOMAIN_ERROR_MESSAGE : "Loading your session."}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">

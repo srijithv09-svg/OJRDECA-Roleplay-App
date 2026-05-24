@@ -10,12 +10,12 @@ export function ResourceGrid({
   resourceType,
   emptyLabel,
   actionLabel,
-  href,
+  approvalStatus = "approved",
 }: {
-  resourceType: SupabaseResourceType;
+  resourceType?: SupabaseResourceType;
   emptyLabel: string;
   actionLabel: string;
-  href: string;
+  approvalStatus?: string;
 }) {
   const [resources, setResources] = useState<ResourceListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -27,16 +27,15 @@ export function ResourceGrid({
 
     async function loadResources() {
       try {
-        const nextResources =
-          resourceType === "roleplay"
-            ? await ResourcesService.listApprovedRoleplays()
-            : await ResourcesService.listApprovedExams();
+        const nextResources = await ResourcesService.listResources({
+          approvalStatus,
+          resourceType,
+        });
 
         if (!isActive) {
           return;
         }
 
-        console.log(`[ResourceGrid] Renderable ${resourceType} resources:`, nextResources);
         setResources(nextResources);
         setError(null);
       } catch (caughtError) {
@@ -44,7 +43,6 @@ export function ResourceGrid({
           return;
         }
 
-        console.error(`[ResourceGrid] Failed to load ${resourceType} resources:`, caughtError);
         setError(
           caughtError instanceof Error
             ? caughtError.message
@@ -63,7 +61,7 @@ export function ResourceGrid({
     return () => {
       isActive = false;
     };
-  }, [reloadKey, resourceType]);
+  }, [approvalStatus, reloadKey, resourceType]);
 
   function retryLoad() {
     setIsLoading(true);
@@ -88,7 +86,6 @@ export function ResourceGrid({
       {resources.map((resource) => (
         <SupabaseResourceCard
           actionLabel={actionLabel}
-          href={href}
           key={resource.id}
           resource={resource}
         />

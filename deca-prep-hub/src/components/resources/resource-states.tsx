@@ -27,8 +27,8 @@ export function ResourceEmptyState({ label }: { label: string }) {
       <div>
         <h2 className="text-lg font-semibold text-slate-950">No {label} found</h2>
         <p className="mt-2 max-w-md text-sm leading-6 text-slate-600">
-          Approved resources from Supabase will appear here once they are added to
-          the resources table.
+          Resources from Supabase will appear here once matching rows are available
+          in the resources table.
         </p>
       </div>
     </Card>

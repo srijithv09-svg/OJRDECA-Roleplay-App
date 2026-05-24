@@ -42,7 +42,6 @@ export default function RoleplaysPage() {
           <ResourceGrid
             actionLabel="Preview PDF"
             emptyLabel="roleplays"
-            href="/roleplays"
             resourceType="roleplay"
           />
         </div>

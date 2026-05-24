@@ -6,6 +6,11 @@ import path from "node:path";
 
 type ResourceType = "roleplay" | "exam" | "reference" | "unknown";
 
+type ClassificationResult = {
+  resourceType: ResourceType;
+  reason: string;
+};
+
 type ImportMetadata = {
   title: string;
   resource_type: ResourceType;
@@ -35,25 +40,38 @@ type Summary = {
   failed: number;
 };
 
-const RAW_PDFS_DIR = path.resolve(process.cwd(), "import_data", "raw_pdfs");
+const RAW_PDFS_DIR = path.resolve(process.cwd(), process.env.IMPORT_PDF_DIR ?? "import_data/raw_pdfs");
 const STORAGE_BUCKET = "resources";
 const MAX_DETECTED_TEXT_LENGTH = 12000;
+const DRY_RUN = process.env.DRY_RUN?.toLowerCase() === "true";
 
 const eventAcronyms: Record<string, string> = {
+  AAM: "Apparel and Accessories Marketing",
+  ACT: "Accounting Applications Series",
+  ASM: "Automotive Services Marketing",
   BFS: "Business Finance Series",
+  BLTDM: "Business Law and Ethics Team Decision Making",
+  BSM: "Business Services Marketing",
+  BTDM: "Buying and Merchandising Team Decision Making",
   EBG: "Entrepreneurship Business Growth",
   EFB: "Entrepreneurship Franchise Business",
   EIP: "Entrepreneurship Innovation Plan",
   ENT: "Entrepreneurship Series",
   ESB: "Entrepreneurship Start-Up Business Plan",
+  FMS: "Food Marketing Series",
   FTDM: "Financial Team Decision Making",
   HLM: "Hotel and Lodging Management",
+  HRM: "Human Resources Management",
   HTDM: "Hospitality Services Team Decision Making",
   MCS: "Marketing Communications Series",
+  MTDM: "Marketing Management Team Decision Making",
   PMK: "Principles of Marketing",
   QSRM: "Quick Serve Restaurant Management",
   RFSM: "Restaurant and Food Service Management",
+  RMS: "Retail Merchandising Series",
   SEM: "Sports and Entertainment Marketing",
+  STDM: "Sports and Entertainment Marketing Team Decision Making",
+  TTDM: "Travel and Tourism Team Decision Making",
 };
 
 const clusterAliases: Array<[RegExp, string]> = [
@@ -169,26 +187,71 @@ function titleFromFilename(filename: string) {
   return normalizeText(withoutId);
 }
 
-function classifyResource(searchText: string): ResourceType {
-  if (/performance[-_\s]?indicators/i.test(searchText) || /\bblueprint\b/i.test(searchText)) {
-    return "reference";
+function toMatchText(value: string) {
+  return value.replace(/\\/g, "/");
+}
+
+function classifyResource(filePath: string): ClassificationResult {
+  const filename = path.basename(filePath);
+  const relativePath = toMatchText(path.relative(RAW_PDFS_DIR, filePath));
+  const filenameText = toMatchText(filename);
+  const pathText = toMatchText(relativePath);
+  const normalizedPath = normalizeText(pathText).toLowerCase();
+  const acronymPattern = new RegExp(`(?:^|[^A-Za-z0-9])(${Object.keys(eventAcronyms).join("|")})(?:[^A-Za-z0-9]|$)`, "i");
+
+  if (
+    /performance[-_\s]?indicators/i.test(filenameText) ||
+    /exam[-_\s]?blueprint/i.test(filenameText) ||
+    /\bblueprint\b/i.test(filenameText)
+  ) {
+    return {
+      reason: "filename contains performance indicators or blueprint",
+      resourceType: "reference",
+    };
   }
 
-  if (/\bcluster sample exam\b/i.test(searchText) || /\bexam\b/i.test(searchText)) {
-    return "exam";
+  if (
+    /\bexam\b/i.test(filenameText) ||
+    normalizedPath.includes("cluster sample exam") ||
+    normalizedPath.includes("sample exam") ||
+    /cluster[_\s-]?sample[_\s-]?exam/i.test(pathText) ||
+    /sample[_\s-]?exam/i.test(pathText) ||
+    /HS[_\s-]?Finance[_\s-]?Cluster[_\s-]?Sample[_\s-]?Exam/i.test(pathText) ||
+    /C25[_\s-]?HS[_\s-]?FIN[_\s-]?exam/i.test(pathText)
+  ) {
+    return {
+      reason: "filename or path contains exam pattern",
+      resourceType: "exam",
+    };
   }
 
-  if (/\b(district[_\s-]?event|icdc|preliminary)\b/i.test(searchText)) {
-    return "roleplay";
+  if (/(^|\/)Roleplays(\/|$)/i.test(pathText)) {
+    return {
+      reason: "path includes /Roleplays/",
+      resourceType: "roleplay",
+    };
   }
 
-  const acronymPattern = new RegExp(`\\b(${Object.keys(eventAcronyms).join("|")})\\b`, "i");
-
-  if (acronymPattern.test(searchText)) {
-    return "roleplay";
+  if (/\b(District_Event|District Event|ICDC|Preliminary)\b/i.test(pathText)) {
+    return {
+      reason: "filename or path contains roleplay event marker",
+      resourceType: "roleplay",
+    };
   }
 
-  return "unknown";
+  const acronymMatch = pathText.match(acronymPattern);
+
+  if (acronymMatch) {
+    return {
+      reason: `filename or path contains event acronym ${acronymMatch[1].toUpperCase()}`,
+      resourceType: "roleplay",
+    };
+  }
+
+  return {
+    reason: "no filename or path classification rule matched",
+    resourceType: "unknown",
+  };
 }
 
 function detectYear(searchText: string): number | null {
@@ -308,7 +371,11 @@ async function extractPdfText(filePath: string) {
   }
 }
 
-function createMetadata(filePath: string, text: string): ImportMetadata {
+function createMetadata(
+  filePath: string,
+  text: string,
+  classification: ClassificationResult,
+): ImportMetadata {
   const originalFilename = path.basename(filePath);
   const relativePath = path.relative(RAW_PDFS_DIR, filePath);
   const folderText = path.dirname(relativePath).split(path.sep).join(" ");
@@ -316,7 +383,7 @@ function createMetadata(filePath: string, text: string): ImportMetadata {
 
   return {
     title: titleFromFilename(originalFilename),
-    resource_type: classifyResource(searchableText),
+    resource_type: classification.resourceType,
     cluster: detectCluster(searchableText),
     event_name: detectEventName(searchableText),
     instructional_area: detectInstructionalArea(searchableText),
@@ -359,33 +426,7 @@ async function main() {
     throw new Error(`Raw PDF directory not found: ${RAW_PDFS_DIR}`);
   }
 
-  const { supabaseKey, supabaseUrl } = getSupabaseCredentials();
-  const supabase = createClient(supabaseUrl, supabaseKey, {
-    auth: { persistSession: false },
-  });
   const pdfFiles = await scanPdfFiles(RAW_PDFS_DIR);
-
-  const { data: bucket, error: getBucketError } =
-    await supabase.storage.getBucket(STORAGE_BUCKET);
-
-  if (!bucket) {
-    if (getBucketError) {
-      console.warn(
-        `Storage bucket lookup failed for "${STORAGE_BUCKET}": ${getBucketError.message}. Attempting to create it.`,
-      );
-    }
-
-    const { error: createBucketError } = await supabase.storage.createBucket(STORAGE_BUCKET, {
-      allowedMimeTypes: ["application/pdf"],
-      public: false,
-    });
-
-    if (createBucketError) {
-      throw new Error(
-        `Storage bucket "${STORAGE_BUCKET}" is missing and could not be created: ${createBucketError.message}`,
-      );
-    }
-  }
 
   const summary: Summary = {
     imported: 0,
@@ -398,11 +439,67 @@ async function main() {
   };
 
   console.log(`Found ${pdfFiles.length} PDF file(s) in ${RAW_PDFS_DIR}`);
+  console.log(`Dry run: ${DRY_RUN ? "true" : "false"}`);
+
+  const supabase = DRY_RUN
+    ? null
+    : (() => {
+        const { supabaseKey, supabaseUrl } = getSupabaseCredentials();
+        return createClient(supabaseUrl, supabaseKey, {
+          auth: { persistSession: false },
+        });
+      })();
+
+  if (supabase) {
+    const { data: bucket, error: getBucketError } =
+      await supabase.storage.getBucket(STORAGE_BUCKET);
+
+    if (!bucket) {
+      if (getBucketError) {
+        console.warn(
+          `Storage bucket lookup failed for "${STORAGE_BUCKET}": ${getBucketError.message}. Attempting to create it.`,
+        );
+      }
+
+      const { error: createBucketError } = await supabase.storage.createBucket(STORAGE_BUCKET, {
+        allowedMimeTypes: ["application/pdf"],
+        public: false,
+      });
+
+      if (createBucketError) {
+        throw new Error(
+          `Storage bucket "${STORAGE_BUCKET}" is missing and could not be created: ${createBucketError.message}`,
+        );
+      }
+    }
+  }
 
   for (const filePath of pdfFiles) {
     const originalFilename = path.basename(filePath);
+    const relativePath = path.relative(process.cwd(), filePath);
+    const classification = classifyResource(filePath);
+
+    console.log(
+      [
+        `File: ${originalFilename}`,
+        `Path: ${relativePath}`,
+        `Classification: ${classification.resourceType}`,
+        `Reason: ${classification.reason}`,
+      ].join("\n"),
+    );
 
     try {
+      if (DRY_RUN) {
+        summary.imported += 1;
+        summary[counterKey(classification.resourceType)] += 1;
+        console.log("Dry run: skipped duplicate check, upload, and insert.\n");
+        continue;
+      }
+
+      if (!supabase) {
+        throw new Error("Supabase client was not initialized.");
+      }
+
       const { data: duplicate, error: duplicateError } = await supabase
         .from("resources")
         .select("id")
@@ -420,7 +517,7 @@ async function main() {
       }
 
       const text = await extractPdfText(filePath);
-      const metadata = createMetadata(filePath, text);
+      const metadata = createMetadata(filePath, text, classification);
       const storagePath = storagePathFor(metadata);
       const fileBuffer = await readFile(filePath);
 

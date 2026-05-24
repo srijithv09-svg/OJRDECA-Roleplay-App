@@ -12,12 +12,6 @@ export function getSupabaseClient() {
   }
 
   if (!browserClient) {
-    console.log("[Supabase] Creating browser client", {
-      hasAnonKey: Boolean(supabaseAnonKey),
-      hasUrl: Boolean(supabaseUrl),
-      url: supabaseUrl,
-    });
-
     browserClient = createClient<Database>(supabaseUrl, supabaseAnonKey);
   }
 

@@ -1,0 +1,14 @@
+[browser] The final argument passed to useEffect changed size between renders. The order and size of this array must remain constant.
+
+Previous: [0, exam]
+Incoming: [approved, 0, exam] 
+    at ResourceGrid (src/components/resources/resource-grid.tsx:25:12)
+    at Set.forEach (<anonymous>)
+  23 |   const [reloadKey, setReloadKey] = useState(0);
+  24 |
+> 25 |   useEffect(() => {
+     |            ^
+  26 |     let isActive = true;
+  27 |
+  28 |     async function loadResources() { (src/components/resources/resource-grid.tsx:25:12)
+[browser] GoTrueClient@sb-tyithayzyvssodazqxzq-auth-token:1 (2.106.1) 2026-05-24T02:42:40.153Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key. (file://C:/Users/vinay/OneDrive/Desktop/OJR-DECA-RP-APP/deca-prep-hub/.next/dev/static/chunks/node_modules_0qloa2o._.js:19090:21)

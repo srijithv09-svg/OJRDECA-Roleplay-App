@@ -1,6 +1,7 @@
 export type ResourceType = "Roleplay" | "Exam";
 
 export type SupabaseResourceType = "roleplay" | "exam" | "reference" | "unknown";
+export type ResourceApprovalStatus = "approved" | "pending" | string;
 
 export type Difficulty = "Intro" | "Standard" | "Advanced";
 
@@ -12,7 +13,13 @@ export type ResourceListItem = {
   instructional_area: string | null;
   year: number | null;
   resource_type: SupabaseResourceType;
-  approval_status: "approved" | string | null;
+  approval_status: ResourceApprovalStatus | null;
+  original_filename: string | null;
+  performance_indicators: string[] | null;
+  confidence_score: number | null;
+  import_notes: string | null;
+  file_path: string | null;
+  storage_path: string | null;
 };
 
 export type Database = {

@@ -27,7 +27,6 @@ export default function ExamsPage() {
           <ResourceGrid
             actionLabel="View exam"
             emptyLabel="exams"
-            href="/exams"
             resourceType="exam"
           />
         </div>
