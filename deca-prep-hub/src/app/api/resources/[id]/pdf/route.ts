@@ -53,10 +53,21 @@ async function requireAdmin(request: Request) {
   return { error: null, userId };
 }
 
-export async function GET(request: Request, context: RouteContext) {
-  const { error: authError } = await requireUser(request);
+async function isAdminUser(userId: string) {
+  const supabase = getSupabaseAdminClient();
+  const { data: profile, error } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", userId)
+    .single();
 
-  if (authError) {
+  return !error && profile?.role === "admin";
+}
+
+export async function GET(request: Request, context: RouteContext) {
+  const { error: authError, userId } = await requireUser(request);
+
+  if (authError || !userId) {
     return NextResponse.json({ error: authError }, { status: 401 });
   }
 
@@ -65,7 +76,7 @@ export async function GET(request: Request, context: RouteContext) {
     const supabase = getSupabaseAdminClient();
     const { data: resource, error } = await supabase
       .from("resources")
-      .select("id,storage_path")
+      .select("id,approval_status,storage_path")
       .eq("id", id)
       .single();
 
@@ -73,9 +84,16 @@ export async function GET(request: Request, context: RouteContext) {
       return NextResponse.json({ error: error.message }, { status: 404 });
     }
 
-    const signedUrl = await createStoredResourcePdfSignedUrl(supabase, resource);
+    if (resource.approval_status !== "approved" && !(await isAdminUser(userId))) {
+      return NextResponse.json(
+        { error: "This resource is not approved for student access." },
+        { status: 403 },
+      );
+    }
 
-    return NextResponse.json(signedUrl);
+    const { signedUrl } = await createStoredResourcePdfSignedUrl(supabase, resource);
+
+    return NextResponse.json({ signedUrl });
   } catch (caughtError) {
     return NextResponse.json(
       {

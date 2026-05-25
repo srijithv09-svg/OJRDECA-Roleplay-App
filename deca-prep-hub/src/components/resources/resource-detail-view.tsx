@@ -6,9 +6,7 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
-import { getCurrentProfile } from "@/lib/services/profiles";
-import { ResourcesService } from "@/lib/services/resources";
-import type { Profile, ResourceListItem } from "@/lib/types";
+import { ResourcesService, type PublicResourceListItem } from "@/lib/services/resources";
 import { ResourceEmptyState, ResourceErrorState, ResourceLoadingState } from "./resource-states";
 
 function formatValue(value: number | string | null | undefined) {
@@ -19,17 +17,38 @@ function formatValue(value: number | string | null | undefined) {
   return String(value);
 }
 
+function normalizeFilenameValue(value: string) {
+  return value
+    .replace(/^[a-f0-9]{16,}[_-]/i, "")
+    .replace(/\.pdf$/i, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function getUsefulOriginalFilename(resource: PublicResourceListItem) {
+  if (!resource.original_filename) {
+    return null;
+  }
+
+  const normalizedFilename = normalizeFilenameValue(resource.original_filename);
+  const normalizedTitle = normalizeFilenameValue(resource.title);
+
+  if (!normalizedFilename || normalizedFilename === normalizedTitle) {
+    return null;
+  }
+
+  return resource.original_filename;
+}
+
 export function ResourceDetailView() {
   const params = useParams<{ id?: string | string[] }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [resource, setResource] = useState<ResourceListItem | null>(null);
+  const [resource, setResource] = useState<PublicResourceListItem | null>(null);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
-  const [signedUrlPath, setSignedUrlPath] = useState<string | null>(null);
   const [pdfError, setPdfError] = useState<string | null>(null);
-  const [repairMessage, setRepairMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isRepairing, setIsRepairing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -42,26 +61,22 @@ export function ResourceDetailView() {
           throw new Error("Missing resource id.");
         }
 
-        const [nextProfile, nextResource] = await Promise.all([
-          getCurrentProfile(),
-          ResourcesService.getResourceById(id),
-        ]);
+        const nextResource = await ResourcesService.getApprovedPublicResourceById(id);
 
         if (!isActive) {
           return;
         }
 
-        setProfile(nextProfile);
-        setResource(nextResource);
-        setError(null);
-        setRepairMessage(null);
-
         if (!nextResource) {
+          setResource(null);
           setSignedUrl(null);
-          setSignedUrlPath(null);
           setPdfError(null);
+          setError(null);
           return;
         }
+
+        setResource(nextResource);
+        setError(null);
 
         try {
           const pdfLink = await ResourcesService.getResourcePdfLink(nextResource.id);
@@ -71,7 +86,6 @@ export function ResourceDetailView() {
           }
 
           setSignedUrl(pdfLink.signedUrl);
-          setSignedUrlPath(pdfLink.storagePath);
           setPdfError(null);
         } catch (caughtError) {
           if (!isActive) {
@@ -79,7 +93,6 @@ export function ResourceDetailView() {
           }
 
           setSignedUrl(null);
-          setSignedUrlPath(nextResource.storage_path);
           setPdfError(
             caughtError instanceof Error
               ? caughtError.message
@@ -98,9 +111,7 @@ export function ResourceDetailView() {
         );
         setResource(null);
         setSignedUrl(null);
-        setSignedUrlPath(null);
         setPdfError(null);
-        setRepairMessage(null);
       } finally {
         if (isActive) {
           setIsLoading(false);
@@ -119,45 +130,7 @@ export function ResourceDetailView() {
     setIsLoading(true);
     setError(null);
     setPdfError(null);
-    setRepairMessage(null);
     setReloadKey((currentKey) => currentKey + 1);
-  }
-
-  async function repairPdfPath() {
-    if (!resource) {
-      return;
-    }
-
-    setIsRepairing(true);
-    setPdfError(null);
-    setRepairMessage(null);
-
-    try {
-      const result = await ResourcesService.repairResourcePdfPath(resource.id);
-
-      setSignedUrl(result.signedUrl);
-      setSignedUrlPath(result.storagePath);
-      setResource((current) =>
-        current
-          ? {
-              ...current,
-              file_path: result.storagePath,
-              storage_path: result.storagePath,
-            }
-          : current,
-      );
-      setRepairMessage(
-        result.updated
-          ? `PDF path repaired: ${result.storagePath}`
-          : `PDF path already correct: ${result.storagePath}`,
-      );
-    } catch (caughtError) {
-      setPdfError(
-        caughtError instanceof Error ? caughtError.message : "Unable to repair the PDF path.",
-      );
-    } finally {
-      setIsRepairing(false);
-    }
   }
 
   if (isLoading) {
@@ -169,24 +142,19 @@ export function ResourceDetailView() {
   }
 
   if (!resource) {
-    return <ResourceEmptyState label="resource" />;
+    return <ResourceEmptyState label="approved resource" />;
   }
 
-  const isAdmin = profile?.role === "admin";
   const hasReviewedIndicators =
     resource.performance_indicators_reviewed && resource.performance_indicators?.length;
+  const usefulOriginalFilename = getUsefulOriginalFilename(resource);
   const metadata = [
-    ["Resource id", resource.id],
     ["Resource type", resource.resource_type],
     ["Cluster", resource.cluster],
     ["Event", resource.event_name],
     ["Instructional area", resource.instructional_area],
     ["Year", resource.year],
-    ["Original filename", resource.original_filename],
-    ["Storage path", resource.storage_path],
-    ["Signed path", signedUrlPath],
-    ["Confidence score", resource.confidence_score],
-    ["Import notes", resource.import_notes],
+    ...(usefulOriginalFilename ? ([["Original filename", usefulOriginalFilename]] as const) : []),
   ];
 
   return (
@@ -196,20 +164,10 @@ export function ResourceDetailView() {
           <>
             <Link
               className="inline-flex min-h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
-              href="/resources"
+              href={resource.resource_type === "exam" ? "/exams" : "/roleplays"}
             >
-              Review queue
+              Back to library
             </Link>
-            {isAdmin ? (
-              <button
-                className="inline-flex min-h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700 disabled:cursor-not-allowed disabled:text-slate-400"
-                disabled={isRepairing}
-                onClick={repairPdfPath}
-                type="button"
-              >
-                {isRepairing ? "Repairing..." : "Repair PDF Path"}
-              </button>
-            ) : null}
             {signedUrl ? (
               <a
                 className="inline-flex min-h-10 items-center justify-center rounded-md bg-blue-700 px-3 text-sm font-semibold text-white transition hover:bg-blue-800"
@@ -220,9 +178,25 @@ export function ResourceDetailView() {
                 Open / Download PDF
               </a>
             ) : null}
+            {resource.resource_type === "roleplay" ? (
+              <button
+                className="inline-flex min-h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700"
+                type="button"
+              >
+                Practice roleplay
+              </button>
+            ) : null}
+            {resource.resource_type === "exam" ? (
+              <button
+                className="inline-flex min-h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700"
+                type="button"
+              >
+                Take exam
+              </button>
+            ) : null}
           </>
         }
-        description="Review imported metadata and open the stored PDF from Supabase Storage."
+        description="Review the resource details and open the approved PDF."
         eyebrow="Resource detail"
         title={resource.title}
       />
@@ -233,9 +207,7 @@ export function ResourceDetailView() {
           <div className="grid gap-4">
             <div className="flex flex-wrap gap-2">
               <Badge tone="blue">{resource.resource_type}</Badge>
-              <Badge tone={resource.approval_status === "pending" ? "amber" : "green"}>
-                {resource.approval_status ?? "No status"}
-              </Badge>
+              <Badge>{resource.year ?? "Year TBD"}</Badge>
             </div>
 
             <dl className="grid gap-3 text-sm">
@@ -255,8 +227,8 @@ export function ResourceDetailView() {
             {signedUrl ? (
               <div className="rounded-lg border border-blue-100 bg-blue-50 p-5">
                 <p className="text-sm font-semibold text-blue-950">PDF link ready</p>
-                <p className="mt-2 break-words text-sm leading-6 text-blue-800">
-                  {signedUrlPath}
+                <p className="mt-2 text-sm leading-6 text-blue-800">
+                  Open the approved resource in a new tab to view or download the PDF.
                 </p>
                 <a
                   className="mt-5 inline-flex min-h-14 w-full items-center justify-center rounded-md bg-blue-700 px-5 text-base font-semibold text-white transition hover:bg-blue-800 sm:w-auto"
@@ -275,11 +247,6 @@ export function ResourceDetailView() {
                 </p>
               </div>
             )}
-            {repairMessage ? (
-              <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-                {repairMessage}
-              </p>
-            ) : null}
           </Card>
 
           <Card>

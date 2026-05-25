@@ -9,10 +9,17 @@ import type {
 const resourceColumns =
   "id,title,cluster,event_name,instructional_area,year,resource_type,approval_status,original_filename,performance_indicators,performance_indicators_reviewed,confidence_score,import_notes,file_path,storage_path";
 const resourceColumnsWithCreatedAt = `${resourceColumns},created_at`;
+const publicResourceColumns =
+  "id,title,cluster,event_name,instructional_area,year,resource_type,approval_status,original_filename,performance_indicators,performance_indicators_reviewed";
+
+export type PublicResourceListItem = Omit<
+  ResourceListItem,
+  "confidence_score" | "import_notes" | "file_path" | "storage_path"
+> &
+  Partial<Pick<ResourceListItem, "confidence_score" | "import_notes" | "file_path" | "storage_path">>;
 
 export type ResourcePdfLinkResult = {
   signedUrl: string;
-  storagePath: string;
 };
 
 export type ResourcePdfRepairResult = {
@@ -121,6 +128,31 @@ export const ResourcesService = {
     });
   },
 
+  async listApprovedPublicResources({
+    resourceType,
+  }: {
+    resourceType: SupabaseResourceType;
+  }): Promise<PublicResourceListItem[]> {
+    const supabase = getSupabaseClient();
+
+    const { data, error } = await withDebugTimeout(
+      supabase
+        .from("resources")
+        .select(publicResourceColumns)
+        .eq("approval_status", "approved")
+        .eq("resource_type", resourceType)
+        .order("year", { ascending: false })
+        .order("title", { ascending: true }),
+      "Approved public resources",
+    );
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return data ?? [];
+  },
+
   async listRecentApprovedResources(limit = 6): Promise<ResourceListItem[]> {
     const supabase = getSupabaseClient();
 
@@ -153,6 +185,26 @@ export const ResourcesService = {
     const { data, error } = await withDebugTimeout(
       supabase.from("resources").select(resourceColumns).eq("id", id).maybeSingle(),
       "Resource detail",
+    );
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return data;
+  },
+
+  async getApprovedPublicResourceById(id: string): Promise<PublicResourceListItem | null> {
+    const supabase = getSupabaseClient();
+
+    const { data, error } = await withDebugTimeout(
+      supabase
+        .from("resources")
+        .select(publicResourceColumns)
+        .eq("id", id)
+        .eq("approval_status", "approved")
+        .maybeSingle(),
+      "Approved resource detail",
     );
 
     if (error) {
