@@ -218,6 +218,29 @@ export const ResourcesService = {
     return data ?? [];
   },
 
+  async bulkReject(ids: string[]): Promise<ResourceListItem[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+
+    const supabase = getSupabaseClient();
+
+    const { data, error } = await withDebugTimeout(
+      supabase
+        .from("resources")
+        .update({ approval_status: "rejected" })
+        .in("id", ids)
+        .select(resourceColumns),
+      "Bulk reject resources",
+    );
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return data ?? [];
+  },
+
   async updateMetadata(id: string, metadata: ResourceMetadataUpdate): Promise<ResourceListItem> {
     const supabase = getSupabaseClient();
 

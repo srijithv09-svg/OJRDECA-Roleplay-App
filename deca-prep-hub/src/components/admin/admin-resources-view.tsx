@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardHeader } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { ResourceErrorState, ResourceLoadingState } from "@/components/resources/resource-states";
 import { getCurrentProfile } from "@/lib/services/profiles";
 import { ResourcesService } from "@/lib/services/resources";
 import type {
   Profile,
+  ResourceApprovalStatus,
   ResourceListItem,
   ResourceMetadataUpdate,
   SupabaseResourceType,
@@ -26,6 +27,11 @@ type MetadataDraft = {
 };
 
 type MetadataTextField = "cluster" | "event_name" | "instructional_area" | "year";
+type ApprovalStatusFilter = "all" | "approved" | "pending" | "rejected";
+type SelectOption = {
+  label: string;
+  value: string;
+};
 
 const metadataTextFields: Array<[MetadataTextField, string]> = [
   ["cluster", "Cluster"],
@@ -34,7 +40,9 @@ const metadataTextFields: Array<[MetadataTextField, string]> = [
   ["year", "Year"],
 ];
 
-const resourceTypeOptions: SupabaseResourceType[] = [
+const approvalStatusOptions: ApprovalStatusFilter[] = ["pending", "approved", "rejected", "all"];
+const resourceTypeOptions: Array<"all" | SupabaseResourceType> = [
+  "all",
   "roleplay",
   "exam",
   "reference",
@@ -72,7 +80,7 @@ function toMetadataUpdate(draft: MetadataDraft): ResourceMetadataUpdate {
   };
 }
 
-function formatValue(value: number | string | null | undefined) {
+function formatValue(value: boolean | number | string | null | undefined) {
   if (value === null || value === undefined || value === "") {
     return "Not available";
   }
@@ -80,17 +88,55 @@ function formatValue(value: number | string | null | undefined) {
   return String(value);
 }
 
+function getStatusTone(status: ResourceApprovalStatus | null) {
+  if (status === "approved") {
+    return "green";
+  }
+
+  if (status === "rejected") {
+    return "slate";
+  }
+
+  return "amber";
+}
+
+function optionize(values: Array<number | string | null | undefined>): SelectOption[] {
+  return Array.from(new Set(values.filter(Boolean).map(String)))
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+    .map((value) => ({ label: value, value }));
+}
+
+function searchableText(resource: ResourceListItem) {
+  return [
+    resource.title,
+    resource.original_filename,
+    resource.event_name,
+    resource.cluster,
+    resource.instructional_area,
+    resource.resource_type,
+    resource.year,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
 export function AdminResourcesView() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [resources, setResources] = useState<ResourceListItem[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingResource, setEditingResource] = useState<ResourceListItem | null>(null);
   const [draft, setDraft] = useState<MetadataDraft | null>(null);
   const [search, setSearch] = useState("");
+  const [approvalStatusFilter, setApprovalStatusFilter] =
+    useState<ApprovalStatusFilter>("pending");
   const [resourceTypeFilter, setResourceTypeFilter] = useState<"all" | SupabaseResourceType>(
     "all",
   );
   const [clusterFilter, setClusterFilter] = useState("all");
+  const [instructionalAreaFilter, setInstructionalAreaFilter] = useState("all");
+  const [yearFilter, setYearFilter] = useState("all");
+  const [openingPdfId, setOpeningPdfId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -115,9 +161,7 @@ export function AdminResourcesView() {
           return;
         }
 
-        const nextResources = await ResourcesService.listResources({
-          approvalStatus: "pending",
-        });
+        const nextResources = await ResourcesService.listResources();
 
         if (!isActive) {
           return;
@@ -125,7 +169,7 @@ export function AdminResourcesView() {
 
         setResources(nextResources);
         setSelectedIds(new Set());
-        setEditingId(null);
+        setEditingResource(null);
         setDraft(null);
         setError(null);
       } catch (caughtError) {
@@ -136,7 +180,7 @@ export function AdminResourcesView() {
         setError(
           caughtError instanceof Error
             ? caughtError.message
-            : "Unable to load pending resources.",
+            : "Unable to load resources.",
         );
       } finally {
         if (isActive) {
@@ -152,11 +196,16 @@ export function AdminResourcesView() {
     };
   }, [reloadKey]);
 
-  const clusters = useMemo(
-    () =>
-      Array.from(
-        new Set(resources.map((resource) => resource.cluster).filter(Boolean) as string[]),
-      ).sort((a, b) => a.localeCompare(b)),
+  const clusterOptions = useMemo(
+    () => optionize(resources.map((resource) => resource.cluster)),
+    [resources],
+  );
+  const instructionalAreaOptions = useMemo(
+    () => optionize(resources.map((resource) => resource.instructional_area)),
+    [resources],
+  );
+  const yearOptions = useMemo(
+    () => optionize(resources.map((resource) => resource.year)),
     [resources],
   );
 
@@ -164,32 +213,54 @@ export function AdminResourcesView() {
     const normalizedSearch = search.trim().toLowerCase();
 
     return resources.filter((resource) => {
+      const matchesSearch =
+        !normalizedSearch || searchableText(resource).includes(normalizedSearch);
+      const matchesStatus =
+        approvalStatusFilter === "all" || resource.approval_status === approvalStatusFilter;
       const matchesType =
         resourceTypeFilter === "all" || resource.resource_type === resourceTypeFilter;
       const matchesCluster = clusterFilter === "all" || resource.cluster === clusterFilter;
-      const searchable = [
-        resource.title,
-        resource.resource_type,
-        resource.cluster,
-        resource.event_name,
-        resource.instructional_area,
-        resource.original_filename,
-        resource.import_notes,
-        resource.storage_path,
-        ...(resource.performance_indicators ?? []),
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
+      const matchesInstructionalArea =
+        instructionalAreaFilter === "all" ||
+        resource.instructional_area === instructionalAreaFilter;
+      const matchesYear = yearFilter === "all" || String(resource.year) === yearFilter;
 
-      return matchesType && matchesCluster && searchable.includes(normalizedSearch);
+      return (
+        matchesSearch &&
+        matchesStatus &&
+        matchesType &&
+        matchesCluster &&
+        matchesInstructionalArea &&
+        matchesYear
+      );
     });
-  }, [clusterFilter, resourceTypeFilter, resources, search]);
+  }, [
+    approvalStatusFilter,
+    clusterFilter,
+    instructionalAreaFilter,
+    resourceTypeFilter,
+    resources,
+    search,
+    yearFilter,
+  ]);
+
+  const selectedVisibleIds = useMemo(
+    () => filteredResources.filter((resource) => selectedIds.has(resource.id)).map((resource) => resource.id),
+    [filteredResources, selectedIds],
+  );
 
   function retryLoad() {
     setIsLoading(true);
     setError(null);
     setReloadKey((currentKey) => currentKey + 1);
+  }
+
+  function patchResources(updatedResources: ResourceListItem[]) {
+    const updatesById = new Map(updatedResources.map((resource) => [resource.id, resource]));
+
+    setResources((current) =>
+      current.map((resource) => updatesById.get(resource.id) ?? resource),
+    );
   }
 
   function toggleSelected(id: string) {
@@ -206,9 +277,46 @@ export function AdminResourcesView() {
     });
   }
 
+  function toggleAllVisible() {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      const allVisibleSelected =
+        filteredResources.length > 0 && filteredResources.every((resource) => next.has(resource.id));
+
+      for (const resource of filteredResources) {
+        if (allVisibleSelected) {
+          next.delete(resource.id);
+        } else {
+          next.add(resource.id);
+        }
+      }
+
+      return next;
+    });
+  }
+
   function startEditing(resource: ResourceListItem) {
-    setEditingId(resource.id);
+    setEditingResource(resource);
     setDraft(toDraft(resource));
+  }
+
+  function closeEditor() {
+    setEditingResource(null);
+    setDraft(null);
+  }
+
+  async function openPdf(resource: ResourceListItem) {
+    setOpeningPdfId(resource.id);
+    setError(null);
+
+    try {
+      const pdfLink = await ResourcesService.getResourcePdfLink(resource.id);
+      window.open(pdfLink.signedUrl, "_blank", "noopener,noreferrer");
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : "Unable to open PDF.");
+    } finally {
+      setOpeningPdfId(null);
+    }
   }
 
   async function updateStatus(id: string, status: "approved" | "rejected") {
@@ -216,8 +324,8 @@ export function AdminResourcesView() {
     setError(null);
 
     try {
-      await ResourcesService.updateApprovalStatus(id, status);
-      setResources((current) => current.filter((resource) => resource.id !== id));
+      const updatedResource = await ResourcesService.updateApprovalStatus(id, status);
+      patchResources([updatedResource]);
       setSelectedIds((current) => {
         const next = new Set(current);
         next.delete(id);
@@ -230,7 +338,7 @@ export function AdminResourcesView() {
     }
   }
 
-  async function bulkApprove() {
+  async function bulkUpdateStatus(status: "approved" | "rejected") {
     const ids = Array.from(selectedIds);
 
     if (ids.length === 0) {
@@ -241,18 +349,25 @@ export function AdminResourcesView() {
     setError(null);
 
     try {
-      await ResourcesService.bulkApprove(ids);
-      setResources((current) => current.filter((resource) => !selectedIds.has(resource.id)));
+      const updatedResources =
+        status === "approved"
+          ? await ResourcesService.bulkApprove(ids)
+          : await ResourcesService.bulkReject(ids);
+      patchResources(updatedResources);
       setSelectedIds(new Set());
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "Unable to bulk approve.");
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : `Unable to bulk ${status === "approved" ? "approve" : "reject"}.`,
+      );
     } finally {
       setIsSaving(false);
     }
   }
 
-  async function saveMetadata(id: string) {
-    if (!draft) {
+  async function saveMetadata() {
+    if (!draft || !editingResource) {
       return;
     }
 
@@ -260,12 +375,12 @@ export function AdminResourcesView() {
     setError(null);
 
     try {
-      const updatedResource = await ResourcesService.updateMetadata(id, toMetadataUpdate(draft));
-      setResources((current) =>
-        current.map((resource) => (resource.id === id ? updatedResource : resource)),
+      const updatedResource = await ResourcesService.updateMetadata(
+        editingResource.id,
+        toMetadataUpdate(draft),
       );
-      setEditingId(null);
-      setDraft(null);
+      patchResources([updatedResource]);
+      closeEditor();
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "Unable to save metadata.");
     } finally {
@@ -298,25 +413,364 @@ export function AdminResourcesView() {
   return (
     <>
       <PageHeader
-        description="Review imported PDFs, fix metadata, and approve resources for student visibility."
+        description="Review imported PDFs, tune metadata, and approve resources for student visibility."
         eyebrow="Admin"
         title="Resource approvals"
       />
 
-      {error ? (
-        <ResourceErrorState message={error} onRetry={retryLoad} />
-      ) : null}
+      {error ? <ResourceErrorState message={error} onRetry={retryLoad} /> : null}
 
       <Card>
-        <div className="grid gap-3 xl:grid-cols-[1fr_220px_220px_auto]">
+        <div className="grid gap-3 xl:grid-cols-[1.4fr_180px_180px_180px]">
           <label className="grid gap-2 text-sm font-semibold text-slate-800">
             Search
             <input
               className="h-11 rounded-md border border-slate-200 px-3 text-sm font-normal outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search titles, filenames, notes, indicators..."
+              placeholder="Search title, filename, event, cluster, type, year..."
               type="search"
               value={search}
+            />
+          </label>
+
+          <FilterSelect
+            label="Status"
+            onChange={(value) => setApprovalStatusFilter(value as ApprovalStatusFilter)}
+            options={approvalStatusOptions.map((status) => ({ label: status, value: status }))}
+            value={approvalStatusFilter}
+          />
+          <FilterSelect
+            label="Type"
+            onChange={(value) => setResourceTypeFilter(value as "all" | SupabaseResourceType)}
+            options={resourceTypeOptions.map((type) => ({ label: type, value: type }))}
+            value={resourceTypeFilter}
+          />
+          <FilterSelect
+            label="Year"
+            onChange={setYearFilter}
+            options={[{ label: "all", value: "all" }, ...yearOptions]}
+            value={yearFilter}
+          />
+        </div>
+
+        <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_auto]">
+          <FilterSelect
+            label="Cluster"
+            onChange={setClusterFilter}
+            options={[{ label: "all", value: "all" }, ...clusterOptions]}
+            value={clusterFilter}
+          />
+          <FilterSelect
+            label="Instructional area"
+            onChange={setInstructionalAreaFilter}
+            options={[{ label: "all", value: "all" }, ...instructionalAreaOptions]}
+            value={instructionalAreaFilter}
+          />
+          <div className="flex flex-wrap items-end gap-2">
+            <button
+              className="min-h-11 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
+              disabled={filteredResources.length === 0}
+              onClick={toggleAllVisible}
+              type="button"
+            >
+              {selectedVisibleIds.length === filteredResources.length && filteredResources.length > 0
+                ? "Clear visible"
+                : "Select visible"}
+            </button>
+            <button
+              className="min-h-11 rounded-md bg-blue-700 px-4 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300"
+              disabled={isSaving || selectedIds.size === 0}
+              onClick={() => void bulkUpdateStatus("approved")}
+              type="button"
+            >
+              Approve selected ({selectedIds.size})
+            </button>
+            <button
+              className="min-h-11 rounded-md bg-red-700 px-4 text-sm font-semibold text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:bg-red-300"
+              disabled={isSaving || selectedIds.size === 0}
+              onClick={() => void bulkUpdateStatus("rejected")}
+              type="button"
+            >
+              Reject selected
+            </button>
+          </div>
+        </div>
+
+        <p className="mt-4 text-sm text-slate-500">
+          Showing {filteredResources.length} of {resources.length} resources.
+        </p>
+      </Card>
+
+      <div className="grid gap-4">
+        {filteredResources.length === 0 ? (
+          <Card className="grid min-h-56 place-items-center text-center">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-950">No resources found</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Adjust the search or filters to find imported resources.
+              </p>
+            </div>
+          </Card>
+        ) : null}
+
+        {filteredResources.map((resource) => (
+          <ResourceApprovalCard
+            isOpeningPdf={openingPdfId === resource.id}
+            isSaving={isSaving}
+            isSelected={selectedIds.has(resource.id)}
+            key={resource.id}
+            onEdit={() => startEditing(resource)}
+            onOpenPdf={() => void openPdf(resource)}
+            onReject={() => void updateStatus(resource.id, "rejected")}
+            onApprove={() => void updateStatus(resource.id, "approved")}
+            onToggleSelected={() => toggleSelected(resource.id)}
+            resource={resource}
+          />
+        ))}
+      </div>
+
+      {editingResource && draft ? (
+        <MetadataEditModal
+          draft={draft}
+          isSaving={isSaving}
+          onClose={closeEditor}
+          onDraftChange={setDraft}
+          onSave={() => void saveMetadata()}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function FilterSelect({
+  label,
+  onChange,
+  options,
+  value,
+}: {
+  label: string;
+  onChange: (value: string) => void;
+  options: SelectOption[];
+  value: string;
+}) {
+  return (
+    <label className="grid gap-2 text-sm font-semibold text-slate-800">
+      {label}
+      <select
+        className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm font-normal text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+        onChange={(event) => onChange(event.target.value)}
+        value={value}
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function ResourceApprovalCard({
+  isOpeningPdf,
+  isSaving,
+  isSelected,
+  onApprove,
+  onEdit,
+  onOpenPdf,
+  onReject,
+  onToggleSelected,
+  resource,
+}: {
+  isOpeningPdf: boolean;
+  isSaving: boolean;
+  isSelected: boolean;
+  onApprove: () => void;
+  onEdit: () => void;
+  onOpenPdf: () => void;
+  onReject: () => void;
+  onToggleSelected: () => void;
+  resource: ResourceListItem;
+}) {
+  const hasReviewedIndicators =
+    resource.performance_indicators_reviewed && resource.performance_indicators?.length;
+
+  return (
+    <Card>
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+        <div className="flex gap-3">
+          <input
+            aria-label={`Select ${resource.title}`}
+            checked={isSelected}
+            className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-700 focus:ring-blue-500"
+            onChange={onToggleSelected}
+            type="checkbox"
+          />
+          <div>
+            <div className="flex flex-wrap gap-2">
+              <Badge tone={getStatusTone(resource.approval_status)}>
+                {resource.approval_status ?? "No status"}
+              </Badge>
+              <Badge tone="blue">{resource.resource_type}</Badge>
+              <Badge>{resource.year ?? "Year TBD"}</Badge>
+            </div>
+            <h2 className="mt-3 text-xl font-semibold text-slate-950">{resource.title}</h2>
+            <p className="mt-1 break-words text-sm text-slate-500">
+              {resource.original_filename ?? "No original filename"}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <button
+            className="min-h-10 rounded-md border border-blue-200 bg-blue-50 px-3 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:text-blue-300"
+            disabled={isOpeningPdf}
+            onClick={onOpenPdf}
+            type="button"
+          >
+            {isOpeningPdf ? "Opening..." : "Open / Download PDF"}
+          </button>
+          <button
+            className="min-h-10 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
+            disabled={isSaving}
+            onClick={onEdit}
+            type="button"
+          >
+            Edit metadata
+          </button>
+          <button
+            className="min-h-10 rounded-md bg-emerald-600 px-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:bg-emerald-300"
+            disabled={isSaving}
+            onClick={onApprove}
+            type="button"
+          >
+            Approve
+          </button>
+          <button
+            className="min-h-10 rounded-md bg-red-700 px-3 text-sm font-semibold text-white transition hover:bg-red-800 disabled:bg-red-300"
+            disabled={isSaving}
+            onClick={onReject}
+            type="button"
+          >
+            Reject
+          </button>
+        </div>
+      </div>
+
+      <dl className="mt-5 grid gap-3 md:grid-cols-3">
+        {[
+          ["Cluster", resource.cluster],
+          ["Event", resource.event_name],
+          ["Instructional area", resource.instructional_area],
+        ].map(([label, value]) => (
+          <div className="rounded-lg bg-slate-50 p-3 text-sm" key={label}>
+            <dt className="font-semibold text-slate-800">{label}</dt>
+            <dd className="mt-1 break-words text-slate-600">{formatValue(value)}</dd>
+          </div>
+        ))}
+      </dl>
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        <div className="rounded-lg border border-slate-100 bg-white p-3">
+          <p className="text-sm font-semibold text-slate-800">Performance indicators</p>
+          {hasReviewedIndicators ? (
+            <ul className="mt-2 space-y-1 text-sm text-slate-600">
+              {resource.performance_indicators?.map((indicator) => (
+                <li key={indicator}>{indicator}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-2 text-sm text-slate-500">
+              Performance indicators pending review
+            </p>
+          )}
+          {resource.performance_indicators?.length ? (
+            <details className="mt-3">
+              <summary className="cursor-pointer text-sm font-semibold text-slate-700">
+                Raw extracted indicators
+              </summary>
+              <ul className="mt-2 grid gap-2">
+                {resource.performance_indicators.map((indicator) => (
+                  <li
+                    className="rounded-lg border border-slate-100 bg-slate-50 p-3 text-sm text-slate-600"
+                    key={indicator}
+                  >
+                    {indicator}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+        </div>
+
+        <details className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+          <summary className="cursor-pointer text-sm font-semibold text-slate-800">
+            Developer details
+          </summary>
+          <dl className="mt-3 grid gap-3 text-sm">
+            {[
+              ["storage_path", resource.storage_path],
+              ["file_path", resource.file_path],
+              ["import_notes", resource.import_notes],
+              ["confidence_score", resource.confidence_score],
+            ].map(([label, value]) => (
+              <div className="rounded-lg bg-white p-3" key={label}>
+                <dt className="font-semibold text-slate-800">{label}</dt>
+                <dd className="mt-1 break-words text-slate-600">{formatValue(value)}</dd>
+              </div>
+            ))}
+          </dl>
+        </details>
+      </div>
+    </Card>
+  );
+}
+
+function MetadataEditModal({
+  draft,
+  isSaving,
+  onClose,
+  onDraftChange,
+  onSave,
+}: {
+  draft: MetadataDraft;
+  isSaving: boolean;
+  onClose: () => void;
+  onDraftChange: (draft: MetadataDraft) => void;
+  onSave: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4">
+      <form
+        className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-lg border border-blue-100 bg-blue-50 p-5 shadow-xl"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSave();
+        }}
+      >
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">
+              Edit
+            </p>
+            <h2 className="mt-1 text-lg font-semibold text-slate-950">Metadata</h2>
+          </div>
+          <button
+            className="min-h-10 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
+            onClick={onClose}
+            type="button"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="grid gap-2 text-sm font-semibold text-slate-800 md:col-span-2">
+            Title
+            <input
+              className="h-11 rounded-md border border-slate-200 px-3 text-sm font-normal outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+              onChange={(event) => onDraftChange({ ...draft, title: event.target.value })}
+              value={draft.title}
             />
           </label>
 
@@ -325,289 +779,79 @@ export function AdminResourcesView() {
             <select
               className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm font-normal text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
               onChange={(event) =>
-                setResourceTypeFilter(event.target.value as "all" | SupabaseResourceType)
+                onDraftChange({
+                  ...draft,
+                  resource_type: event.target.value as SupabaseResourceType,
+                })
               }
-              value={resourceTypeFilter}
+              value={draft.resource_type}
             >
-              <option value="all">All types</option>
-              {resourceTypeOptions.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="grid gap-2 text-sm font-semibold text-slate-800">
-            Cluster
-            <select
-              className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm font-normal text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-              onChange={(event) => setClusterFilter(event.target.value)}
-              value={clusterFilter}
-            >
-              <option value="all">All clusters</option>
-              {clusters.map((cluster) => (
-                <option key={cluster} value={cluster}>
-                  {cluster}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <div className="flex items-end">
-            <button
-              className="min-h-11 w-full rounded-md bg-blue-700 px-4 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300"
-              disabled={isSaving || selectedIds.size === 0}
-              onClick={bulkApprove}
-              type="button"
-            >
-              Approve selected ({selectedIds.size})
-            </button>
-          </div>
-        </div>
-      </Card>
-
-      <div className="grid gap-4">
-        {filteredResources.length === 0 ? (
-          <Card className="grid min-h-56 place-items-center text-center">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-950">No pending resources found</h2>
-              <p className="mt-2 text-sm leading-6 text-slate-600">
-                Pending imports will appear here when they match the current filters.
-              </p>
-            </div>
-          </Card>
-        ) : null}
-
-        {filteredResources.map((resource) => {
-          const isEditing = editingId === resource.id && draft;
-
-          return (
-            <Card key={resource.id}>
-              <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                <div className="flex gap-3">
-                  <input
-                    aria-label={`Select ${resource.title}`}
-                    checked={selectedIds.has(resource.id)}
-                    className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-700 focus:ring-blue-500"
-                    onChange={() => toggleSelected(resource.id)}
-                    type="checkbox"
-                  />
-                  <div>
-                    <div className="flex flex-wrap gap-2">
-                      <Badge tone="amber">pending</Badge>
-                      <Badge tone="blue">{resource.resource_type}</Badge>
-                      <Badge>{resource.year ?? "Year TBD"}</Badge>
-                    </div>
-                    <h2 className="mt-3 text-xl font-semibold text-slate-950">
-                      {resource.title}
-                    </h2>
-                    <p className="mt-1 text-sm text-slate-500">
-                      {resource.original_filename ?? "No original filename"}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    className="min-h-10 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
-                    disabled={isSaving}
-                    onClick={() => startEditing(resource)}
-                    type="button"
-                  >
-                    Edit metadata
-                  </button>
-                  <button
-                    className="min-h-10 rounded-md bg-emerald-600 px-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:bg-emerald-300"
-                    disabled={isSaving}
-                    onClick={() => updateStatus(resource.id, "approved")}
-                    type="button"
-                  >
-                    Approve
-                  </button>
-                  <button
-                    className="min-h-10 rounded-md bg-red-700 px-3 text-sm font-semibold text-white transition hover:bg-red-800 disabled:bg-red-300"
-                    disabled={isSaving}
-                    onClick={() => updateStatus(resource.id, "rejected")}
-                    type="button"
-                  >
-                    Reject
-                  </button>
-                </div>
-              </div>
-
-              <dl className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {[
-                  ["Cluster", resource.cluster],
-                  ["Event", resource.event_name],
-                  ["Instructional area", resource.instructional_area],
-                  ["Confidence score", resource.confidence_score],
-                  ["Import notes", resource.import_notes],
-                  ["Storage path", resource.storage_path],
-                ].map(([label, value]) => (
-                  <div className="rounded-lg bg-slate-50 p-3 text-sm" key={label}>
-                    <dt className="font-semibold text-slate-800">{label}</dt>
-                    <dd className="mt-1 break-words text-slate-600">{formatValue(value)}</dd>
-                  </div>
+              {resourceTypeOptions
+                .filter((type) => type !== "all")
+                .map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
                 ))}
-              </dl>
+            </select>
+          </label>
 
-              <div className="mt-4">
-                <p className="text-sm font-semibold text-slate-800">Performance indicators</p>
-                {resource.performance_indicators_reviewed &&
-                resource.performance_indicators?.length ? (
-                  <p className="mt-2 text-sm text-slate-600">
-                    {resource.performance_indicators.length} reviewed indicator
-                    {resource.performance_indicators.length === 1 ? "" : "s"}
-                  </p>
-                ) : (
-                  <p className="mt-2 text-sm text-slate-500">
-                    Performance indicators pending review
-                  </p>
-                )}
-                {resource.performance_indicators?.length ? (
-                  <details className="mt-3 rounded-lg border border-slate-100 bg-slate-50 p-3">
-                    <summary className="cursor-pointer text-sm font-semibold text-slate-800">
-                      Raw extracted indicators
-                    </summary>
-                    <ul className="mt-3 grid gap-2">
-                      {resource.performance_indicators.map((indicator) => (
-                        <li
-                          className="rounded-lg border border-slate-100 bg-white p-3 text-sm text-slate-600"
-                          key={indicator}
-                        >
-                          {indicator}
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                ) : null}
-              </div>
+          {metadataTextFields.map(([key, label]) => (
+            <label className="grid gap-2 text-sm font-semibold text-slate-800" key={key}>
+              {label}
+              <input
+                className="h-11 rounded-md border border-slate-200 px-3 text-sm font-normal outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                onChange={(event) => onDraftChange({ ...draft, [key]: event.target.value })}
+                type={key === "year" ? "number" : "text"}
+                value={draft[key]}
+              />
+            </label>
+          ))}
 
-              {isEditing ? (
-                <form className="mt-5 rounded-lg border border-blue-100 bg-blue-50 p-4">
-                  <CardHeader eyebrow="Edit" title="Metadata" />
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <label className="grid gap-2 text-sm font-semibold text-slate-800 md:col-span-2">
-                      Title
-                      <input
-                        className="h-11 rounded-md border border-slate-200 px-3 text-sm font-normal outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                        onChange={(event) =>
-                          setDraft((current) =>
-                            current ? { ...current, title: event.target.value } : current,
-                          )
-                        }
-                        value={draft.title}
-                      />
-                    </label>
+          <label className="grid gap-2 text-sm font-semibold text-slate-800 md:col-span-2">
+            Performance indicators
+            <textarea
+              className="min-h-32 rounded-md border border-slate-200 px-3 py-2 text-sm font-normal outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+              onChange={(event) =>
+                onDraftChange({ ...draft, performance_indicators: event.target.value })
+              }
+              value={draft.performance_indicators}
+            />
+          </label>
 
-                    <label className="grid gap-2 text-sm font-semibold text-slate-800">
-                      Resource type
-                      <select
-                        className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm font-normal text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                        onChange={(event) =>
-                          setDraft((current) =>
-                            current
-                              ? {
-                                  ...current,
-                                  resource_type: event.target.value as SupabaseResourceType,
-                                }
-                              : current,
-                          )
-                        }
-                        value={draft.resource_type}
-                      >
-                        {resourceTypeOptions.map((type) => (
-                          <option key={type} value={type}>
-                            {type}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+          <label className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 text-sm font-semibold text-slate-800 md:col-span-2">
+            <input
+              checked={draft.performance_indicators_reviewed}
+              className="h-4 w-4 rounded border-slate-300 text-blue-700 focus:ring-blue-500"
+              onChange={(event) =>
+                onDraftChange({
+                  ...draft,
+                  performance_indicators_reviewed: event.target.checked,
+                })
+              }
+              type="checkbox"
+            />
+            Mark performance indicators as reviewed
+          </label>
+        </div>
 
-                    {metadataTextFields.map(([key, label]) => (
-                      <label
-                        className="grid gap-2 text-sm font-semibold text-slate-800"
-                        key={key}
-                      >
-                        {label}
-                        <input
-                          className="h-11 rounded-md border border-slate-200 px-3 text-sm font-normal outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                          onChange={(event) =>
-                            setDraft((current) =>
-                              current ? { ...current, [key]: event.target.value } : current,
-                            )
-                          }
-                          type={key === "year" ? "number" : "text"}
-                          value={draft[key]}
-                        />
-                      </label>
-                    ))}
-
-                    <label className="grid gap-2 text-sm font-semibold text-slate-800 md:col-span-2">
-                      Performance indicators
-                      <textarea
-                        className="min-h-28 rounded-md border border-slate-200 px-3 py-2 text-sm font-normal outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                        onChange={(event) =>
-                          setDraft((current) =>
-                            current
-                              ? { ...current, performance_indicators: event.target.value }
-                              : current,
-                          )
-                        }
-                        value={draft.performance_indicators}
-                      />
-                    </label>
-
-                    <label className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 text-sm font-semibold text-slate-800 md:col-span-2">
-                      <input
-                        checked={draft.performance_indicators_reviewed}
-                        className="h-4 w-4 rounded border-slate-300 text-blue-700 focus:ring-blue-500"
-                        onChange={(event) =>
-                          setDraft((current) =>
-                            current
-                              ? {
-                                  ...current,
-                                  performance_indicators_reviewed: event.target.checked,
-                                }
-                              : current,
-                          )
-                        }
-                        type="checkbox"
-                      />
-                      Mark performance indicators as reviewed
-                    </label>
-                  </div>
-
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <button
-                      className="min-h-10 rounded-md bg-blue-700 px-3 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:bg-blue-300"
-                      disabled={isSaving}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        void saveMetadata(resource.id);
-                      }}
-                      type="submit"
-                    >
-                      Save metadata
-                    </button>
-                    <button
-                      className="min-h-10 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
-                      onClick={() => {
-                        setEditingId(null);
-                        setDraft(null);
-                      }}
-                      type="button"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </form>
-              ) : null}
-            </Card>
-          );
-        })}
-      </div>
-    </>
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
+          <button
+            className="min-h-10 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
+            onClick={onClose}
+            type="button"
+          >
+            Cancel
+          </button>
+          <button
+            className="min-h-10 rounded-md bg-blue-700 px-3 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:bg-blue-300"
+            disabled={isSaving}
+            type="submit"
+          >
+            Save metadata
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
