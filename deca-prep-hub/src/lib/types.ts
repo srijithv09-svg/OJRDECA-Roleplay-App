@@ -25,6 +25,7 @@ export type ResourceListItem = {
   approval_status: ResourceApprovalStatus | null;
   original_filename: string | null;
   performance_indicators: string[] | null;
+  performance_indicators_reviewed: boolean | null;
   confidence_score: number | null;
   import_notes: string | null;
   file_path: string | null;
@@ -37,6 +38,7 @@ export type ResourceMetadataUpdate = Pick<
   | "event_name"
   | "instructional_area"
   | "performance_indicators"
+  | "performance_indicators_reviewed"
   | "resource_type"
   | "title"
   | "year"

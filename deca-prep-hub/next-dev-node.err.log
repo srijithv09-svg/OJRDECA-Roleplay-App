@@ -12,3 +12,63 @@ Incoming: [approved, 0, exam]
   27 |
   28 |     async function loadResources() { (src/components/resources/resource-grid.tsx:25:12)
 [browser] GoTrueClient@sb-tyithayzyvssodazqxzq-auth-token:1 (2.106.1) 2026-05-24T02:42:40.153Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key. (file://C:/Users/vinay/OneDrive/Desktop/OJR-DECA-RP-APP/deca-prep-hub/.next/dev/static/chunks/node_modules_0qloa2o._.js:19090:21)
+[browser] Signed URL error: Object not found 
+    at Object.createResourceSignedUrl (src/lib/services/resources.ts:143:15)
+    at async loadResource (src/components/resources/resource-detail-view.tsx:65:33)
+  141 |
+  142 |     if (error) {
+> 143 |       console.error("Signed URL error:", error.message);
+      |               ^
+  144 |       throw new Error(error.message);
+  145 |     }
+  146 | (src/lib/services/resources.ts:143:15)
+[browser] Resource detail signed URL error: Error: Object not found
+    at Object.createResourceSignedUrl (src/lib/services/resources.ts:144:13)
+    at async loadResource (src/components/resources/resource-detail-view.tsx:65:33)
+  142 |     if (error) {
+  143 |       console.error("Signed URL error:", error.message);
+> 144 |       throw new Error(error.message);
+      |             ^
+  145 |     }
+  146 |
+  147 |     return data.signedUrl; (src/components/resources/resource-detail-view.tsx:82:19)
+[browser] Signed URL error: Object not found 
+    at Object.createResourceSignedUrl (src/lib/services/resources.ts:143:15)
+    at async loadResource (src/components/resources/resource-detail-view.tsx:65:33)
+  141 |
+  142 |     if (error) {
+> 143 |       console.error("Signed URL error:", error.message);
+      |               ^
+  144 |       throw new Error(error.message);
+  145 |     }
+  146 | (src/lib/services/resources.ts:143:15)
+[browser] Resource detail signed URL error: Error: Object not found
+    at Object.createResourceSignedUrl (src/lib/services/resources.ts:144:13)
+    at async loadResource (src/components/resources/resource-detail-view.tsx:65:33)
+  142 |     if (error) {
+  143 |       console.error("Signed URL error:", error.message);
+> 144 |       throw new Error(error.message);
+      |             ^
+  145 |     }
+  146 |
+  147 |     return data.signedUrl; (src/components/resources/resource-detail-view.tsx:82:19)
+[browser] Signed URL error: Object not found 
+    at Object.createResourceSignedUrl (src/lib/services/resources.ts:143:15)
+    at async loadResource (src/components/resources/resource-detail-view.tsx:65:33)
+  141 |
+  142 |     if (error) {
+> 143 |       console.error("Signed URL error:", error.message);
+      |               ^
+  144 |       throw new Error(error.message);
+  145 |     }
+  146 | (src/lib/services/resources.ts:143:15)
+[browser] Resource detail signed URL error: Error: Object not found
+    at Object.createResourceSignedUrl (src/lib/services/resources.ts:144:13)
+    at async loadResource (src/components/resources/resource-detail-view.tsx:65:33)
+  142 |     if (error) {
+  143 |       console.error("Signed URL error:", error.message);
+> 144 |       throw new Error(error.message);
+      |             ^
+  145 |     }
+  146 |
+  147 |     return data.signedUrl; (src/components/resources/resource-detail-view.tsx:82:19)

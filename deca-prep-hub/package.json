@@ -6,6 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "import:pdfs": "tsx scripts/import-pdfs.ts",
+    "debug:resource-pdf": "tsx scripts/debug-resource-pdf.ts",
+    "cleanup:performance-indicators": "tsx scripts/cleanup-performance-indicators.ts",
+    "repair:instructional-areas": "tsx scripts/repair-instructional-areas.ts",
     "start": "next start",
     "lint": "eslint"
   },

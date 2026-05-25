@@ -10,6 +10,8 @@ export function SupabaseResourceCard({
   resource: ResourceListItem;
   actionLabel: string;
 }) {
+  const hasReviewedIndicators =
+    resource.performance_indicators_reviewed && resource.performance_indicators?.length;
   const typeLabel =
     resource.resource_type === "roleplay"
       ? "Roleplay"
@@ -45,6 +47,14 @@ export function SupabaseResourceCard({
         <div>
           <dt className="font-semibold text-slate-800">Cluster</dt>
           <dd className="mt-1 text-slate-600">{resource.cluster ?? "Not assigned"}</dd>
+        </div>
+        <div>
+          <dt className="font-semibold text-slate-800">Performance indicators</dt>
+          <dd className="mt-1 text-slate-600">
+            {hasReviewedIndicators
+              ? resource.performance_indicators?.join("; ")
+              : "Performance indicators pending review"}
+          </dd>
         </div>
       </dl>
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3">

@@ -1,0 +1,31 @@
+
+> deca-prep-hub@0.1.0 dev
+> next dev
+
+▲ Next.js 16.2.6 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.1.186:3000
+- Environments: .env.local
+✓ Ready in 450ms
+
+ GET /roleplays 200 in 647ms (next.js: 383ms, application-code: 263ms)
+ GET /login 200 in 78ms (next.js: 30ms, application-code: 48ms)
+ GET /resources/0c54f8bb-c24b-4543-9046-655cec532b70 200 in 514ms (next.js: 484ms, application-code: 29ms)
+ GET /resources/0c54f8bb-c24b-4543-9046-655cec532b70 200 in 65ms (next.js: 13ms, application-code: 52ms)
+ GET /roleplays 200 in 29ms (next.js: 4ms, application-code: 25ms)
+ GET /resources/0c54f8bb-c24b-4543-9046-655cec532b70 200 in 33ms (next.js: 8ms, application-code: 24ms)
+ GET / 200 in 80ms (next.js: 35ms, application-code: 45ms)
+ GET / 200 in 53ms (next.js: 4ms, application-code: 49ms)
+ GET / 200 in 45ms (next.js: 4ms, application-code: 41ms)
+ GET /roleplays 200 in 158ms (next.js: 3ms, application-code: 155ms)
+ GET /login 200 in 164ms (next.js: 43ms, application-code: 121ms)
+ GET /settings 200 in 169ms (next.js: 97ms, application-code: 72ms)
+ GET /login 200 in 48ms (next.js: 3ms, application-code: 45ms)
+ GET /login 200 in 24ms (next.js: 5ms, application-code: 19ms)
+ GET /resources/0c54f8bb-c24b-4543-9046-655cec532b70 200 in 54ms (next.js: 12ms, application-code: 42ms)
+ GET /dashboard 200 in 72ms (next.js: 40ms, application-code: 32ms)
+ GET /roleplays 200 in 26ms (next.js: 3ms, application-code: 23ms)
+ GET /admin/analytics 200 in 98ms (next.js: 61ms, application-code: 37ms)
+ GET /admin/resources 200 in 85ms (next.js: 42ms, application-code: 42ms)
+ GET /settings 200 in 27ms (next.js: 5ms, application-code: 22ms)
+[?25h

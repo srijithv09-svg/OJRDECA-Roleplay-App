@@ -19,10 +19,20 @@ type MetadataDraft = {
   event_name: string;
   instructional_area: string;
   performance_indicators: string;
+  performance_indicators_reviewed: boolean;
   resource_type: SupabaseResourceType;
   title: string;
   year: string;
 };
+
+type MetadataTextField = "cluster" | "event_name" | "instructional_area" | "year";
+
+const metadataTextFields: Array<[MetadataTextField, string]> = [
+  ["cluster", "Cluster"],
+  ["event_name", "Event name"],
+  ["instructional_area", "Instructional area"],
+  ["year", "Year"],
+];
 
 const resourceTypeOptions: SupabaseResourceType[] = [
   "roleplay",
@@ -37,6 +47,7 @@ function toDraft(resource: ResourceListItem): MetadataDraft {
     event_name: resource.event_name ?? "",
     instructional_area: resource.instructional_area ?? "",
     performance_indicators: resource.performance_indicators?.join("\n") ?? "",
+    performance_indicators_reviewed: Boolean(resource.performance_indicators_reviewed),
     resource_type: resource.resource_type,
     title: resource.title,
     year: resource.year?.toString() ?? "",
@@ -54,6 +65,7 @@ function toMetadataUpdate(draft: MetadataDraft): ResourceMetadataUpdate {
     event_name: draft.event_name.trim() || null,
     instructional_area: draft.instructional_area.trim() || null,
     performance_indicators: performanceIndicators.length > 0 ? performanceIndicators : null,
+    performance_indicators_reviewed: draft.performance_indicators_reviewed,
     resource_type: draft.resource_type,
     title: draft.title.trim(),
     year: draft.year.trim() ? Number(draft.year) : null,
@@ -442,20 +454,34 @@ export function AdminResourcesView() {
 
               <div className="mt-4">
                 <p className="text-sm font-semibold text-slate-800">Performance indicators</p>
-                {resource.performance_indicators?.length ? (
-                  <ul className="mt-2 grid gap-2">
-                    {resource.performance_indicators.map((indicator) => (
-                      <li
-                        className="rounded-lg border border-slate-100 p-3 text-sm text-slate-600"
-                        key={indicator}
-                      >
-                        {indicator}
-                      </li>
-                    ))}
-                  </ul>
+                {resource.performance_indicators_reviewed &&
+                resource.performance_indicators?.length ? (
+                  <p className="mt-2 text-sm text-slate-600">
+                    {resource.performance_indicators.length} reviewed indicator
+                    {resource.performance_indicators.length === 1 ? "" : "s"}
+                  </p>
                 ) : (
-                  <p className="mt-2 text-sm text-slate-500">No indicators detected.</p>
+                  <p className="mt-2 text-sm text-slate-500">
+                    Performance indicators pending review
+                  </p>
                 )}
+                {resource.performance_indicators?.length ? (
+                  <details className="mt-3 rounded-lg border border-slate-100 bg-slate-50 p-3">
+                    <summary className="cursor-pointer text-sm font-semibold text-slate-800">
+                      Raw extracted indicators
+                    </summary>
+                    <ul className="mt-3 grid gap-2">
+                      {resource.performance_indicators.map((indicator) => (
+                        <li
+                          className="rounded-lg border border-slate-100 bg-white p-3 text-sm text-slate-600"
+                          key={indicator}
+                        >
+                          {indicator}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                ) : null}
               </div>
 
               {isEditing ? (
@@ -499,12 +525,7 @@ export function AdminResourcesView() {
                       </select>
                     </label>
 
-                    {[
-                      ["cluster", "Cluster"],
-                      ["event_name", "Event name"],
-                      ["instructional_area", "Instructional area"],
-                      ["year", "Year"],
-                    ].map(([key, label]) => (
+                    {metadataTextFields.map(([key, label]) => (
                       <label
                         className="grid gap-2 text-sm font-semibold text-slate-800"
                         key={key}
@@ -518,7 +539,7 @@ export function AdminResourcesView() {
                             )
                           }
                           type={key === "year" ? "number" : "text"}
-                          value={draft[key as keyof MetadataDraft]}
+                          value={draft[key]}
                         />
                       </label>
                     ))}
@@ -536,6 +557,25 @@ export function AdminResourcesView() {
                         }
                         value={draft.performance_indicators}
                       />
+                    </label>
+
+                    <label className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 text-sm font-semibold text-slate-800 md:col-span-2">
+                      <input
+                        checked={draft.performance_indicators_reviewed}
+                        className="h-4 w-4 rounded border-slate-300 text-blue-700 focus:ring-blue-500"
+                        onChange={(event) =>
+                          setDraft((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  performance_indicators_reviewed: event.target.checked,
+                                }
+                              : current,
+                          )
+                        }
+                        type="checkbox"
+                      />
+                      Mark performance indicators as reviewed
                     </label>
                   </div>
 

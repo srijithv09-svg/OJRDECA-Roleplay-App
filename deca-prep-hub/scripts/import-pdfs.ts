@@ -3,6 +3,7 @@ import { PDFParse } from "pdf-parse";
 import { existsSync, readFileSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
+import { getInstructionalAreaForResource } from "../src/lib/deca/instructional-areas";
 
 type ResourceType = "roleplay" | "exam" | "reference" | "unknown";
 
@@ -18,6 +19,7 @@ type ImportMetadata = {
   event_name: string | null;
   instructional_area: string | null;
   performance_indicators: string[] | null;
+  performance_indicators_reviewed: boolean;
   year: number | null;
   original_filename: string;
 };
@@ -81,19 +83,6 @@ const clusterAliases: Array<[RegExp, string]> = [
   [/\b(management|business management|business administration|admin|aam|act|hrm|pse)\b/i, "Business Management and Administration"],
   [/\b(entrepreneurship|entrepreneur|ent|eip|esb|ebg|efb)\b/i, "Entrepreneurship"],
   [/\b(personal financial literacy|pfl)\b/i, "Personal Financial Literacy"],
-];
-
-const instructionalAreaPatterns: Array<[RegExp, string]> = [
-  [/\bpromotion\b/i, "Promotion"],
-  [/\bpricing\b/i, "Pricing"],
-  [/\bcustomer relations?\b/i, "Customer Relations"],
-  [/\beconomics?\b/i, "Economics"],
-  [/\boperations?\b/i, "Operations"],
-  [/\bfinancial analysis\b/i, "Financial Analysis"],
-  [/\bmarketing information management\b/i, "Marketing Information Management"],
-  [/\bchannel management\b/i, "Channel Management"],
-  [/\bprofessional development\b/i, "Professional Development"],
-  [/\bcommunication skills?\b/i, "Communication Skills"],
 ];
 
 function loadEnvFile(filePath: string) {
@@ -304,24 +293,6 @@ function detectCluster(searchText: string): string | null {
   return null;
 }
 
-function detectInstructionalArea(searchText: string): string | null {
-  const explicitMatch = searchText.match(
-    /instructional area[:\s-]+([A-Za-z&/ -]{3,80})(?:\n|performance indicator|scenario|$)/i,
-  );
-
-  if (explicitMatch) {
-    return normalizeText(explicitMatch[1]);
-  }
-
-  for (const [pattern, area] of instructionalAreaPatterns) {
-    if (pattern.test(searchText)) {
-      return area;
-    }
-  }
-
-  return null;
-}
-
 function detectPerformanceIndicators(text: string): string[] | null {
   const indicators = new Set<string>();
   const lines = text
@@ -381,16 +352,21 @@ function createMetadata(
   const folderText = path.dirname(relativePath).split(path.sep).join(" ");
   const searchableText = `${originalFilename} ${folderText} ${text.slice(0, 4000)}`;
 
-  return {
+  const metadata: ImportMetadata = {
     title: titleFromFilename(originalFilename),
     resource_type: classification.resourceType,
     cluster: detectCluster(searchableText),
     event_name: detectEventName(searchableText),
-    instructional_area: detectInstructionalArea(searchableText),
+    instructional_area: null,
     performance_indicators: detectPerformanceIndicators(text),
+    performance_indicators_reviewed: false,
     year: detectYear(searchableText),
     original_filename: originalFilename,
   };
+
+  metadata.instructional_area = getInstructionalAreaForResource(metadata);
+
+  return metadata;
 }
 
 function storagePathFor(metadata: ImportMetadata) {
@@ -521,7 +497,7 @@ async function main() {
       const storagePath = storagePathFor(metadata);
       const fileBuffer = await readFile(filePath);
 
-      const { error: uploadError } = await supabase.storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
         .from(STORAGE_BUCKET)
         .upload(storagePath, fileBuffer, {
           contentType: "application/pdf",
@@ -532,12 +508,14 @@ async function main() {
         throw new Error(`Storage upload failed: ${uploadError.message}`);
       }
 
+      const uploadedPath = uploadData.path ?? storagePath;
+
       const insertPayload: ResourceInsert = {
         ...metadata,
         approval_status: "pending",
         detected_text: text.slice(0, MAX_DETECTED_TEXT_LENGTH) || null,
-        file_path: storagePath,
-        storage_path: storagePath,
+        file_path: uploadedPath,
+        storage_path: uploadedPath,
         import_notes: `Imported locally from ${path.relative(process.cwd(), filePath)}`,
       };
 

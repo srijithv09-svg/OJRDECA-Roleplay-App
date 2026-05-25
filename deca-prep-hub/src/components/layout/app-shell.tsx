@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { DOMAIN_ERROR_MESSAGE, isAllowedSchoolEmail } from "@/lib/auth";
+import { getProfileDisplayName, getProfileInitials } from "@/lib/profile-display";
 import { getCurrentProfile } from "@/lib/services/profiles";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import type { Profile } from "@/lib/types";
@@ -17,10 +18,9 @@ const navItems: Array<{ label: string; href: string; icon: IconName; adminOnly?:
   { label: "Exams", href: "/exams", icon: "exams" },
   { label: "Analytics", href: "/analytics", icon: "analytics" },
   { label: "Calendar", href: "/calendar", icon: "calendar" },
-  { label: "Upload", href: "/upload", icon: "upload", adminOnly: true },
+  { label: "Settings", href: "/settings", icon: "settings" },
   { label: "Admin Resources", href: "/admin/resources", icon: "exams", adminOnly: true },
   { label: "Admin Analytics", href: "/admin/analytics", icon: "analytics", adminOnly: true },
-  { label: "Settings", href: "/settings", icon: "settings" },
 ];
 
 function isActive(pathname: string, href: string) {
@@ -38,6 +38,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [authState, setAuthState] = useState<"checking" | "allowed" | "blocked">("checking");
   const [profile, setProfile] = useState<Profile | null>(null);
   const visibleNavItems = navItems.filter((item) => !item.adminOnly || profile?.role === "admin");
+  const displayName = getProfileDisplayName(profile) ?? "Student";
+  const profileInitials = getProfileInitials(profile);
 
   useEffect(() => {
     let isActive = true;
@@ -164,6 +166,15 @@ export function AppShell({ children }: { children: ReactNode }) {
     };
   }, [isLoginPage, router]);
 
+  async function handleSignOut() {
+    const supabase = getSupabaseClient();
+
+    await supabase.auth.signOut();
+    setProfile(null);
+    setAuthState("allowed");
+    router.replace("/login");
+  }
+
   if (isLoginPage) {
     return <>{children}</>;
   }
@@ -250,13 +261,20 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="flex items-center gap-3">
               <div className="hidden text-right sm:block">
                 <p className="text-sm font-semibold text-slate-950">
-                  {profile?.email ?? "Student Member"}
+                  {displayName}
                 </p>
                 <p className="text-xs capitalize text-slate-500">{profile?.role ?? "student"}</p>
               </div>
               <div className="grid h-10 w-10 place-items-center rounded-lg border border-blue-100 bg-blue-50 text-sm font-bold text-blue-700">
-                SM
+                {profileInitials}
               </div>
+              <button
+                className="hidden min-h-10 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700 sm:inline-flex sm:items-center"
+                onClick={handleSignOut}
+                type="button"
+              >
+                Sign out
+              </button>
             </div>
           </div>
 

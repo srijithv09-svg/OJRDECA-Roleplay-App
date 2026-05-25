@@ -7,8 +7,20 @@ import type {
 } from "@/lib/types";
 
 const resourceColumns =
-  "id,title,cluster,event_name,instructional_area,year,resource_type,approval_status,original_filename,performance_indicators,confidence_score,import_notes,file_path,storage_path";
+  "id,title,cluster,event_name,instructional_area,year,resource_type,approval_status,original_filename,performance_indicators,performance_indicators_reviewed,confidence_score,import_notes,file_path,storage_path";
 const resourceColumnsWithCreatedAt = `${resourceColumns},created_at`;
+
+export type ResourcePdfLinkResult = {
+  signedUrl: string;
+  storagePath: string;
+};
+
+export type ResourcePdfRepairResult = {
+  resource: ResourceListItem;
+  signedUrl: string | null;
+  storagePath: string;
+  updated: boolean;
+};
 
 async function withDebugTimeout<T>(request: PromiseLike<T>, label: string): Promise<T> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -26,6 +38,40 @@ async function withDebugTimeout<T>(request: PromiseLike<T>, label: string): Prom
       clearTimeout(timeoutId);
     }
   }
+}
+
+async function getAccessToken() {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.auth.getSession();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!data.session?.access_token) {
+    throw new Error("You must be signed in to open resource PDFs.");
+  }
+
+  return data.session.access_token;
+}
+
+async function fetchResourcePdfEndpoint<T>(id: string, options: RequestInit = {}) {
+  const token = await getAccessToken();
+  const response = await fetch(`/api/resources/${id}/pdf`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+  const payload = (await response.json()) as T & { error?: string };
+
+  if (!response.ok) {
+    throw new Error(payload.error ?? "Unable to load the resource PDF.");
+  }
+
+  return payload;
 }
 
 export const ResourcesService = {
@@ -116,23 +162,14 @@ export const ResourcesService = {
     return data;
   },
 
-  async createResourceSignedUrl(resource: ResourceListItem): Promise<string | null> {
-    const supabase = getSupabaseClient();
-    const storagePath = resource.storage_path ?? resource.file_path;
+  async getResourcePdfLink(id: string): Promise<ResourcePdfLinkResult> {
+    return fetchResourcePdfEndpoint<ResourcePdfLinkResult>(id);
+  },
 
-    if (!storagePath) {
-      return null;
-    }
-
-    const { data, error } = await supabase.storage
-      .from("resources")
-      .createSignedUrl(storagePath, 60 * 60);
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    return data.signedUrl;
+  async repairResourcePdfPath(id: string): Promise<ResourcePdfRepairResult> {
+    return fetchResourcePdfEndpoint<ResourcePdfRepairResult>(id, {
+      method: "POST",
+    });
   },
 
   async updateApprovalStatus(

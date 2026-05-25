@@ -1,11 +1,40 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { AnalyticsBars } from "@/components/analytics/analytics-bars";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button-link";
 import { Card, CardHeader } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { recentActivity, upcomingEvents, weakAreas } from "@/lib/placeholder-data";
+import { getProfileDisplayName } from "@/lib/profile-display";
+import { getCurrentProfile } from "@/lib/services/profiles";
+import type { Profile } from "@/lib/types";
 
 export function DashboardView() {
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const displayName = getProfileDisplayName(profile) ?? "member";
+
+  useEffect(() => {
+    let isActive = true;
+
+    void getCurrentProfile()
+      .then((nextProfile) => {
+        if (isActive) {
+          setProfile(nextProfile);
+        }
+      })
+      .catch(() => {
+        if (isActive) {
+          setProfile(null);
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
   return (
     <>
       <PageHeader
@@ -19,7 +48,7 @@ export function DashboardView() {
         }
         description="Track preparation, find approved resources, and keep the next conference milestone visible."
         eyebrow="Student dashboard"
-        title="Welcome back, Student Member"
+        title={`Welcome back, ${displayName}`}
       />
 
       <section className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
