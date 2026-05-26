@@ -7,6 +7,7 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { getProfileDisplayName } from "@/lib/profile-display";
 import { AnalyticsService } from "@/lib/services/analytics";
+import { EXAM_ATTEMPTS_CHANGED_EVENT } from "@/lib/services/exam-attempts";
 import { getCurrentProfile } from "@/lib/services/profiles";
 import type {
   AnalyticsAreaSummary,
@@ -189,6 +190,20 @@ export function DashboardView() {
     };
   }, [reloadKey]);
 
+  useEffect(() => {
+    function refreshDashboard() {
+      setReloadKey((currentKey) => currentKey + 1);
+    }
+
+    window.addEventListener(EXAM_ATTEMPTS_CHANGED_EVENT, refreshDashboard);
+    window.addEventListener("focus", refreshDashboard);
+
+    return () => {
+      window.removeEventListener(EXAM_ATTEMPTS_CHANGED_EVENT, refreshDashboard);
+      window.removeEventListener("focus", refreshDashboard);
+    };
+  }, []);
+
   function retryLoad() {
     setIsLoading(true);
     setError(null);
@@ -219,6 +234,7 @@ export function DashboardView() {
   const { analytics, profile } = dashboard;
   const isAdmin = profile.role === "admin";
   const displayName = getProfileDisplayName(profile) ?? "member";
+  const hasAttempts = analytics.examsCompleted > 0;
 
   return (
     <>
@@ -241,7 +257,7 @@ export function DashboardView() {
         <Card className="!border-blue-800 !bg-blue-700 !text-white">
           <p className="text-sm font-semibold text-blue-100">Exam performance</p>
           <h2 className="mt-3 text-3xl font-bold">
-            {analytics.examsCompleted > 0
+            {hasAttempts
               ? `${analytics.averageScore}% average score`
               : "Start your first graded exam"}
           </h2>
@@ -285,7 +301,11 @@ export function DashboardView() {
 
       <section className="grid gap-4 md:grid-cols-3">
         <StatCard eyebrow="Attempts" title="Exams completed" value={analytics.examsCompleted} />
-        <StatCard eyebrow="Average" title="Average exam score" value={`${analytics.averageScore}%`} />
+        <StatCard
+          eyebrow="Average"
+          title="Average exam score"
+          value={hasAttempts ? `${analytics.averageScore}%` : "N/A"}
+        />
         <StatCard
           eyebrow="Best"
           title="Best score"

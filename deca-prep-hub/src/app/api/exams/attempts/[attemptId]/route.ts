@@ -56,10 +56,17 @@ export async function GET(request: Request, context: RouteContext) {
       .from("exam_attempts")
       .select("id,user_id,resource_id,score,total_questions,percentage,completed_at")
       .eq("id", attemptId)
-      .single();
+      .maybeSingle();
 
     if (attemptError) {
-      return NextResponse.json({ error: attemptError.message }, { status: 404 });
+      return NextResponse.json({ error: attemptError.message }, { status: 500 });
+    }
+
+    if (!attempt) {
+      return NextResponse.json(
+        { error: "This saved attempt could not be found." },
+        { status: 404 },
+      );
     }
 
     if (attempt.user_id !== user.id) {
@@ -128,10 +135,17 @@ export async function DELETE(request: Request, context: RouteContext) {
       .from("exam_attempts")
       .select("id,user_id")
       .eq("id", attemptId)
-      .single();
+      .maybeSingle();
 
     if (attemptError) {
-      return NextResponse.json({ error: attemptError.message }, { status: 404 });
+      return NextResponse.json({ error: attemptError.message }, { status: 500 });
+    }
+
+    if (!attempt) {
+      return NextResponse.json(
+        { error: "This saved attempt could not be found." },
+        { status: 404 },
+      );
     }
 
     if (attempt.user_id !== user.id) {

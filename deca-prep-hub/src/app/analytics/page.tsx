@@ -8,7 +8,10 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { ResourceErrorState, ResourceLoadingState } from "@/components/resources/resource-states";
 import { AnalyticsService } from "@/lib/services/analytics";
-import { ExamAttemptsService } from "@/lib/services/exam-attempts";
+import {
+  EXAM_ATTEMPTS_CHANGED_EVENT,
+  ExamAttemptsService,
+} from "@/lib/services/exam-attempts";
 import type {
   AnalyticsAreaSummary,
   AnalyticsAttemptSummary,
@@ -32,6 +35,25 @@ function StatCard({ label, value }: { label: string; value: number | string }) {
       <Badge tone="blue">Current</Badge>
       <p className="mt-5 text-4xl font-bold text-slate-950">{value}</p>
       <p className="mt-2 text-sm font-semibold text-slate-500">{label}</p>
+    </Card>
+  );
+}
+
+function EmptyAnalyticsCard() {
+  return (
+    <Card className="border-dashed bg-slate-50">
+      <Badge tone="blue">Getting started</Badge>
+      <h2 className="mt-4 text-xl font-semibold text-slate-950">
+        Your analytics will appear after your first graded exam.
+      </h2>
+      <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+        Open an approved exam with an answer key, enter your answers, and submit it.
+        Saved attempts will populate score trends, missed questions, and instructional
+        area strengths.
+      </p>
+      <ButtonLink className="mt-5" href="/exams" variant="primary">
+        Find an exam
+      </ButtonLink>
     </Card>
   );
 }
@@ -114,6 +136,7 @@ export default function AnalyticsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingAttemptId, setDeletingAttemptId] = useState<string | null>(null);
+  const [deleteDialogAttemptId, setDeleteDialogAttemptId] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
@@ -152,6 +175,20 @@ export default function AnalyticsPage() {
     };
   }, [reloadKey]);
 
+  useEffect(() => {
+    function refreshAnalytics() {
+      setReloadKey((currentKey) => currentKey + 1);
+    }
+
+    window.addEventListener(EXAM_ATTEMPTS_CHANGED_EVENT, refreshAnalytics);
+    window.addEventListener("focus", refreshAnalytics);
+
+    return () => {
+      window.removeEventListener(EXAM_ATTEMPTS_CHANGED_EVENT, refreshAnalytics);
+      window.removeEventListener("focus", refreshAnalytics);
+    };
+  }, []);
+
   function retryLoad() {
     setIsLoading(true);
     setError(null);
@@ -159,15 +196,8 @@ export default function AnalyticsPage() {
   }
 
   async function deleteAttempt(attemptId: string) {
-    if (
-      !window.confirm(
-        "Are you sure you want to delete this attempt? This will remove it from your analytics and cannot be undone.",
-      )
-    ) {
-      return;
-    }
-
     setDeletingAttemptId(attemptId);
+    setDeleteDialogAttemptId(null);
     setError(null);
 
     try {
@@ -194,6 +224,8 @@ export default function AnalyticsPage() {
     return null;
   }
 
+  const hasAttempts = analytics.examsCompleted > 0;
+
   return (
     <>
       <PageHeader
@@ -205,9 +237,22 @@ export default function AnalyticsPage() {
 
       {error ? <ResourceErrorState message={error} onRetry={retryLoad} /> : null}
 
+      {deleteDialogAttemptId ? (
+        <DeleteAttemptDialog
+          isDeleting={deletingAttemptId === deleteDialogAttemptId}
+          onCancel={() => setDeleteDialogAttemptId(null)}
+          onConfirm={() => void deleteAttempt(deleteDialogAttemptId)}
+        />
+      ) : null}
+
+      {!hasAttempts ? <EmptyAnalyticsCard /> : null}
+
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Exams completed" value={analytics.examsCompleted} />
-        <StatCard label="Average score" value={`${analytics.averageScore}%`} />
+        <StatCard
+          label="Average score"
+          value={hasAttempts ? `${analytics.averageScore}%` : "N/A"}
+        />
         <StatCard
           label="Best score"
           value={analytics.bestScore === null ? "N/A" : `${analytics.bestScore}%`}
@@ -222,9 +267,12 @@ export default function AnalyticsPage() {
         <Card>
           <CardHeader eyebrow="Trend" title="Score trend" />
           {analytics.attemptHistory.length === 0 ? (
-            <p className="text-sm leading-6 text-slate-600">
-              Score trend appears after your first graded attempt.
-            </p>
+            <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4">
+              <p className="font-semibold text-slate-800">No trend yet</p>
+              <p className="mt-1 text-sm leading-6 text-slate-600">
+                Score trend appears after your first graded attempt.
+              </p>
+            </div>
           ) : (
             <div className="space-y-3">
               {analytics.attemptHistory.slice(0, 10).map((attempt) => (
@@ -248,9 +296,16 @@ export default function AnalyticsPage() {
         <Card>
           <CardHeader eyebrow="Misses" title="Missed question summary" />
           {analytics.missedQuestions.length === 0 ? (
-            <p className="text-sm leading-6 text-slate-600">
-              Missed questions will appear here after incorrect answers are saved.
-            </p>
+            <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4">
+              <p className="font-semibold text-slate-800">
+                {hasAttempts ? "No missed questions saved" : "No missed questions yet"}
+              </p>
+              <p className="mt-1 text-sm leading-6 text-slate-600">
+                {hasAttempts
+                  ? "Nice work. Incorrect answers will appear here when saved."
+                  : "Missed questions will appear after you submit a graded exam."}
+              </p>
+            </div>
           ) : (
             <div className="space-y-3">
               {analytics.missedQuestions.slice(0, 8).map((miss) => (
@@ -298,12 +353,59 @@ export default function AnalyticsPage() {
                 attempt={attempt}
                 deletingAttemptId={deletingAttemptId}
                 key={attempt.id}
-                onDelete={(attemptId) => void deleteAttempt(attemptId)}
+                onDelete={setDeleteDialogAttemptId}
               />
             ))}
           </div>
         )}
       </Card>
     </>
+  );
+}
+
+function DeleteAttemptDialog({
+  isDeleting,
+  onCancel,
+  onConfirm,
+}: {
+  isDeleting: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div
+      aria-modal="true"
+      className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4"
+      role="dialog"
+    >
+      <Card className="w-full max-w-lg">
+        <Badge tone="amber">Delete attempt</Badge>
+        <h2 className="mt-4 text-xl font-semibold text-slate-950">
+          Remove this saved attempt?
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-slate-600">
+          Are you sure you want to delete this attempt? This will remove it from
+          your analytics and cannot be undone.
+        </p>
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
+          <button
+            className="min-h-10 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
+            disabled={isDeleting}
+            onClick={onCancel}
+            type="button"
+          >
+            Keep attempt
+          </button>
+          <button
+            className="min-h-10 rounded-md bg-red-700 px-4 text-sm font-semibold text-white transition hover:bg-red-800 disabled:bg-red-300"
+            disabled={isDeleting}
+            onClick={onConfirm}
+            type="button"
+          >
+            {isDeleting ? "Deleting..." : "Delete attempt"}
+          </button>
+        </div>
+      </Card>
+    </div>
   );
 }

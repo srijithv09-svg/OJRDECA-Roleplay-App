@@ -27,6 +27,8 @@ export function ExamTakeView() {
   const [openingPdf, setOpeningPdf] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isConfirmingSubmit, setIsConfirmingSubmit] = useState(false);
+  const [showUnansweredWarnings, setShowUnansweredWarnings] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -74,6 +76,15 @@ export function ExamTakeView() {
     [answers, exam],
   );
   const unansweredCount = (exam?.questionCount ?? 0) - answeredCount;
+  const unansweredQuestions = useMemo(
+    () =>
+      exam
+        ? exam.questions
+            .filter((question) => !answers[question.question_number])
+            .map((question) => question.question_number)
+        : [],
+    [answers, exam],
+  );
   const progressPercentage =
     exam && exam.questionCount > 0 ? Math.round((answeredCount / exam.questionCount) * 100) : 0;
 
@@ -88,6 +99,19 @@ export function ExamTakeView() {
       ...currentAnswers,
       [questionNumber]: answer,
     }));
+  }
+
+  function scrollToFirstUnanswered() {
+    const firstUnanswered = unansweredQuestions[0];
+
+    if (!firstUnanswered) {
+      return;
+    }
+
+    document
+      .getElementById(`question-${firstUnanswered}`)
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    setShowUnansweredWarnings(true);
   }
 
   async function openPdf() {
@@ -108,17 +132,13 @@ export function ExamTakeView() {
     }
   }
 
+  function startSubmitReview() {
+    setShowUnansweredWarnings(true);
+    setIsConfirmingSubmit(true);
+  }
+
   async function submitAttempt() {
     if (!id || !exam) {
-      return;
-    }
-
-    if (
-      unansweredCount > 0 &&
-      !window.confirm(
-        `${unansweredCount} question${unansweredCount === 1 ? "" : "s"} unanswered. Submit anyway? Unanswered questions count as incorrect.`,
-      )
-    ) {
       return;
     }
 
@@ -130,6 +150,7 @@ export function ExamTakeView() {
       }));
 
     setIsSubmitting(true);
+    setIsConfirmingSubmit(false);
     setError(null);
 
     try {
@@ -211,6 +232,17 @@ export function ExamTakeView() {
 
       {error ? <ResourceErrorState message={error} onRetry={retryLoad} /> : null}
 
+      {isConfirmingSubmit ? (
+        <SubmitConfirmationDialog
+          answeredCount={answeredCount}
+          isSubmitting={isSubmitting}
+          onCancel={() => setIsConfirmingSubmit(false)}
+          onConfirm={() => void submitAttempt()}
+          totalQuestions={exam.questionCount}
+          unansweredQuestions={unansweredQuestions}
+        />
+      ) : null}
+
       <section className="grid gap-5 xl:grid-cols-[320px_1fr]">
         <Card>
           <CardHeader eyebrow="Progress" title="Answer entry" />
@@ -239,15 +271,30 @@ export function ExamTakeView() {
             </div>
             <div className="rounded-lg bg-slate-50 p-3 text-sm">
               <p className="font-semibold text-slate-800">Unanswered</p>
-              <p className="mt-1 text-slate-600">{unansweredCount}</p>
+              <p
+                className={`mt-1 text-2xl font-bold ${
+                  unansweredCount > 0 ? "text-amber-700" : "text-emerald-700"
+                }`}
+              >
+                {unansweredCount}
+              </p>
+              {unansweredCount > 0 ? (
+                <button
+                  className="mt-3 min-h-9 rounded-md border border-amber-200 bg-white px-3 text-xs font-semibold text-amber-700 transition hover:bg-amber-50"
+                  onClick={scrollToFirstUnanswered}
+                  type="button"
+                >
+                  Review unanswered
+                </button>
+              ) : null}
             </div>
             <button
               className="min-h-11 w-full rounded-md bg-blue-700 px-4 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:bg-blue-300"
               disabled={isSubmitting}
-              onClick={() => void submitAttempt()}
+              onClick={startSubmitReview}
               type="button"
             >
-              {isSubmitting ? "Submitting..." : "Submit for grading"}
+              {isSubmitting ? "Submitting..." : "Review and submit"}
             </button>
           </div>
         </Card>
@@ -257,10 +304,18 @@ export function ExamTakeView() {
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {exam.questions.map((question) => {
               const selectedAnswer = answers[question.question_number];
+              const shouldHighlightUnanswered = showUnansweredWarnings && !selectedAnswer;
 
               return (
                 <div
-                  className="rounded-lg border border-slate-100 bg-white p-3 shadow-sm"
+                  className={`rounded-lg border p-3 shadow-sm transition ${
+                    shouldHighlightUnanswered
+                      ? "border-amber-300 bg-amber-50 ring-2 ring-amber-100"
+                      : selectedAnswer
+                        ? "border-emerald-100 bg-white"
+                        : "border-slate-100 bg-white"
+                  }`}
+                  id={`question-${question.question_number}`}
                   key={question.question_number}
                 >
                   <div className="mb-3 flex items-center justify-between gap-3">
@@ -268,9 +323,14 @@ export function ExamTakeView() {
                       Question {question.question_number}
                     </p>
                     <Badge tone={selectedAnswer ? "green" : "amber"}>
-                      {selectedAnswer ? "Answered" : "Unanswered"}
+                      {selectedAnswer ? "Answered" : "Needs answer"}
                     </Badge>
                   </div>
+                  {shouldHighlightUnanswered ? (
+                    <p className="mb-3 rounded-md bg-white px-3 py-2 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">
+                      This question will be marked incorrect if left blank.
+                    </p>
+                  ) : null}
                   <div className="grid grid-cols-5 gap-2">
                     {answerOptions.map((answer) => (
                       <button
@@ -279,6 +339,7 @@ export function ExamTakeView() {
                             ? "border-blue-700 bg-blue-700 text-white"
                             : "border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:text-blue-700"
                         }`}
+                        aria-pressed={selectedAnswer === answer}
                         key={answer}
                         onClick={() => setQuestionAnswer(question.question_number, answer)}
                         type="button"
@@ -301,6 +362,81 @@ export function ExamTakeView() {
         </Card>
       </section>
     </>
+  );
+}
+
+function SubmitConfirmationDialog({
+  answeredCount,
+  isSubmitting,
+  onCancel,
+  onConfirm,
+  totalQuestions,
+  unansweredQuestions,
+}: {
+  answeredCount: number;
+  isSubmitting: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+  totalQuestions: number;
+  unansweredQuestions: number[];
+}) {
+  const unansweredCount = unansweredQuestions.length;
+
+  return (
+    <div
+      aria-modal="true"
+      className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4"
+      role="dialog"
+    >
+      <Card className="w-full max-w-xl">
+        <Badge tone={unansweredCount > 0 ? "amber" : "green"}>
+          {unansweredCount > 0 ? "Review needed" : "Ready to grade"}
+        </Badge>
+        <h2 className="mt-4 text-xl font-semibold text-slate-950">
+          Submit this exam for grading?
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-slate-600">
+          You answered {answeredCount} of {totalQuestions} questions. Once submitted,
+          this attempt will be saved and included in your dashboard and analytics.
+        </p>
+
+        {unansweredCount > 0 ? (
+          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
+            <p className="text-sm font-semibold text-amber-900">
+              {unansweredCount} unanswered question{unansweredCount === 1 ? "" : "s"} will
+              count as incorrect.
+            </p>
+            <p className="mt-2 text-sm leading-6 text-amber-800">
+              Missing: {unansweredQuestions.slice(0, 18).join(", ")}
+              {unansweredQuestions.length > 18 ? ", ..." : ""}
+            </p>
+          </div>
+        ) : (
+          <div className="mt-4 rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm font-semibold text-emerald-900">
+            All questions have an answer selected.
+          </div>
+        )}
+
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
+          <button
+            className="min-h-10 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
+            disabled={isSubmitting}
+            onClick={onCancel}
+            type="button"
+          >
+            Keep editing
+          </button>
+          <button
+            className="min-h-10 rounded-md bg-blue-700 px-4 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:bg-blue-300"
+            disabled={isSubmitting}
+            onClick={onConfirm}
+            type="button"
+          >
+            {isSubmitting ? "Submitting..." : "Submit final attempt"}
+          </button>
+        </div>
+      </Card>
+    </div>
   );
 }
 

@@ -23,6 +23,14 @@ export type ExamSubmitAnswer = {
   selected_answer: ExamCorrectAnswer;
 };
 
+export const EXAM_ATTEMPTS_CHANGED_EVENT = "exam-attempts:changed";
+
+function notifyExamAttemptsChanged() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(EXAM_ATTEMPTS_CHANGED_EVENT));
+  }
+}
+
 async function getAccessToken() {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.auth.getSession();
@@ -63,10 +71,12 @@ export const ExamAttemptsService = {
   },
 
   async submitExamAttempt(resourceId: string, answers: ExamSubmitAnswer[]) {
-    return fetchExamEndpoint<{ attemptId: string }>(`/api/exams/${resourceId}/submit`, {
+    const result = await fetchExamEndpoint<{ attemptId: string }>(`/api/exams/${resourceId}/submit`, {
       method: "POST",
       body: JSON.stringify({ answers }),
     });
+    notifyExamAttemptsChanged();
+    return result;
   },
 
   async getExamAttemptResult(attemptId: string): Promise<ExamAttemptResult> {
@@ -77,6 +87,7 @@ export const ExamAttemptsService = {
     await fetchExamEndpoint<{ deleted: boolean }>(`/api/exams/attempts/${attemptId}`, {
       method: "DELETE",
     });
+    notifyExamAttemptsChanged();
   },
 
   async getStudentExamAttemptsForResource(resourceId: string): Promise<ExamAttempt[]> {
