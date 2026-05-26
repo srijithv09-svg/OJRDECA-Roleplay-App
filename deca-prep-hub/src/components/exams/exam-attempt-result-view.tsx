@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -28,9 +28,11 @@ function formatAnswer(answer: ExamAttemptAnswer["selected_answer"]) {
 
 export function ExamAttemptResultView() {
   const params = useParams<{ attemptId?: string | string[] }>();
+  const router = useRouter();
   const attemptId = Array.isArray(params.attemptId) ? params.attemptId[0] : params.attemptId;
   const [result, setResult] = useState<ExamAttemptResult | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -87,6 +89,34 @@ export function ExamAttemptResultView() {
     setReloadKey((currentKey) => currentKey + 1);
   }
 
+  async function deleteAttempt() {
+    if (!attemptId) {
+      return;
+    }
+
+    if (
+      !window.confirm(
+        "Are you sure you want to delete this attempt? This will remove it from your analytics and cannot be undone.",
+      )
+    ) {
+      return;
+    }
+
+    setIsDeleting(true);
+    setError(null);
+
+    try {
+      await ExamAttemptsService.deleteExamAttempt(attemptId);
+      router.push("/analytics");
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error ? caughtError.message : "Unable to delete attempt.",
+      );
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
   if (isLoading) {
     return <ResourceLoadingState />;
   }
@@ -122,12 +152,22 @@ export function ExamAttemptResultView() {
             <LinkButton href={`/exams/${result.resource.id}/take`}>
               Retake / Enter Another Attempt
             </LinkButton>
+            <button
+              className="inline-flex min-h-10 items-center justify-center rounded-md border border-red-200 bg-white px-3 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:text-red-300"
+              disabled={isDeleting}
+              onClick={() => void deleteAttempt()}
+              type="button"
+            >
+              {isDeleting ? "Deleting..." : "Delete attempt"}
+            </button>
           </>
         }
         description="Review your saved exam score and missed questions."
         eyebrow="Exam results"
         title={result.resource.title}
       />
+
+      {error ? <ResourceErrorState message={error} onRetry={retryLoad} /> : null}
 
       <section className="grid gap-4 md:grid-cols-4">
         <StatCard eyebrow="Score" label="Correct answers" value={`${score} / ${totalQuestions}`} />

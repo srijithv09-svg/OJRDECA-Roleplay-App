@@ -6,18 +6,18 @@ import { ButtonLink } from "@/components/ui/button-link";
 import { Card, CardHeader } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { getProfileDisplayName } from "@/lib/profile-display";
-import { countProfiles, getCurrentProfile } from "@/lib/services/profiles";
-import {
-  ResourcesService,
-  type RecentPublicResourceListItem,
-  type ResourceDashboardSummary,
-} from "@/lib/services/resources";
-import type { Profile } from "@/lib/types";
+import { AnalyticsService } from "@/lib/services/analytics";
+import { getCurrentProfile } from "@/lib/services/profiles";
+import type {
+  AnalyticsAreaSummary,
+  AnalyticsAttemptSummary,
+  Profile,
+  StudentAnalyticsSummary,
+} from "@/lib/types";
 
 type DashboardState = {
+  analytics: StudentAnalyticsSummary;
   profile: Profile;
-  profileCount: number | null;
-  summary: ResourceDashboardSummary;
 };
 
 function formatDate(value: string | null | undefined) {
@@ -30,22 +30,6 @@ function formatDate(value: string | null | undefined) {
     month: "short",
     year: "numeric",
   }).format(new Date(value));
-}
-
-function formatResourceType(resource: RecentPublicResourceListItem) {
-  if (resource.resource_type === "roleplay") {
-    return "Roleplay";
-  }
-
-  if (resource.resource_type === "exam") {
-    return "Exam";
-  }
-
-  if (resource.resource_type === "reference") {
-    return "Reference";
-  }
-
-  return "Resource";
 }
 
 function StatCard({
@@ -69,7 +53,7 @@ function StatCard({
   );
 }
 
-function DashboardLoadingState() {
+function LoadingState() {
   return (
     <div className="grid gap-4">
       <Card className="min-h-44 animate-pulse">
@@ -90,7 +74,7 @@ function DashboardLoadingState() {
   );
 }
 
-function DashboardErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
+function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
     <Card className="border-red-200 bg-red-50">
       <h2 className="text-lg font-semibold text-red-950">Unable to load dashboard</h2>
@@ -106,11 +90,50 @@ function DashboardErrorState({ message, onRetry }: { message: string; onRetry: (
   );
 }
 
-function EmptyRecentResources() {
+function AttemptRow({ attempt }: { attempt: AnalyticsAttemptSummary }) {
   return (
-    <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-5 text-sm leading-6 text-slate-600">
-      No approved resources have been added yet. Once admins approve roleplays,
-      exams, or references, the newest items will appear here.
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-100 p-3">
+      <div>
+        <p className="font-semibold text-slate-950">{attempt.resource_title}</p>
+        <p className="mt-1 text-sm text-slate-500">
+          {attempt.cluster ?? "Cluster TBD"} - {formatDate(attempt.completed_at)}
+        </p>
+      </div>
+      <div className="flex items-center gap-2">
+        <Badge tone={attempt.percentage >= 70 ? "green" : "amber"}>{attempt.percentage}%</Badge>
+        <ButtonLink href={`/exams/attempts/${attempt.id}`}>Results</ButtonLink>
+      </div>
+    </div>
+  );
+}
+
+function AreaList({
+  areas,
+  emptyLabel,
+  mode,
+}: {
+  areas: AnalyticsAreaSummary[];
+  emptyLabel: string;
+  mode: "strong" | "weak";
+}) {
+  if (areas.length === 0) {
+    return <p className="text-sm leading-6 text-slate-600">{emptyLabel}</p>;
+  }
+
+  return (
+    <div className="space-y-3">
+      {areas.slice(0, 4).map((area) => {
+        const count = mode === "strong" ? area.correct_count : area.incorrect_count;
+
+        return (
+          <div className="rounded-lg border border-slate-100 p-3" key={area.instructional_area}>
+            <div className="flex items-center justify-between gap-4 text-sm">
+              <span className="font-semibold text-slate-950">{area.instructional_area}</span>
+              <span className="text-slate-600">{count} questions</span>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -126,27 +149,20 @@ export function DashboardView() {
 
     async function loadDashboard() {
       try {
-        const nextProfile = await getCurrentProfile();
+        const [nextProfile, analytics] = await Promise.all([
+          getCurrentProfile(),
+          AnalyticsService.getStudentAnalytics(),
+        ]);
 
         if (!nextProfile) {
           throw new Error("No active profile was found for the current session.");
         }
 
-        const isAdmin = nextProfile.role === "admin";
-        const [summary, nextProfileCount] = await Promise.all([
-          ResourcesService.getDashboardSummary({ includeAdmin: isAdmin }),
-          isAdmin ? countProfiles().catch(() => null) : Promise.resolve(null),
-        ]);
-
         if (!isActive) {
           return;
         }
 
-        setDashboard({
-          profile: nextProfile,
-          profileCount: nextProfileCount,
-          summary,
-        });
+        setDashboard({ analytics, profile: nextProfile });
         setError(null);
       } catch (caughtError) {
         if (!isActive) {
@@ -180,11 +196,11 @@ export function DashboardView() {
   }
 
   if (isLoading) {
-    return <DashboardLoadingState />;
+    return <LoadingState />;
   }
 
   if (error) {
-    return <DashboardErrorState message={error} onRetry={retryLoad} />;
+    return <ErrorState message={error} onRetry={retryLoad} />;
   }
 
   if (!dashboard) {
@@ -193,14 +209,14 @@ export function DashboardView() {
         <div>
           <h2 className="text-lg font-semibold text-slate-950">Dashboard unavailable</h2>
           <p className="mt-2 max-w-md text-sm leading-6 text-slate-600">
-            Sign in with an approved school account to view your resource dashboard.
+            Sign in with an approved school account to view your analytics.
           </p>
         </div>
       </Card>
     );
   }
 
-  const { profile, profileCount, summary } = dashboard;
+  const { analytics, profile } = dashboard;
   const isAdmin = profile.role === "admin";
   const displayName = getProfileDisplayName(profile) ?? "member";
 
@@ -209,31 +225,38 @@ export function DashboardView() {
       <PageHeader
         actions={
           <>
-            <ButtonLink href="/roleplays" variant="primary">
-              Practice roleplays
+            <ButtonLink href="/exams" variant="primary">
+              Open exams
             </ButtonLink>
-            <ButtonLink href="/exams">Open exams</ButtonLink>
-            {isAdmin ? <ButtonLink href="/admin/resources">Admin Resources</ButtonLink> : null}
+            <ButtonLink href="/analytics">View analytics</ButtonLink>
+            {isAdmin ? <ButtonLink href="/admin/analytics">Admin Analytics</ButtonLink> : null}
           </>
         }
-        description="Track approved resources from Supabase and jump into the next practice flow."
+        description="Track saved exam attempts, score trends, and instructional area patterns."
         eyebrow={isAdmin ? "Admin dashboard" : "Student dashboard"}
         title={`Welcome back, ${displayName}`}
       />
 
       <section className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
         <Card className="!border-blue-800 !bg-blue-700 !text-white">
-          <p className="text-sm font-semibold text-blue-100">Resource library</p>
-          <h2 className="mt-3 text-3xl font-bold">Approved DECA resources are ready</h2>
+          <p className="text-sm font-semibold text-blue-100">Exam performance</p>
+          <h2 className="mt-3 text-3xl font-bold">
+            {analytics.examsCompleted > 0
+              ? `${analytics.averageScore}% average score`
+              : "Start your first graded exam"}
+          </h2>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-blue-50">
-            The dashboard is now using live Supabase data for approved roleplays,
-            exams, and recent resource approvals.
+            These numbers come from your saved exam attempts and update when an
+            attempt is added or deleted.
           </p>
           <div className="mt-6 grid gap-3 sm:grid-cols-3">
             {[
-              [summary.approvedRoleplays, "Approved roleplays"],
-              [summary.approvedExams, "Approved exams"],
-              [summary.approvedResources, "Total approved"],
+              [analytics.examsCompleted, "Exams completed"],
+              [analytics.bestScore === null ? "N/A" : `${analytics.bestScore}%`, "Best score"],
+              [
+                analytics.mostRecentScore === null ? "N/A" : `${analytics.mostRecentScore}%`,
+                "Most recent",
+              ],
             ].map(([value, label]) => (
               <div className="rounded-lg bg-white/10 p-4 ring-1 ring-white/20" key={label}>
                 <p className="text-2xl font-bold">{value}</p>
@@ -248,7 +271,9 @@ export function DashboardView() {
           <div className="space-y-3 text-sm">
             <div className="rounded-lg bg-slate-50 p-3">
               <p className="font-semibold text-slate-800">Email</p>
-              <p className="mt-1 break-words text-slate-600">{profile.email ?? "Email unavailable"}</p>
+              <p className="mt-1 break-words text-slate-600">
+                {profile.email ?? "Email unavailable"}
+              </p>
             </div>
             <div className="rounded-lg bg-slate-50 p-3">
               <p className="font-semibold text-slate-800">Role</p>
@@ -259,96 +284,50 @@ export function DashboardView() {
       </section>
 
       <section className="grid gap-4 md:grid-cols-3">
+        <StatCard eyebrow="Attempts" title="Exams completed" value={analytics.examsCompleted} />
+        <StatCard eyebrow="Average" title="Average exam score" value={`${analytics.averageScore}%`} />
         <StatCard
-          description="Live count of approved roleplay resources."
-          eyebrow="Roleplays"
-          title="Total approved roleplays"
-          value={summary.approvedRoleplays}
-        />
-        <StatCard
-          description="Live count of approved exam resources."
-          eyebrow="Exams"
-          title="Total approved exams"
-          value={summary.approvedExams}
-        />
-        <StatCard
-          description="Includes roleplays, exams, references, and other approved resource rows."
-          eyebrow="Resources"
-          title="Total approved resources"
-          value={summary.approvedResources}
+          eyebrow="Best"
+          title="Best score"
+          value={analytics.bestScore === null ? "N/A" : `${analytics.bestScore}%`}
         />
       </section>
 
-      {isAdmin ? (
-        <section className="grid gap-4 md:grid-cols-3">
-          <StatCard
-            description="Waiting for review on the admin resources page."
-            eyebrow="Admin"
-            title="Pending resources"
-            value={summary.pendingResources}
-          />
-          <StatCard
-            description="Rows rejected during resource review."
-            eyebrow="Admin"
-            title="Rejected resources"
-            value={summary.rejectedResources}
-          />
-          <StatCard
-            description={profileCount === null ? "Profile count is not accessible with current policies." : "Profiles visible to this admin session."}
-            eyebrow="Users"
-            title="Total profiles"
-            value={profileCount ?? "Unavailable"}
-          />
-        </section>
-      ) : null}
-
       <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
         <Card>
-          <CardHeader eyebrow="Recently approved" title="Newest resources" />
-          {summary.recentApprovedResources.length === 0 ? (
-            <EmptyRecentResources />
+          <CardHeader eyebrow="Recent attempts" title="Latest scores" />
+          {analytics.recentAttempts.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-5 text-sm leading-6 text-slate-600">
+              No exam attempts yet. Take an exam with an answer key to populate
+              your dashboard analytics.
+            </div>
           ) : (
             <div className="space-y-3">
-              {summary.recentApprovedResources.map((resource) => (
-                <div
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-100 p-3"
-                  key={resource.id}
-                >
-                  <div>
-                    <p className="font-semibold text-slate-950">{resource.title}</p>
-                    <p className="mt-1 text-sm text-slate-500">
-                      {formatResourceType(resource)} · {resource.cluster ?? "Cluster TBD"} ·{" "}
-                      {resource.year ?? "Year TBD"}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge tone={resource.resource_type === "exam" ? "green" : "blue"}>
-                      {formatResourceType(resource)}
-                    </Badge>
-                    <span className="text-xs font-medium text-slate-500">
-                      {formatDate(resource.created_at)}
-                    </span>
-                  </div>
-                </div>
+              {analytics.recentAttempts.map((attempt) => (
+                <AttemptRow attempt={attempt} key={attempt.id} />
               ))}
             </div>
           )}
         </Card>
 
         <Card>
-          <CardHeader eyebrow="Practice analytics" title="Coming soon" />
-          <div className="space-y-3">
-            <div className="rounded-lg bg-slate-50 p-4">
-              <p className="text-sm font-semibold text-slate-950">Average exam score</p>
-              <p className="mt-1 text-sm leading-6 text-slate-600">
-                Available after practice attempts.
-              </p>
+          <CardHeader eyebrow="Instructional areas" title="Strong and weak areas" />
+          <div className="grid gap-5">
+            <div>
+              <p className="mb-2 text-sm font-semibold text-slate-800">Strong</p>
+              <AreaList
+                areas={analytics.strongAreas}
+                emptyLabel="Strong areas appear after correct answers are saved."
+                mode="strong"
+              />
             </div>
-            <div className="rounded-lg bg-slate-50 p-4">
-              <p className="text-sm font-semibold text-slate-950">Weak instructional areas</p>
-              <p className="mt-1 text-sm leading-6 text-slate-600">
-                Coming soon after scored roleplay and exam practice data is captured.
-              </p>
+            <div>
+              <p className="mb-2 text-sm font-semibold text-slate-800">Needs work</p>
+              <AreaList
+                areas={analytics.weakAreas}
+                emptyLabel="Weak areas appear after missed answers are saved."
+                mode="weak"
+              />
             </div>
           </div>
         </Card>
@@ -357,19 +336,19 @@ export function DashboardView() {
       <section className="grid gap-4 lg:grid-cols-3">
         {[
           {
-            title: "Run a roleplay round",
-            description: "Open an approved case and use it as the starting point for practice.",
-            href: "/roleplays",
+            title: "Take a cluster exam",
+            description: "Enter answers for an approved exam with an answer key.",
+            href: "/exams",
           },
           {
-            title: "Take a cluster exam",
-            description: "Browse approved exams until the full testing workflow is ready.",
-            href: "/exams",
+            title: "Review progress",
+            description: "Open your full attempt history and instructional area breakdown.",
+            href: "/analytics",
           },
           {
             title: "Review resources",
             description: isAdmin
-              ? "Approve, reject, and repair imported resource metadata."
+              ? "Approve resources or review chapter analytics."
               : "Revisit approved resources and choose your next practice target.",
             href: isAdmin ? "/admin/resources" : "/resources",
           },

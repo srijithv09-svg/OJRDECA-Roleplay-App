@@ -73,6 +73,12 @@ export const ExamAttemptsService = {
     return fetchExamEndpoint<ExamAttemptResult>(`/api/exams/attempts/${attemptId}`);
   },
 
+  async deleteExamAttempt(attemptId: string): Promise<void> {
+    await fetchExamEndpoint<{ deleted: boolean }>(`/api/exams/attempts/${attemptId}`, {
+      method: "DELETE",
+    });
+  },
+
   async getStudentExamAttemptsForResource(resourceId: string): Promise<ExamAttempt[]> {
     const supabase = getSupabaseClient();
     const { data, error } = await supabase

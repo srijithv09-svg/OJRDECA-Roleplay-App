@@ -95,6 +95,64 @@ export type InstructionalAreaBreakdown = {
   percentage: number;
 };
 
+export type AnalyticsAreaSummary = {
+  instructional_area: string;
+  correct_count: number;
+  incorrect_count: number;
+  total_count: number;
+  percentage: number;
+};
+
+export type AnalyticsAttemptSummary = {
+  id: string;
+  user_id?: string;
+  user_email?: string | null;
+  resource_id: string;
+  resource_title: string;
+  cluster: string | null;
+  score: number;
+  total_questions: number;
+  percentage: number;
+  completed_at: string | null;
+};
+
+export type MissedQuestionSummary = {
+  attempt_id: string;
+  resource_id: string;
+  resource_title: string;
+  question_number: number;
+  instructional_area: string;
+  completed_at: string | null;
+};
+
+export type StudentAnalyticsSummary = {
+  examsCompleted: number;
+  averageScore: number;
+  bestScore: number | null;
+  mostRecentScore: number | null;
+  recentAttempts: AnalyticsAttemptSummary[];
+  attemptHistory: AnalyticsAttemptSummary[];
+  weakAreas: AnalyticsAreaSummary[];
+  strongAreas: AnalyticsAreaSummary[];
+  missedQuestions: MissedQuestionSummary[];
+};
+
+export type AdminAnalyticsSummary = {
+  totalAttempts: number;
+  averageScore: number;
+  profileCount: number | null;
+  profileCountUnavailable: boolean;
+  mostAttemptedExams: Array<{
+    resource_id: string;
+    resource_title: string;
+    attempts: number;
+  }>;
+  weakAreas: AnalyticsAreaSummary[];
+  recentAttempts: AnalyticsAttemptSummary[];
+  resourceTypeCounts: Record<SupabaseResourceType, number>;
+  approvalCounts: Record<"approved" | "pending" | "rejected", number>;
+};
+
 export type ExamAttemptResult = {
   attempt: ExamAttempt;
   resource: PublicExamResource;

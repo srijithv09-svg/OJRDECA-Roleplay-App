@@ -5,17 +5,18 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { ResourceErrorState } from "@/components/resources/resource-states";
-import { getCurrentProfile, listProfiles } from "@/lib/services/profiles";
-import { ResourcesService } from "@/lib/services/resources";
+import { AnalyticsService } from "@/lib/services/analytics";
+import { getCurrentOwnProfile } from "@/lib/services/profiles";
 import type {
+  AdminAnalyticsSummary,
+  AnalyticsAreaSummary,
+  AnalyticsAttemptSummary,
   Profile,
-  ResourceListItem,
   SupabaseResourceType,
 } from "@/lib/types";
 
 const resourceTypes: SupabaseResourceType[] = ["roleplay", "exam", "reference", "unknown"];
 const approvalStatuses = ["pending", "approved", "rejected"] as const;
-type TrackedApprovalStatus = (typeof approvalStatuses)[number];
 
 function formatDate(value: string | null | undefined) {
   if (!value) {
@@ -109,11 +110,52 @@ function CountRow({
   );
 }
 
+function AreaRows({ areas }: { areas: AnalyticsAreaSummary[] }) {
+  if (areas.length === 0) {
+    return <p className="text-sm leading-6 text-slate-600">No missed instructional areas yet.</p>;
+  }
+
+  return (
+    <div className="space-y-3">
+      {areas.map((area) => (
+        <div className="rounded-lg border border-slate-100 p-3" key={area.instructional_area}>
+          <div className="flex items-center justify-between gap-4 text-sm">
+            <span className="font-semibold text-slate-950">{area.instructional_area}</span>
+            <Badge tone="amber">{area.incorrect_count} missed</Badge>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function RecentAttemptRows({ attempts }: { attempts: AnalyticsAttemptSummary[] }) {
+  if (attempts.length === 0) {
+    return <p className="text-sm leading-6 text-slate-600">No exam attempts submitted yet.</p>;
+  }
+
+  return (
+    <div className="space-y-3">
+      {attempts.map((attempt) => (
+        <div className="rounded-lg border border-slate-100 p-3" key={attempt.id}>
+          <div className="flex flex-wrap gap-2">
+            <Badge tone={attempt.percentage >= 70 ? "green" : "amber"}>{attempt.percentage}%</Badge>
+            <Badge>{formatDate(attempt.completed_at)}</Badge>
+          </div>
+          <p className="mt-3 text-sm font-semibold text-slate-950">{attempt.resource_title}</p>
+          <p className="mt-1 text-xs text-slate-500">
+            {attempt.user_email ?? "User email unavailable"} - {attempt.score} /{" "}
+            {attempt.total_questions}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function AdminAnalyticsView() {
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [resources, setResources] = useState<ResourceListItem[]>([]);
-  const [recentApprovedResources, setRecentApprovedResources] = useState<ResourceListItem[]>([]);
+  const [analytics, setAnalytics] = useState<AdminAnalyticsSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -123,7 +165,7 @@ export function AdminAnalyticsView() {
 
     async function loadAnalytics() {
       try {
-        const nextProfile = await getCurrentProfile();
+        const nextProfile = await getCurrentOwnProfile();
 
         if (!isActive) {
           return;
@@ -132,32 +174,25 @@ export function AdminAnalyticsView() {
         setProfile(nextProfile);
 
         if (nextProfile?.role !== "admin") {
-          setProfiles([]);
-          setResources([]);
-          setRecentApprovedResources([]);
+          setAnalytics(null);
           setError(null);
           return;
         }
 
-        const [nextProfiles, nextResources, nextRecentApprovedResources] = await Promise.all([
-          listProfiles(),
-          ResourcesService.listResources(),
-          ResourcesService.listRecentApprovedResources(),
-        ]);
+        const nextAnalytics = await AnalyticsService.getAdminAnalytics();
 
         if (!isActive) {
           return;
         }
 
-        setProfiles(nextProfiles);
-        setResources(nextResources);
-        setRecentApprovedResources(nextRecentApprovedResources);
+        setAnalytics(nextAnalytics);
         setError(null);
       } catch (caughtError) {
         if (!isActive) {
           return;
         }
 
+        setAnalytics(null);
         setError(
           caughtError instanceof Error ? caughtError.message : "Unable to load admin analytics.",
         );
@@ -175,43 +210,14 @@ export function AdminAnalyticsView() {
     };
   }, [reloadKey]);
 
-  const resourceTypeCounts = useMemo(() => {
-    const counts = Object.fromEntries(resourceTypes.map((type) => [type, 0])) as Record<
-      SupabaseResourceType,
-      number
-    >;
-
-    for (const resource of resources) {
-      if (resourceTypes.includes(resource.resource_type)) {
-        counts[resource.resource_type] += 1;
-      }
-    }
-
-    return counts;
-  }, [resources]);
-
-  const approvalCounts = useMemo(() => {
-    const counts = Object.fromEntries(approvalStatuses.map((status) => [status, 0])) as Record<
-      TrackedApprovalStatus,
-      number
-    >;
-
-    for (const resource of resources) {
-      if (
-        resource.approval_status === "pending" ||
-        resource.approval_status === "approved" ||
-        resource.approval_status === "rejected"
-      ) {
-        counts[resource.approval_status] += 1;
-      }
-    }
-
-    return counts;
-  }, [resources]);
-
-  const recentUsers = profiles.slice(0, 6);
-  const maxResourceTypeCount = Math.max(...Object.values(resourceTypeCounts), 0);
-  const maxApprovalCount = Math.max(...Object.values(approvalCounts), 0);
+  const maxResourceTypeCount = useMemo(
+    () => Math.max(...Object.values(analytics?.resourceTypeCounts ?? {}), 0),
+    [analytics],
+  );
+  const maxApprovalCount = useMemo(
+    () => Math.max(...Object.values(analytics?.approvalCounts ?? {}), 0),
+    [analytics],
+  );
 
   function retryLoad() {
     setIsLoading(true);
@@ -251,10 +257,14 @@ export function AdminAnalyticsView() {
     );
   }
 
+  if (!analytics) {
+    return <ResourceErrorState message="Unable to load admin analytics." onRetry={retryLoad} />;
+  }
+
   return (
     <>
       <PageHeader
-        description="Monitor member access, imported resources, approval activity, and future performance analytics."
+        description="Monitor exam attempts, instructional area patterns, resource status, and chapter-wide activity."
         eyebrow="Admin"
         title="Admin analytics"
       />
@@ -262,11 +272,27 @@ export function AdminAnalyticsView() {
       {error ? <ResourceErrorState message={error} onRetry={retryLoad} /> : null}
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard eyebrow="Users" label="Total profiles" value={profiles.length} />
-        <StatCard eyebrow="Resources" label="Total resources" value={resources.length} />
-        <StatCard eyebrow="Approvals" label="Pending review" value={approvalCounts.pending} />
-        <StatCard eyebrow="Library" label="Approved resources" value={approvalCounts.approved} />
+        <StatCard eyebrow="Attempts" label="Total attempts" value={analytics.totalAttempts} />
+        <StatCard eyebrow="Scores" label="Average score" value={`${analytics.averageScore}%`} />
+        <StatCard
+          eyebrow="Users"
+          label="Total profiles"
+          value={analytics.profileCount ?? "Unavailable"}
+        />
+        <StatCard
+          eyebrow="Library"
+          label="Approved resources"
+          value={analytics.approvalCounts.approved}
+        />
       </section>
+
+      {analytics.profileCountUnavailable ? (
+        <Card className="border-amber-200 bg-amber-50">
+          <p className="text-sm font-semibold text-amber-950">
+            Profile count unavailable due to access policy.
+          </p>
+        </Card>
+      ) : null}
 
       <section className="grid gap-4 lg:grid-cols-2">
         <Card>
@@ -274,7 +300,7 @@ export function AdminAnalyticsView() {
           <div className="space-y-4">
             {resourceTypes.map((type) => (
               <CountRow
-                count={resourceTypeCounts[type]}
+                count={analytics.resourceTypeCounts[type]}
                 key={type}
                 label={type}
                 maxCount={maxResourceTypeCount}
@@ -289,7 +315,7 @@ export function AdminAnalyticsView() {
           <div className="space-y-4">
             {approvalStatuses.map((status) => (
               <CountRow
-                count={approvalCounts[status]}
+                count={analytics.approvalCounts[status]}
                 key={status}
                 label={status}
                 maxCount={maxApprovalCount}
@@ -302,27 +328,17 @@ export function AdminAnalyticsView() {
 
       <section className="grid gap-4 xl:grid-cols-2">
         <Card>
-          <CardHeader eyebrow="Members" title="Recent users" />
-          {recentUsers.length === 0 ? (
-            <p className="text-sm leading-6 text-slate-600">No profiles found yet.</p>
+          <CardHeader eyebrow="Exams" title="Most attempted exams" />
+          {analytics.mostAttemptedExams.length === 0 ? (
+            <p className="text-sm leading-6 text-slate-600">No exams have attempts yet.</p>
           ) : (
             <div className="space-y-3">
-              {recentUsers.map((userProfile) => (
-                <div
-                  className="flex flex-col gap-3 rounded-lg border border-slate-100 p-3 sm:flex-row sm:items-center sm:justify-between"
-                  key={userProfile.id}
-                >
-                  <div>
-                    <p className="text-sm font-semibold text-slate-950">
-                      {userProfile.email ?? "Email unavailable"}
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Joined {formatDate(userProfile.created_at)}
-                    </p>
+              {analytics.mostAttemptedExams.map((exam) => (
+                <div className="rounded-lg border border-slate-100 p-3" key={exam.resource_id}>
+                  <div className="flex items-center justify-between gap-4 text-sm">
+                    <span className="font-semibold text-slate-950">{exam.resource_title}</span>
+                    <Badge tone="blue">{exam.attempts} attempts</Badge>
                   </div>
-                  <Badge tone={userProfile.role === "admin" ? "blue" : "slate"}>
-                    {userProfile.role}
-                  </Badge>
                 </div>
               ))}
             </div>
@@ -330,67 +346,15 @@ export function AdminAnalyticsView() {
         </Card>
 
         <Card>
-          <CardHeader eyebrow="Resources" title="Recent approved resources" />
-          {recentApprovedResources.length === 0 ? (
-            <p className="text-sm leading-6 text-slate-600">
-              Approved resources will appear here after admin review.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {recentApprovedResources.map((resource) => (
-                <div className="rounded-lg border border-slate-100 p-3" key={resource.id}>
-                  <div className="flex flex-wrap gap-2">
-                    <Badge tone={getResourceTypeTone(resource.resource_type)}>
-                      {resource.resource_type}
-                    </Badge>
-                    <Badge tone="green">approved</Badge>
-                  </div>
-                  <p className="mt-3 text-sm font-semibold text-slate-950">{resource.title}</p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {[resource.cluster, resource.event_name, formatDate(resource.created_at)]
-                      .filter(Boolean)
-                      .join(" - ")}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
+          <CardHeader eyebrow="Weaknesses" title="Common weak instructional areas" />
+          <AreaRows areas={analytics.weakAreas} />
         </Card>
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader eyebrow="Future" title="Test score analytics" />
-          <div className="grid gap-3">
-            {["Average exam score", "Completed diagnostics", "Score growth"].map((label) => (
-              <div className="rounded-lg border border-slate-100 p-3" key={label}>
-                <div className="flex items-center justify-between gap-4">
-                  <span className="text-sm font-semibold text-slate-700">{label}</span>
-                  <span className="text-sm font-bold text-slate-400">Coming soon</span>
-                </div>
-                <div className="mt-3 h-2 rounded-full bg-slate-100">
-                  <div className="h-2 w-1/3 rounded-full bg-slate-300" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        <Card>
-          <CardHeader eyebrow="Future" title="Weak instructional areas" />
-          <div className="space-y-3">
-            {["Pricing", "Operations", "Marketing information management"].map((area) => (
-              <div
-                className="flex items-center justify-between gap-4 rounded-lg border border-slate-100 p-3"
-                key={area}
-              >
-                <span className="text-sm font-semibold text-slate-700">{area}</span>
-                <Badge tone="amber">Awaiting scores</Badge>
-              </div>
-            ))}
-          </div>
-        </Card>
-      </section>
+      <Card>
+        <CardHeader eyebrow="Recent" title="Recent attempts across users" />
+        <RecentAttemptRows attempts={analytics.recentAttempts} />
+      </Card>
     </>
   );
 }

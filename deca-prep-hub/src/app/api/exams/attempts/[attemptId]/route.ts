@@ -113,3 +113,53 @@ export async function GET(request: Request, context: RouteContext) {
     );
   }
 }
+
+export async function DELETE(request: Request, context: RouteContext) {
+  const { error: authError, user } = await requireAuthenticatedSchoolUser(request);
+
+  if (authError || !user) {
+    return NextResponse.json({ error: authError }, { status: 401 });
+  }
+
+  try {
+    const { attemptId } = await context.params;
+    const supabase = getSupabaseAdminClient();
+    const { data: attempt, error: attemptError } = await supabase
+      .from("exam_attempts")
+      .select("id,user_id")
+      .eq("id", attemptId)
+      .single();
+
+    if (attemptError) {
+      return NextResponse.json({ error: attemptError.message }, { status: 404 });
+    }
+
+    if (attempt.user_id !== user.id) {
+      return NextResponse.json(
+        { error: "You can only delete your own exam attempts." },
+        { status: 403 },
+      );
+    }
+
+    const { error: deleteError } = await supabase
+      .from("exam_attempts")
+      .delete()
+      .eq("id", attemptId);
+
+    if (deleteError) {
+      return NextResponse.json({ error: deleteError.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ deleted: true });
+  } catch (caughtError) {
+    return NextResponse.json(
+      {
+        error:
+          caughtError instanceof Error
+            ? caughtError.message
+            : "Unable to delete this exam attempt.",
+      },
+      { status: 500 },
+    );
+  }
+}
