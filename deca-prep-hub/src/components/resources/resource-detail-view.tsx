@@ -6,7 +6,9 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
+import { ExamAttemptsService } from "@/lib/services/exam-attempts";
 import { ResourcesService, type PublicResourceListItem } from "@/lib/services/resources";
+import type { ExamAttempt } from "@/lib/types";
 import { ResourceEmptyState, ResourceErrorState, ResourceLoadingState } from "./resource-states";
 
 function formatValue(value: number | string | null | undefined) {
@@ -48,6 +50,11 @@ export function ResourceDetailView() {
   const [resource, setResource] = useState<PublicResourceListItem | null>(null);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [examKeyState, setExamKeyState] = useState<
+    "available" | "error" | "idle" | "loading" | "unavailable"
+  >("idle");
+  const [examQuestionCount, setExamQuestionCount] = useState(0);
+  const [recentAttempts, setRecentAttempts] = useState<ExamAttempt[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -71,6 +78,9 @@ export function ResourceDetailView() {
           setResource(null);
           setSignedUrl(null);
           setPdfError(null);
+          setExamKeyState("idle");
+          setExamQuestionCount(0);
+          setRecentAttempts([]);
           setError(null);
           return;
         }
@@ -99,6 +109,50 @@ export function ResourceDetailView() {
               : "Unable to create a signed PDF link.",
           );
         }
+
+        if (nextResource.resource_type === "exam") {
+          setExamKeyState("loading");
+          setExamQuestionCount(0);
+          setRecentAttempts([]);
+
+          try {
+            const nextExam = await ExamAttemptsService.getExamForTaking(nextResource.id);
+
+            if (!isActive) {
+              return;
+            }
+
+            setExamKeyState(nextExam.hasAnswerKey ? "available" : "unavailable");
+            setExamQuestionCount(nextExam.questionCount);
+          } catch {
+            if (!isActive) {
+              return;
+            }
+
+            setExamKeyState("error");
+            setExamQuestionCount(0);
+          }
+
+          try {
+            const attempts = await ExamAttemptsService.getStudentExamAttemptsForResource(
+              nextResource.id,
+            );
+
+            if (!isActive) {
+              return;
+            }
+
+            setRecentAttempts(attempts);
+          } catch {
+            if (isActive) {
+              setRecentAttempts([]);
+            }
+          }
+        } else {
+          setExamKeyState("idle");
+          setExamQuestionCount(0);
+          setRecentAttempts([]);
+        }
       } catch (caughtError) {
         if (!isActive) {
           return;
@@ -112,6 +166,9 @@ export function ResourceDetailView() {
         setResource(null);
         setSignedUrl(null);
         setPdfError(null);
+        setExamKeyState("idle");
+        setExamQuestionCount(0);
+        setRecentAttempts([]);
       } finally {
         if (isActive) {
           setIsLoading(false);
@@ -130,6 +187,9 @@ export function ResourceDetailView() {
     setIsLoading(true);
     setError(null);
     setPdfError(null);
+    setExamKeyState("idle");
+    setExamQuestionCount(0);
+    setRecentAttempts([]);
     setReloadKey((currentKey) => currentKey + 1);
   }
 
@@ -187,12 +247,18 @@ export function ResourceDetailView() {
               </button>
             ) : null}
             {resource.resource_type === "exam" ? (
-              <button
-                className="inline-flex min-h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700"
-                type="button"
-              >
-                Take exam
-              </button>
+              examKeyState === "available" ? (
+                <Link
+                  className="inline-flex min-h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
+                  href={`/exams/${resource.id}/take`}
+                >
+                  Take Exam
+                </Link>
+              ) : (
+                <span className="inline-flex min-h-10 items-center justify-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-500">
+                  {examKeyState === "loading" ? "Checking answer key..." : "Answer key not available yet"}
+                </span>
+              )
             ) : null}
           </>
         }
@@ -248,6 +314,67 @@ export function ResourceDetailView() {
               </div>
             )}
           </Card>
+
+          {resource.resource_type === "exam" ? (
+            <Card>
+              <CardHeader eyebrow="Exam" title="Answer entry" />
+              {examKeyState === "available" ? (
+                <div className="rounded-lg border border-blue-100 bg-blue-50 p-5">
+                  <p className="text-sm font-semibold text-blue-950">
+                    Answer key ready
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-blue-800">
+                    This exam has {examQuestionCount} questions ready for grading.
+                  </p>
+                  <Link
+                    className="mt-5 inline-flex min-h-11 items-center justify-center rounded-md bg-blue-700 px-4 text-sm font-semibold text-white transition hover:bg-blue-800"
+                    href={`/exams/${resource.id}/take`}
+                  >
+                    Take Exam
+                  </Link>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-5">
+                  <p className="text-sm font-semibold text-slate-950">
+                    {examKeyState === "loading"
+                      ? "Checking answer key"
+                      : "Answer key not available yet"}
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                    {examKeyState === "error"
+                      ? "Unable to check the answer key right now."
+                      : "You can still open the PDF, but automatic grading is not ready for this exam."}
+                  </p>
+                </div>
+              )}
+              {recentAttempts.length > 0 ? (
+                <div className="mt-4">
+                  <p className="text-sm font-semibold text-slate-800">Recent attempts</p>
+                  <div className="mt-2 space-y-2">
+                    {recentAttempts.map((attempt) => (
+                      <Link
+                        className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 p-3 text-sm transition hover:border-blue-200 hover:bg-blue-50"
+                        href={`/exams/attempts/${attempt.id}`}
+                        key={attempt.id}
+                      >
+                        <span className="font-medium text-slate-700">
+                          {attempt.completed_at
+                            ? new Intl.DateTimeFormat("en-US", {
+                                dateStyle: "medium",
+                              }).format(new Date(attempt.completed_at))
+                            : "Date unavailable"}
+                        </span>
+                        <span className="font-semibold text-slate-950">
+                          {attempt.score ?? 0} / {attempt.total_questions ?? 0} ·{" "}
+                          {attempt.percentage ?? 0}%
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </Card>
+          ) : null}
 
           <Card>
             <CardHeader eyebrow="Indicators" title="Performance indicators" />

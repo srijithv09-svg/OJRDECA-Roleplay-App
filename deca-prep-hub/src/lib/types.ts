@@ -3,6 +3,9 @@ export type ResourceType = "Roleplay" | "Exam";
 export type SupabaseResourceType = "roleplay" | "exam" | "reference" | "unknown";
 export type ResourceApprovalStatus = "approved" | "pending" | "rejected" | string;
 export type ProfileRole = "student" | "admin";
+export type ExamCorrectAnswer = "A" | "B" | "C" | "D" | "E";
+export type ExamSelectedAnswer = ExamCorrectAnswer | "UNANSWERED";
+export type ExamKeyStatus = "no-key" | "partial" | "complete";
 
 export type Profile = {
   id: string;
@@ -44,6 +47,66 @@ export type ResourceMetadataUpdate = Pick<
   | "year"
 >;
 
+export type ExamAnswerKeyRow = {
+  id: string;
+  resource_id: string;
+  question_number: number;
+  correct_answer: ExamCorrectAnswer;
+  instructional_area: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type ExamAnswerKeyInput = {
+  question_number: number;
+  correct_answer: ExamCorrectAnswer;
+  instructional_area: string | null;
+};
+
+export type ExamResourceWithKeyStatus = ResourceListItem & {
+  answer_key_count: number;
+  answer_key_status: ExamKeyStatus;
+};
+
+export type ExamAttempt = {
+  id: string;
+  user_id: string;
+  resource_id: string;
+  score: number | null;
+  total_questions: number | null;
+  percentage: number | null;
+  completed_at: string | null;
+};
+
+export type ExamAttemptAnswer = {
+  id: string;
+  attempt_id: string;
+  question_number: number;
+  selected_answer: ExamSelectedAnswer;
+  correct_answer: ExamCorrectAnswer;
+  is_correct: boolean;
+  instructional_area: string | null;
+};
+
+export type InstructionalAreaBreakdown = {
+  instructional_area: string;
+  correct_count: number;
+  total_count: number;
+  percentage: number;
+};
+
+export type ExamAttemptResult = {
+  attempt: ExamAttempt;
+  resource: PublicExamResource;
+  answers: ExamAttemptAnswer[];
+  breakdown: InstructionalAreaBreakdown[];
+};
+
+export type PublicExamResource = Pick<
+  ResourceListItem,
+  "cluster" | "event_name" | "id" | "original_filename" | "resource_type" | "title" | "year"
+>;
+
 export type Database = {
   public: {
     Tables: {
@@ -67,6 +130,32 @@ export type Database = {
         Row: ResourceListItem;
         Insert: Partial<ResourceListItem>;
         Update: Partial<ResourceListItem>;
+        Relationships: [];
+      };
+      exam_answer_keys: {
+        Row: ExamAnswerKeyRow;
+        Insert: Partial<ExamAnswerKeyRow>;
+        Update: Partial<ExamAnswerKeyRow>;
+        Relationships: [];
+      };
+      exam_attempts: {
+        Row: ExamAttempt;
+        Insert: {
+          id?: string;
+          user_id: string;
+          resource_id: string;
+          score?: number | null;
+          total_questions?: number | null;
+          percentage?: number | null;
+          completed_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["exam_attempts"]["Insert"]>;
+        Relationships: [];
+      };
+      exam_attempt_answers: {
+        Row: ExamAttemptAnswer;
+        Insert: Partial<Database["public"]["Tables"]["exam_attempt_answers"]["Row"]>;
+        Update: Partial<Database["public"]["Tables"]["exam_attempt_answers"]["Row"]>;
         Relationships: [];
       };
     };

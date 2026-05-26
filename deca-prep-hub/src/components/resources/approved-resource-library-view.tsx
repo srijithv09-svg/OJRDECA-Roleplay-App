@@ -307,12 +307,21 @@ function StudentResourceCard({
         >
           Details
         </Link>
-        <button
-          className="inline-flex min-h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700"
-          type="button"
-        >
-          {isRoleplay ? "Practice roleplay" : "Take exam"}
-        </button>
+        {isRoleplay ? (
+          <button
+            className="inline-flex min-h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700"
+            type="button"
+          >
+            Practice roleplay
+          </button>
+        ) : (
+          <Link
+            className="inline-flex min-h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
+            href={`/exams/${resource.id}/take`}
+          >
+            Take exam
+          </Link>
+        )}
       </div>
     </Card>
   );

@@ -17,6 +17,18 @@ export type PublicResourceListItem = Omit<
   "confidence_score" | "import_notes" | "file_path" | "storage_path"
 > &
   Partial<Pick<ResourceListItem, "confidence_score" | "import_notes" | "file_path" | "storage_path">>;
+export type RecentPublicResourceListItem = PublicResourceListItem & {
+  created_at: string | null;
+};
+
+export type ResourceDashboardSummary = {
+  approvedRoleplays: number;
+  approvedExams: number;
+  approvedResources: number;
+  pendingResources: number;
+  rejectedResources: number;
+  recentApprovedResources: RecentPublicResourceListItem[];
+};
 
 export type ResourcePdfLinkResult = {
   signedUrl: string;
@@ -79,6 +91,34 @@ async function fetchResourcePdfEndpoint<T>(id: string, options: RequestInit = {}
   }
 
   return payload;
+}
+
+async function getResourceCount({
+  approvalStatus,
+  resourceType,
+}: {
+  approvalStatus?: ResourceApprovalStatus;
+  resourceType?: SupabaseResourceType;
+}) {
+  const supabase = getSupabaseClient();
+
+  let query = supabase.from("resources").select("id", { count: "exact", head: true });
+
+  if (approvalStatus) {
+    query = query.eq("approval_status", approvalStatus);
+  }
+
+  if (resourceType) {
+    query = query.eq("resource_type", resourceType);
+  }
+
+  const { count, error } = await withDebugTimeout(query, "Resource count");
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return count ?? 0;
 }
 
 export const ResourcesService = {
@@ -177,6 +217,56 @@ export const ResourcesService = {
     });
 
     return fallbackResources.slice(0, limit);
+  },
+
+  async listRecentApprovedPublicResources(limit = 5): Promise<RecentPublicResourceListItem[]> {
+    const supabase = getSupabaseClient();
+
+    const { data, error } = await withDebugTimeout(
+      supabase
+        .from("resources")
+        .select(`${publicResourceColumns},created_at`)
+        .eq("approval_status", "approved")
+        .order("created_at", { ascending: false })
+        .limit(limit),
+      "Recent approved public resources",
+    );
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return (data ?? []).map((resource) => ({
+      ...resource,
+      created_at: resource.created_at ?? null,
+    }));
+  },
+
+  async getDashboardSummary({ includeAdmin = false } = {}): Promise<ResourceDashboardSummary> {
+    const [
+      approvedRoleplays,
+      approvedExams,
+      approvedResources,
+      recentApprovedResources,
+      pendingResources,
+      rejectedResources,
+    ] = await Promise.all([
+      getResourceCount({ approvalStatus: "approved", resourceType: "roleplay" }),
+      getResourceCount({ approvalStatus: "approved", resourceType: "exam" }),
+      getResourceCount({ approvalStatus: "approved" }),
+      this.listRecentApprovedPublicResources(),
+      includeAdmin ? getResourceCount({ approvalStatus: "pending" }) : Promise.resolve(0),
+      includeAdmin ? getResourceCount({ approvalStatus: "rejected" }) : Promise.resolve(0),
+    ]);
+
+    return {
+      approvedRoleplays,
+      approvedExams,
+      approvedResources,
+      pendingResources,
+      rejectedResources,
+      recentApprovedResources,
+    };
   },
 
   async getResourceById(id: string): Promise<ResourceListItem | null> {
