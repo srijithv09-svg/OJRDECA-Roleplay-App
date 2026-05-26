@@ -254,14 +254,14 @@ export function DashboardView() {
       />
 
       <section className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
-        <Card className="!border-blue-800 !bg-blue-700 !text-white">
-          <p className="text-sm font-semibold text-blue-100">Exam performance</p>
+        <Card className="!border-[var(--primary-soft-strong)] !bg-[var(--primary)] !text-white shadow-lg shadow-red-950/10 dark:!border-[var(--border-strong)] dark:shadow-black/30">
+          <p className="text-sm font-semibold text-white/80">Exam performance</p>
           <h2 className="mt-3 text-3xl font-bold">
             {hasAttempts
               ? `${analytics.averageScore}% average score`
               : "Start your first graded exam"}
           </h2>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-blue-50">
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-white/85">
             These numbers come from your saved exam attempts and update when an
             attempt is added or deleted.
           </p>
@@ -276,7 +276,7 @@ export function DashboardView() {
             ].map(([value, label]) => (
               <div className="rounded-lg bg-white/10 p-4 ring-1 ring-white/20" key={label}>
                 <p className="text-2xl font-bold">{value}</p>
-                <p className="mt-1 text-xs font-medium text-blue-100">{label}</p>
+                <p className="mt-1 text-xs font-medium text-white/75">{label}</p>
               </div>
             ))}
           </div>

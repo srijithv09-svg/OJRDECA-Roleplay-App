@@ -1,13 +1,51 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  color-scheme: light;
+  --background: #f6f5f3;
+  --foreground: #171717;
+  --card: #ffffff;
+  --card-muted: #f1efec;
+  --border: #ded8d2;
+  --border-strong: #cbbeb6;
+  --primary: #8f1d2c;
+  --primary-hover: #741623;
+  --primary-soft: #f7e8ea;
+  --primary-soft-strong: #efcfd4;
+  --primary-foreground: #ffffff;
+  --muted: #6b655f;
+  --muted-foreground: #4b4642;
+  --ring: #e9b9c0;
+  --shadow: 0 16px 40px -28px rgb(55 20 26 / 0.42);
+}
+
+.dark {
+  color-scheme: dark;
+  --background: #080808;
+  --foreground: #f6f1ec;
+  --card: #121111;
+  --card-muted: #1b1817;
+  --border: #2b2523;
+  --border-strong: #4c2c2f;
+  --primary: #9f2d3c;
+  --primary-hover: #bd3c4d;
+  --primary-soft: #261315;
+  --primary-soft-strong: #4a2026;
+  --primary-foreground: #fff7f7;
+  --muted: #b8afa8;
+  --muted-foreground: #d8d0ca;
+  --ring: #5b252d;
+  --shadow: 0 18px 44px -30px rgb(0 0 0 / 0.9);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-muted: var(--card-muted);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-primary-soft: var(--primary-soft);
   --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
@@ -26,6 +64,174 @@ textarea {
 }
 
 ::selection {
-  background: #bfdbfe;
-  color: #0f172a;
+  background: var(--primary-soft-strong);
+  color: var(--foreground);
+}
+
+/* Brand compatibility layer for existing Tailwind-heavy screens. */
+.bg-blue-700,
+.hover\:bg-blue-700:hover {
+  background-color: var(--primary) !important;
+}
+
+.hover\:bg-blue-800:hover {
+  background-color: var(--primary-hover) !important;
+}
+
+.bg-blue-50,
+.hover\:bg-blue-50:hover {
+  background-color: var(--primary-soft) !important;
+}
+
+.bg-blue-100,
+.hover\:bg-blue-100:hover {
+  background-color: var(--primary-soft-strong) !important;
+}
+
+.text-blue-700,
+.hover\:text-blue-700:hover {
+  color: var(--primary) !important;
+}
+
+.text-blue-800,
+.text-blue-950 {
+  color: var(--primary-hover) !important;
+}
+
+.text-blue-50,
+.text-blue-100 {
+  color: #fff1f3 !important;
+}
+
+.border-blue-100,
+.border-blue-200,
+.border-blue-300,
+.hover\:border-blue-200:hover {
+  border-color: var(--primary-soft-strong) !important;
+}
+
+.ring-blue-100,
+.ring-blue-200 {
+  --tw-ring-color: var(--ring) !important;
+}
+
+.focus\:border-blue-500:focus {
+  border-color: var(--primary) !important;
+}
+
+.focus\:ring-blue-100:focus,
+.focus\:ring-blue-500:focus {
+  --tw-ring-color: var(--ring) !important;
+}
+
+.shadow-blue-100,
+.shadow-blue-200 {
+  --tw-shadow-color: rgb(143 29 44 / 0.18) !important;
+}
+
+.dark .bg-slate-50,
+.dark .bg-slate-100,
+.dark .hover\:bg-slate-50:hover,
+.dark .hover\:bg-slate-100:hover {
+  background-color: var(--card-muted) !important;
+}
+
+.dark .bg-white {
+  background-color: var(--card) !important;
+}
+
+.dark .border-slate-100,
+.dark .border-slate-200,
+.dark .border-slate-300 {
+  border-color: var(--border) !important;
+}
+
+.dark .text-slate-950,
+.dark .text-slate-900,
+.dark .text-slate-800,
+.dark .text-slate-700 {
+  color: var(--foreground) !important;
+}
+
+.dark .text-slate-600,
+.dark .text-slate-500,
+.dark .text-slate-400 {
+  color: var(--muted) !important;
+}
+
+.dark .placeholder\:text-slate-400::placeholder {
+  color: #8d8580 !important;
+}
+
+.dark .shadow-slate-200\/60,
+.dark .shadow-slate-200 {
+  --tw-shadow-color: rgb(0 0 0 / 0.35) !important;
+}
+
+.dark input,
+.dark select,
+.dark textarea {
+  background-color: var(--card) !important;
+  border-color: var(--border) !important;
+  color: var(--foreground) !important;
+}
+
+.dark option {
+  background-color: var(--card);
+  color: var(--foreground);
+}
+
+.dark .bg-red-50 {
+  background-color: #2a1012 !important;
+}
+
+.dark .bg-amber-50 {
+  background-color: #2b1f0d !important;
+}
+
+.dark .bg-emerald-50 {
+  background-color: #0f241b !important;
+}
+
+.dark .border-red-200 {
+  border-color: #6b262c !important;
+}
+
+.dark .border-amber-200,
+.dark .border-amber-300 {
+  border-color: #76551b !important;
+}
+
+.dark .border-emerald-100,
+.dark .border-emerald-200 {
+  border-color: #245c43 !important;
+}
+
+.dark .text-red-950,
+.dark .text-red-800,
+.dark .text-red-700 {
+  color: #f3b5bb !important;
+}
+
+.dark .text-amber-900,
+.dark .text-amber-800,
+.dark .text-amber-700 {
+  color: #f1cf83 !important;
+}
+
+.dark .text-emerald-950,
+.dark .text-emerald-900,
+.dark .text-emerald-800,
+.dark .text-emerald-700 {
+  color: #9ad7bc !important;
+}
+
+.dark .ring-amber-100,
+.dark .ring-amber-200 {
+  --tw-ring-color: #76551b !important;
+}
+
+.dark .ring-emerald-100,
+.dark .ring-emerald-200 {
+  --tw-ring-color: #245c43 !important;
 }

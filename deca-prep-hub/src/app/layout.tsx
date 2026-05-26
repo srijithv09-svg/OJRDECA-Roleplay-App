@@ -13,9 +13,22 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const themeScript = `
+    try {
+      const storedTheme = localStorage.getItem("theme");
+      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      const theme = storedTheme === "dark" || storedTheme === "light"
+        ? storedTheme
+        : prefersDark ? "dark" : "light";
+      document.documentElement.classList.toggle("dark", theme === "dark");
+      document.documentElement.style.colorScheme = theme;
+    } catch {}
+  `;
+
   return (
-    <html lang="en" className="h-full antialiased">
-      <body className="min-h-full bg-slate-50 text-slate-950">
+    <html lang="en" className="h-full antialiased" suppressHydrationWarning>
+      <body className="min-h-full bg-background text-foreground">
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <AppShell>{children}</AppShell>
       </body>
     </html>

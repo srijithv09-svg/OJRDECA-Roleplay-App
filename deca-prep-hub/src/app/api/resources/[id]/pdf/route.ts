@@ -22,7 +22,7 @@ async function requireUser(request: Request) {
     return { error: "Missing authorization token.", userId: null };
   }
 
-  const supabase = getSupabaseServerClient();
+  const supabase = await getSupabaseServerClient();
   const { data, error } = await supabase.auth.getUser(token);
 
   if (error || !data.user) {

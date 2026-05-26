@@ -1,7 +1,8 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { DOMAIN_ERROR_MESSAGE, SCHOOL_EMAIL_DOMAIN } from "@/lib/auth";
 import { getSiteOrigin } from "@/lib/site-url";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -10,10 +11,20 @@ export function LoginView() {
   const searchParams = useSearchParams();
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const domainError = searchParams.get("error") === "domain";
-  const authError = searchParams.get("error") === "auth";
-  const authErrorMessage =
-    searchParams.get("message") ?? "We could not complete sign-in. Please try again.";
+  const loginError = searchParams.get("error");
+  const callbackErrorMessage = searchParams.get("message");
+  const domainError = loginError === "domain" || loginError === "unauthorized_domain";
+  const authError = loginError === "auth" || loginError === "auth_callback_failed";
+
+  useEffect(() => {
+    if (
+      authError &&
+      callbackErrorMessage &&
+      process.env.NODE_ENV !== "production"
+    ) {
+      console.error("[auth callback]", callbackErrorMessage);
+    }
+  }, [authError, callbackErrorMessage]);
 
   async function signInWithGoogle() {
     setIsSigningIn(true);
@@ -41,28 +52,38 @@ export function LoginView() {
 
   return (
     <main className="grid min-h-screen bg-slate-50 px-4 py-8">
+      <div className="fixed right-4 top-4 z-10">
+        <ThemeToggle />
+      </div>
       <section className="mx-auto grid w-full max-w-6xl items-center gap-8 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="max-w-2xl">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-700">
-            DECA Prep Hub
+            OJR DECA
           </p>
           <h1 className="mt-3 text-4xl font-bold text-slate-950">
-            Sign in to your chapter prep workspace
+            DECA Prep Hub
           </h1>
           <p className="mt-4 text-base leading-7 text-slate-600">
-            Use your Owen J. Roberts school Google account to access roleplays,
-            exams, analytics, calendar tools, and imported DECA resources.
+            Sign in with your Owen J. Roberts school Google account to access
+            roleplays, exams, analytics, calendar tools, and approved chapter resources.
           </p>
+          <div className="mt-6 grid gap-3 text-sm text-slate-600 sm:grid-cols-3">
+            {["Roleplay practice", "Cluster exams", "Progress analytics"].map((label) => (
+              <div className="rounded-lg border border-slate-200 bg-white p-3 font-semibold" key={label}>
+                {label}
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm shadow-slate-200/60">
           <div className="flex items-center gap-3">
             <span className="grid h-12 w-12 place-items-center rounded-lg bg-blue-700 text-sm font-black text-white">
-              DH
+              OJR
             </span>
             <div>
               <h2 className="text-xl font-bold text-slate-950">Welcome back</h2>
-              <p className="mt-1 text-sm text-slate-500">School account required</p>
+              <p className="mt-1 text-sm text-slate-500">Owen J. Roberts DECA portal</p>
             </div>
           </div>
 
@@ -74,7 +95,7 @@ export function LoginView() {
 
           {authError ? (
             <div className="mt-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm font-medium leading-6 text-red-800">
-              {authErrorMessage}
+              Google sign-in could not be completed. Please try again.
             </div>
           ) : null}
 

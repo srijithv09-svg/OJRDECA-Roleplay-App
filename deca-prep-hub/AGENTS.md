@@ -8,7 +8,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## Project Overview
 
-This project is **DECA Prep Hub**, a web application for the **Oak Junction Ridge / Owen J. Roberts High School DECA chapter**. The app helps chapter members prepare for DECA roleplays and cluster exams by organizing study resources, letting students practice exams, tracking analytics, and eventually supporting AI-assisted roleplay feedback.
+This project is **DECA Prep Hub**, a web application for the **Owen J. Roberts High School DECA chapter**. The app helps OJR DECA members prepare for DECA roleplays and cluster exams by organizing study resources, letting students practice exams, tracking analytics, and eventually supporting AI-assisted roleplay feedback.
 
 The current user/project owner is building this with:
 
@@ -19,6 +19,35 @@ The current user/project owner is building this with:
 - **Supabase** for backend/auth/database/storage
 
 The project is intended for members with `@ojrsd.net` accounts only.
+
+Branding rules:
+
+- Use **OJR DECA** or **Owen J. Roberts DECA** for chapter branding.
+- Keep the product/app name as **DECA Prep Hub**.
+- Do not use generic or incorrect chapter names such as "Oak Junction Ridge DECA".
+- Do not rename database tables, service methods, or routes for branding-only changes.
+
+Theme/UI rules:
+
+- The app supports light and dark mode using the `dark` class on `<html>`.
+- Theme preference is persisted in `localStorage` under `theme`.
+- First visit should respect `prefers-color-scheme` when no stored preference exists.
+- `src/app/layout.tsx` includes an inline theme bootstrap script to reduce hydration flicker.
+- `src/components/theme/theme-toggle.tsx` owns the visible light/dark toggle.
+- Theme colors are tokenized in `src/app/globals.css`.
+- Light mode should use off-white backgrounds, white cards, near-black text, and dark red/burgundy primary accents.
+- Dark mode should use near-black backgrounds, charcoal cards, off-white text, and muted crimson/burgundy accents.
+- Primary navigation/accent colors should be OJR burgundy, not bright blue. Approval can remain green and reject/error can remain red.
+- The top navbar/header should use the OJR DECA burgundy theme: off-white/light grey with subtle burgundy accents in light mode, and charcoal/near-black with subtle burgundy borders in dark mode.
+- The dashboard performance hero/card should use explicit OJR DECA burgundy/crimson styling and must not fall back to bright blue.
+- Keep the style minimal, professional, spacious, school-appropriate, and free of neon or flashy gradients.
+
+Auth loading behavior:
+
+- During session/profile checks, show a clean full-page auth/loading state such as "Signing you in..." or "Loading your DECA workspace...".
+- Do not show the login card after successful OAuth while the app is still checking session/profile and routing to `/dashboard`.
+- Do not alter the working Supabase Google OAuth callback flow unless a bug requires it.
+- Keep the `@ojrsd.net` restriction intact.
 
 ---
 
@@ -38,6 +67,7 @@ Use the existing stack. Do not migrate unless explicitly asked.
 Important packages already used or expected:
 
 - `@supabase/supabase-js`
+- `@supabase/ssr`
 - `tsx`
 - `pdf-parse`
 
@@ -62,6 +92,7 @@ NEXT_PUBLIC_SITE_URL is public and should be the canonical app origin.
 Local `.env.local` can use `NEXT_PUBLIC_SITE_URL=http://localhost:3000`.
 Vercel production should use `NEXT_PUBLIC_SITE_URL=https://ojrdeca-roleplay-app.vercel.app`.
 If NEXT_PUBLIC_SITE_URL is unset, browser OAuth uses `window.location.origin` so preview/production domains still work.
+NEXT_PUBLIC_SITE_URL is required in Vercel production to keep OAuth redirects on the canonical app domain.
 SUPABASE_SERVICE_ROLE_KEY is sensitive and must never be used in frontend/browser code.
 Service role key may be used only in:
 local scripts
@@ -115,10 +146,16 @@ The app uses Google OAuth through Supabase.
 Authentication requirements:
 
 Users sign in with Google.
-Google OAuth uses a PKCE callback flow.
+Google OAuth uses the `@supabase/ssr` PKCE callback flow.
+Client components use `createBrowserClient` from `@supabase/ssr`.
+Server route handlers use `createServerClient` from `@supabase/ssr` with Next cookies.
 `signInWithOAuth` redirects to `${origin}/auth/callback`, where `origin` is `NEXT_PUBLIC_SITE_URL` with a browser `window.location.origin` fallback.
-`/auth/callback` exchanges the OAuth code for a browser session, verifies the email domain, prepares the profile, and redirects successful users to `/dashboard`.
-Failed auth returns to `/login?error=auth` with a clear message.
+`/auth/callback/route.ts` exchanges the OAuth code with `exchangeCodeForSession`, verifies the email domain, prepares the profile, and redirects successful users to `/dashboard`.
+Failed auth returns to `/login?error=auth_callback_failed` with a clear message.
+Non-OJR accounts return to `/login?error=unauthorized_domain`.
+Never exchange OAuth codes in client components.
+Never manually parse hash `access_token` fragments.
+Never mix localStorage-only auth helpers with the SSR callback exchange; the PKCE verifier must live in cookies for both the browser client and callback route.
 Only emails ending in @ojrsd.net should be allowed.
 Non-@ojrsd.net users should be signed out and shown a message like:
 This app is only for Owen J. Roberts DECA members.
@@ -790,6 +827,14 @@ Supabase Auth Redirect URLs include `https://ojrdeca-roleplay-app.vercel.app/aut
 Vercel has `NEXT_PUBLIC_SITE_URL=https://ojrdeca-roleplay-app.vercel.app`.
 The app code uses `/auth/callback`, not `/dashboard`, as the OAuth `redirectTo`.
 Localhost is allowed only for local development redirect URLs.
+
+If Google sign-in returns `PKCE code verifier not found in storage`, check:
+
+The login button uses `createBrowserClient` from `@supabase/ssr`.
+The callback is `src/app/auth/callback/route.ts`, not a client page.
+The callback uses `createServerClient` from `@supabase/ssr` and `exchangeCodeForSession(code)`.
+Both browser and server auth clients share cookie-backed SSR storage.
+The app is not mixing localStorage-only Supabase clients with SSR callback exchange.
 
 Vercel 404 on /
 

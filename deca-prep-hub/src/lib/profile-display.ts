@@ -8,7 +8,7 @@ export function getProfileInitials(profile: Profile | null) {
   const email = profile?.email;
 
   if (!email) {
-    return "DH";
+    return "OJ";
   }
 
   const localPart = email.split("@")[0] ?? "";
@@ -18,5 +18,5 @@ export function getProfileInitials(profile: Profile | null) {
     return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
   }
 
-  return localPart.slice(0, 2).toUpperCase() || "DH";
+  return localPart.slice(0, 2).toUpperCase() || "OJ";
 }
