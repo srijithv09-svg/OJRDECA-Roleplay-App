@@ -37,7 +37,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const isLoginPage = pathname === "/login";
   const isRootPage = pathname === "/";
-  const isAuthEntryPage = isLoginPage || isRootPage;
+  const isAuthCallbackPage = pathname === "/auth/callback";
+  const isAuthEntryPage = isLoginPage || isRootPage || isAuthCallbackPage;
   const [authState, setAuthState] = useState<"checking" | "allowed" | "blocked">("checking");
   const [profile, setProfile] = useState<Profile | null>(null);
   const visibleNavItems = navItems.filter((item) => !item.adminOnly || profile?.role === "admin");

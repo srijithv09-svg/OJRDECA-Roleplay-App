@@ -12,7 +12,11 @@ export function getSupabaseClient() {
   }
 
   if (!browserClient) {
-    browserClient = createClient<Database>(supabaseUrl, supabaseAnonKey);
+    browserClient = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        flowType: "pkce",
+      },
+    });
   }
 
   return browserClient;

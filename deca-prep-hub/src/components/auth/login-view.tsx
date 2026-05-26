@@ -3,6 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { DOMAIN_ERROR_MESSAGE, SCHOOL_EMAIL_DOMAIN } from "@/lib/auth";
+import { getSiteOrigin } from "@/lib/site-url";
 import { getSupabaseClient } from "@/lib/supabase/client";
 
 export function LoginView() {
@@ -10,14 +11,17 @@ export function LoginView() {
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const domainError = searchParams.get("error") === "domain";
+  const authError = searchParams.get("error") === "auth";
+  const authErrorMessage =
+    searchParams.get("message") ?? "We could not complete sign-in. Please try again.";
 
   async function signInWithGoogle() {
     setIsSigningIn(true);
     setError(null);
 
     const supabase = getSupabaseClient();
-    const redirectTo =
-      typeof window === "undefined" ? undefined : `${window.location.origin}/dashboard`;
+    const origin = getSiteOrigin();
+    const redirectTo = origin ? `${origin}/auth/callback` : undefined;
 
     const { error: signInError } = await supabase.auth.signInWithOAuth({
       options: {
@@ -65,6 +69,12 @@ export function LoginView() {
           {domainError ? (
             <div className="mt-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm font-medium leading-6 text-red-800">
               {DOMAIN_ERROR_MESSAGE}
+            </div>
+          ) : null}
+
+          {authError ? (
+            <div className="mt-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm font-medium leading-6 text-red-800">
+              {authErrorMessage}
             </div>
           ) : null}
 
