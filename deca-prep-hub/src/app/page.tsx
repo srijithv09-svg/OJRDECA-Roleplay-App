@@ -1,5 +1,5 @@
-import { DashboardView } from "@/components/dashboard/dashboard-view";
+import { RootRedirectView } from "@/components/auth/root-redirect-view";
 
 export default function Home() {
-  return <DashboardView />;
+  return <RootRedirectView />;
 }

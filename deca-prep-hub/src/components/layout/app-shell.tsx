@@ -36,6 +36,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const isLoginPage = pathname === "/login";
+  const isRootPage = pathname === "/";
+  const isAuthEntryPage = isLoginPage || isRootPage;
   const [authState, setAuthState] = useState<"checking" | "allowed" | "blocked">("checking");
   const [profile, setProfile] = useState<Profile | null>(null);
   const visibleNavItems = navItems.filter((item) => !item.adminOnly || profile?.role === "admin");
@@ -56,9 +58,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       }
 
       if (!session) {
-        setAuthState(isLoginPage ? "allowed" : "blocked");
+        setAuthState(isAuthEntryPage ? "allowed" : "blocked");
 
-        if (!isLoginPage) {
+        if (!isAuthEntryPage) {
           router.replace("/login");
         }
 
@@ -74,7 +76,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           return;
         }
 
-        setAuthState(isLoginPage ? "allowed" : "blocked");
+        setAuthState(isAuthEntryPage ? "allowed" : "blocked");
         router.replace(`/login?error=domain`);
         return;
       }
@@ -94,7 +96,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         await supabase.auth.signOut();
         setProfile(null);
-        setAuthState(isLoginPage ? "allowed" : "blocked");
+        setAuthState(isAuthEntryPage ? "allowed" : "blocked");
         router.replace("/login");
         return;
       }
@@ -117,9 +119,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       if (!session) {
         setProfile(null);
-        setAuthState(isLoginPage ? "allowed" : "blocked");
+        setAuthState(isAuthEntryPage ? "allowed" : "blocked");
 
-        if (!isLoginPage) {
+        if (!isAuthEntryPage) {
           router.replace("/login");
         }
 
@@ -130,7 +132,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         void supabase.auth.signOut().finally(() => {
           if (isActive) {
             setProfile(null);
-            setAuthState(isLoginPage ? "allowed" : "blocked");
+            setAuthState(isAuthEntryPage ? "allowed" : "blocked");
             router.replace("/login?error=domain");
           }
         });
@@ -154,7 +156,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           void supabase.auth.signOut().finally(() => {
             if (isActive) {
               setProfile(null);
-              setAuthState(isLoginPage ? "allowed" : "blocked");
+              setAuthState(isAuthEntryPage ? "allowed" : "blocked");
               router.replace("/login");
             }
           });
@@ -165,7 +167,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       isActive = false;
       subscription.unsubscribe();
     };
-  }, [isLoginPage, router]);
+  }, [isAuthEntryPage, isLoginPage, router]);
 
   async function handleSignOut() {
     const supabase = getSupabaseClient();
@@ -176,7 +178,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     router.replace("/login");
   }
 
-  if (isLoginPage) {
+  if (isAuthEntryPage) {
     return <>{children}</>;
   }
 
