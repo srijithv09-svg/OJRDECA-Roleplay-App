@@ -205,14 +205,20 @@ export function ResourceDetailView() {
     return <ResourceEmptyState label="approved resource" />;
   }
 
+  const isRoleplay = resource.resource_type === "roleplay";
   const hasReviewedIndicators =
-    resource.performance_indicators_reviewed && resource.performance_indicators?.length;
+    isRoleplay && resource.performance_indicators_reviewed && resource.performance_indicators?.length;
   const usefulOriginalFilename = getUsefulOriginalFilename(resource);
   const metadata = [
     ["Resource type", resource.resource_type],
+    ...(resource.resource_type === "roleplay"
+      ? ([
+          ["Event code", resource.event_code],
+          ["Event name", resource.event_name],
+          ["Event category", resource.event_category],
+        ] as const)
+      : []),
     ["Cluster", resource.cluster],
-    ["Event", resource.event_name],
-    ["Instructional area", resource.instructional_area],
     ["Year", resource.year],
     ...(usefulOriginalFilename ? ([["Original filename", usefulOriginalFilename]] as const) : []),
   ];
@@ -224,7 +230,13 @@ export function ResourceDetailView() {
           <>
             <Link
               className="inline-flex min-h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
-              href={resource.resource_type === "exam" ? "/exams" : "/roleplays"}
+              href={
+                resource.resource_type === "exam"
+                  ? "/exams"
+                  : resource.resource_type === "roleplay"
+                    ? "/roleplays"
+                    : "/resources"
+              }
             >
               Back to library
             </Link>
@@ -273,6 +285,7 @@ export function ResourceDetailView() {
           <div className="grid gap-4">
             <div className="flex flex-wrap gap-2">
               <Badge tone="blue">{resource.resource_type}</Badge>
+              {resource.event_code ? <Badge>{resource.event_code}</Badge> : null}
               <Badge>{resource.year ?? "Year TBD"}</Badge>
             </div>
 
@@ -376,22 +389,24 @@ export function ResourceDetailView() {
             </Card>
           ) : null}
 
-          <Card>
-            <CardHeader eyebrow="Indicators" title="Performance indicators" />
-            {hasReviewedIndicators ? (
-              <ul className="space-y-2 text-sm text-slate-600">
-                {resource.performance_indicators?.map((indicator) => (
-                  <li className="rounded-lg border border-slate-100 p-3" key={indicator}>
-                    {indicator}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm leading-6 text-slate-600">
-                Performance indicators pending review
-              </p>
-            )}
-          </Card>
+          {isRoleplay ? (
+            <Card>
+              <CardHeader eyebrow="Indicators" title="Performance indicators" />
+              {hasReviewedIndicators ? (
+                <ul className="space-y-2 text-sm text-slate-600">
+                  {resource.performance_indicators?.map((indicator) => (
+                    <li className="rounded-lg border border-slate-100 p-3" key={indicator}>
+                      {indicator}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm leading-6 text-slate-600">
+                  Performance indicators pending review
+                </p>
+              )}
+            </Card>
+          ) : null}
         </div>
       </section>
     </>

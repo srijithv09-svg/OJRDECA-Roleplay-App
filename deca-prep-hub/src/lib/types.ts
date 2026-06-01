@@ -21,6 +21,8 @@ export type ResourceListItem = {
   title: string;
   created_at?: string | null;
   cluster: string | null;
+  event_category: string | null;
+  event_code: string | null;
   event_name: string | null;
   instructional_area: string | null;
   year: number | null;
@@ -38,6 +40,8 @@ export type ResourceListItem = {
 export type ResourceMetadataUpdate = Pick<
   ResourceListItem,
   | "cluster"
+  | "event_category"
+  | "event_code"
   | "event_name"
   | "instructional_area"
   | "performance_indicators"
@@ -162,7 +166,15 @@ export type ExamAttemptResult = {
 
 export type PublicExamResource = Pick<
   ResourceListItem,
-  "cluster" | "event_name" | "id" | "original_filename" | "resource_type" | "title" | "year"
+  | "cluster"
+  | "event_category"
+  | "event_code"
+  | "event_name"
+  | "id"
+  | "original_filename"
+  | "resource_type"
+  | "title"
+  | "year"
 >;
 
 export type Database = {

@@ -18,7 +18,7 @@ export async function GET(request: Request, context: RouteContext) {
     const supabase = getSupabaseAdminClient();
     const { data: resource, error: resourceError } = await supabase
       .from("resources")
-      .select("id,title,cluster,event_name,year,resource_type,approval_status,original_filename")
+      .select("id,title,cluster,event_code,event_name,event_category,year,resource_type,approval_status,original_filename")
       .eq("id", id)
       .single();
 

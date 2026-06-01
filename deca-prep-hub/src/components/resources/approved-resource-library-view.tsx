@@ -32,9 +32,10 @@ function optionize(values: Array<number | string | null | undefined>): SelectOpt
 function searchableText(resource: PublicResourceListItem) {
   return [
     resource.title,
+    resource.event_code,
     resource.event_name,
+    resource.event_category,
     resource.cluster,
-    resource.instructional_area,
     resource.year,
     resource.original_filename,
   ]
@@ -53,7 +54,6 @@ export function ApprovedResourceLibraryView({
   const [resources, setResources] = useState<PublicResourceListItem[]>([]);
   const [search, setSearch] = useState("");
   const [clusterFilter, setClusterFilter] = useState("all");
-  const [instructionalAreaFilter, setInstructionalAreaFilter] = useState("all");
   const [yearFilter, setYearFilter] = useState("all");
   const [openingPdfId, setOpeningPdfId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -104,10 +104,6 @@ export function ApprovedResourceLibraryView({
     () => optionize(resources.map((resource) => resource.cluster)),
     [resources],
   );
-  const instructionalAreaOptions = useMemo(
-    () => optionize(resources.map((resource) => resource.instructional_area)),
-    [resources],
-  );
   const yearOptions = useMemo(
     () => optionize(resources.map((resource) => resource.year)),
     [resources],
@@ -120,14 +116,11 @@ export function ApprovedResourceLibraryView({
       const matchesSearch =
         !normalizedSearch || searchableText(resource).includes(normalizedSearch);
       const matchesCluster = clusterFilter === "all" || resource.cluster === clusterFilter;
-      const matchesInstructionalArea =
-        instructionalAreaFilter === "all" ||
-        resource.instructional_area === instructionalAreaFilter;
       const matchesYear = yearFilter === "all" || String(resource.year) === yearFilter;
 
-      return matchesSearch && matchesCluster && matchesInstructionalArea && matchesYear;
+      return matchesSearch && matchesCluster && matchesYear;
     });
-  }, [clusterFilter, instructionalAreaFilter, resources, search, yearFilter]);
+  }, [clusterFilter, resources, search, yearFilter]);
 
   function retryLoad() {
     setIsLoading(true);
@@ -160,7 +153,7 @@ export function ApprovedResourceLibraryView({
   return (
     <section className="space-y-5">
       <Card>
-        <div className="grid gap-3 lg:grid-cols-[1.4fr_1fr_1fr_180px]">
+        <div className="grid gap-3 lg:grid-cols-[1.4fr_1fr_180px]">
           <label className="relative grid gap-2 text-sm font-semibold text-slate-800">
             Search
             <span className="relative">
@@ -183,12 +176,6 @@ export function ApprovedResourceLibraryView({
             onChange={setClusterFilter}
             options={[{ label: "all", value: "all" }, ...clusterOptions]}
             value={clusterFilter}
-          />
-          <FilterSelect
-            label="Instructional area"
-            onChange={setInstructionalAreaFilter}
-            options={[{ label: "all", value: "all" }, ...instructionalAreaOptions]}
-            value={instructionalAreaFilter}
           />
           <FilterSelect
             label="Year"
@@ -267,6 +254,7 @@ function StudentResourceCard({
     <Card>
       <div className="flex flex-wrap gap-2">
         <Badge tone="blue">{resource.resource_type}</Badge>
+        {resource.event_code ? <Badge>{resource.event_code}</Badge> : null}
         <Badge>{resource.year ?? "Year TBD"}</Badge>
       </div>
       <h2 className="mt-4 text-lg font-semibold text-slate-950">{resource.title}</h2>
@@ -278,11 +266,13 @@ function StudentResourceCard({
 
       <dl className="mt-4 grid gap-3 text-sm">
         {[
-          ...(isRoleplay ? ([["Event", resource.event_name]] as const) : []),
-          ["Cluster", resource.cluster],
           ...(isRoleplay
-            ? ([["Instructional area", resource.instructional_area]] as const)
+            ? ([
+                ["Event category", resource.event_category],
+                ["Event", resource.event_name],
+              ] as const)
             : []),
+          ["Cluster", resource.cluster],
           ["Year", resource.year],
         ].map(([label, value]) => (
           <div className="rounded-lg bg-slate-50 p-3" key={label}>

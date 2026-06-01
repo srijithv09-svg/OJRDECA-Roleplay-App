@@ -425,7 +425,40 @@ Signed URLs work.
 If PDF link fails, the app/database path is likely wrong.
 DECA Instructional Area Mapping
 
-A canonical mapping was added because importer guesses were wrong. The importer originally produced invalid instructional areas such as random PDF text or values that were not aligned with the official roleplay mapping.
+Instructional area is no longer the primary resource categorization field. Roleplay resources should be categorized primarily by canonical DECA event code, event name, event category, cluster, and year.
+
+Canonical DECA event catalog:
+
+src/lib/deca/events.ts
+
+Resources table event metadata columns:
+
+event_code
+event_category
+
+Migration:
+
+supabase/migrations/20260526000000_add_resource_event_metadata.sql
+
+Event code detection should prioritize exact DECA acronyms from original_filename, title, storage_path, file_path, folder path, and import_notes. It must avoid false positives inside longer words and prefer longer codes first, such as BLTDM before shorter fragments.
+
+Known important mapping:
+
+ETDM = Entrepreneurship Team Decision Making
+cluster = Entrepreneurship
+event_category = Team Decision Making
+
+Event metadata repair script:
+
+scripts/repair-deca-event-metadata.ts
+
+Package script:
+
+"repair:event-metadata": "tsx scripts/repair-deca-event-metadata.ts"
+
+This script scans resources, detects canonical DECA events from filename/path metadata, sets event_code/event_name/event_category/cluster, fixes unknown roleplays, and skips clear exam/reference resources.
+
+Legacy instructional area mapping still exists for future roleplay performance indicator work. The importer originally produced invalid instructional areas such as random PDF text or values that were not aligned with the official roleplay mapping.
 
 Mapping file:
 
@@ -445,7 +478,7 @@ Package script:
 
 "repair:instructional-areas": "tsx scripts/repair-instructional-areas.ts"
 
-Roleplay instructional areas should come from mapping rules, not extracted PDF text.
+Roleplay instructional areas should come from mapping rules, not extracted PDF text, but they should not be emphasized on student-facing resource cards.
 
 2025-2026 mapping used:
 
@@ -511,13 +544,30 @@ This was cleaned up.
 
 Important rule:
 
-Do not display performance_indicators unless performance_indicators_reviewed = true.
-If not reviewed, display:
+Only roleplay resources may show performance indicators to students.
+Do not display `performance_indicators` unless:
+
+resource_type = "roleplay"
+and
+performance_indicators_reviewed = true
+
+For roleplays with no reviewed indicators, display:
 Performance indicators pending review
+
+Exam resources must not show:
+performance_indicators
+performance_indicators_reviewed
+Performance indicators pending review
+
+Reference resources, including performance indicator reference PDFs, are document resources only.
+Do not treat reference PDF body text as PI arrays.
 
 Admin edit form should allow manually editing indicators and setting:
 
 performance_indicators_reviewed = true
+
+Only show the performance indicator editor for roleplay resources.
+If a resource is changed from roleplay to exam/reference/unknown, preserve existing indicator data but hide it from the UI.
 
 Cleanup script:
 
@@ -526,6 +576,17 @@ scripts/cleanup-performance-indicators.ts
 Package script:
 
 "cleanup:performance-indicators": "tsx scripts/cleanup-performance-indicators.ts"
+
+Non-roleplay reviewed-flag cleanup script:
+
+scripts/cleanup-non-roleplay-performance-indicators.ts
+
+Package script:
+
+"cleanup:non-roleplay-pis": "tsx scripts/cleanup-non-roleplay-performance-indicators.ts"
+
+This script scans non-roleplay resources and sets `performance_indicators_reviewed = false`.
+It preserves existing `performance_indicators` arrays rather than clearing data.
 
 Cleanup already removed/cleared many bad indicators.
 
@@ -550,8 +611,9 @@ status badge
 resource type badge
 year badge
 cluster
-event
-instructional area
+event_code
+event_name
+event_category
 original filename
 Open / Download PDF button
 Edit metadata button
@@ -572,6 +634,8 @@ Search should work across:
 title
 original_filename
 event_name
+event_code
+event_category
 cluster
 instructional_area
 resource_type
@@ -584,6 +648,59 @@ resource_type
 cluster
 instructional_area
 year
+
+Admin Resource Upload
+
+Page:
+
+/admin/upload
+
+Legacy `/upload` redirects to `/admin/upload`.
+
+Sidebar admin link:
+
+Upload Resource
+
+API route:
+
+POST /api/admin/resources/upload
+
+Behavior:
+
+Admins can upload one or more PDF files.
+The client shows a pre-import metadata review table before upload.
+The API verifies the bearer token, requires an `@ojrsd.net` user, checks the current user's own `profiles.role`, and requires `admin`.
+Uploads use the server-side Supabase admin client; never expose `SUPABASE_SERVICE_ROLE_KEY` in browser code.
+Files are uploaded to Supabase Storage bucket `resources`.
+Storage paths are generated as:
+
+roleplay/YYYY/filename.pdf
+exam/YYYY/filename.pdf
+reference/YYYY/filename.pdf
+unknown/YYYY/filename.pdf
+
+A unique prefix is added to avoid overwrites.
+Inserted resource rows default to `approval_status = "pending"` and `performance_indicators_reviewed = false`.
+Pending uploads should not appear to students until approved in `/admin/resources`.
+
+Metadata detection file:
+
+src/lib/resources/metadata-detection.ts
+
+Filename-first classification rules:
+
+exam / cluster sample exam / sample exam => exam
+DECA event codes or roleplay signals => roleplay
+performance indicators / performance-indicators / exam blueprint / blueprint => reference
+otherwise => unknown
+
+Admin upload review supports manual classification/editing for title, resource_type, event_code, event_name, event_category, cluster, and year. Selecting a canonical event_code auto-fills event_name, event_category, cluster, and roleplay resource_type. Admins can still override event_name/category/cluster manually.
+
+Roleplay instructional areas should use:
+
+src/lib/deca/instructional-areas.ts
+
+Exam and reference uploads should leave `instructional_area` null unless an admin explicitly edits it.
 Student Resource Pages
 
 Pages:
@@ -601,9 +718,10 @@ Do not expose developer fields.
 Student roleplay cards should show:
 
 title
-event
+event_code
+event_name
+event_category
 cluster
-instructional area
 year
 Open / Download PDF button
 Practice roleplay button placeholder/future feature
@@ -616,6 +734,8 @@ year
 Open / Download PDF button
 Take exam button if answer key exists
 
+Do not show instructional_area as a major field on student resource cards.
+
 Do not show to students:
 
 storage_path
@@ -624,6 +744,8 @@ import_notes
 confidence_score
 developer debug info
 unreviewed performance indicators
+Exam resources must not show instructional_area or performance indicator sections.
+Reference resources must not show performance indicator arrays.
 Exam Answer Key Management
 
 Admin page:

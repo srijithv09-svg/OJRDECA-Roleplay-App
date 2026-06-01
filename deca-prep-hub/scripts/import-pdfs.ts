@@ -3,7 +3,8 @@ import { PDFParse } from "pdf-parse";
 import { existsSync, readFileSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { getInstructionalAreaForResource } from "../src/lib/deca/instructional-areas";
+import { detectDecaEventCodeFromText } from "../src/lib/deca/events";
+import { detectResourceMetadata } from "../src/lib/resources/metadata-detection";
 
 type ResourceType = "roleplay" | "exam" | "reference" | "unknown";
 
@@ -16,6 +17,8 @@ type ImportMetadata = {
   title: string;
   resource_type: ResourceType;
   cluster: string | null;
+  event_category: string | null;
+  event_code: string | null;
   event_name: string | null;
   instructional_area: string | null;
   performance_indicators: string[] | null;
@@ -46,44 +49,6 @@ const RAW_PDFS_DIR = path.resolve(process.cwd(), process.env.IMPORT_PDF_DIR ?? "
 const STORAGE_BUCKET = "resources";
 const MAX_DETECTED_TEXT_LENGTH = 12000;
 const DRY_RUN = process.env.DRY_RUN?.toLowerCase() === "true";
-
-const eventAcronyms: Record<string, string> = {
-  AAM: "Apparel and Accessories Marketing",
-  ACT: "Accounting Applications Series",
-  ASM: "Automotive Services Marketing",
-  BFS: "Business Finance Series",
-  BLTDM: "Business Law and Ethics Team Decision Making",
-  BSM: "Business Services Marketing",
-  BTDM: "Buying and Merchandising Team Decision Making",
-  EBG: "Entrepreneurship Business Growth",
-  EFB: "Entrepreneurship Franchise Business",
-  EIP: "Entrepreneurship Innovation Plan",
-  ENT: "Entrepreneurship Series",
-  ESB: "Entrepreneurship Start-Up Business Plan",
-  FMS: "Food Marketing Series",
-  FTDM: "Financial Team Decision Making",
-  HLM: "Hotel and Lodging Management",
-  HRM: "Human Resources Management",
-  HTDM: "Hospitality Services Team Decision Making",
-  MCS: "Marketing Communications Series",
-  MTDM: "Marketing Management Team Decision Making",
-  PMK: "Principles of Marketing",
-  QSRM: "Quick Serve Restaurant Management",
-  RFSM: "Restaurant and Food Service Management",
-  RMS: "Retail Merchandising Series",
-  SEM: "Sports and Entertainment Marketing",
-  STDM: "Sports and Entertainment Marketing Team Decision Making",
-  TTDM: "Travel and Tourism Team Decision Making",
-};
-
-const clusterAliases: Array<[RegExp, string]> = [
-  [/\b(fin|finance|financial)\b/i, "Finance"],
-  [/\b(marketing|mktg|pmk|mcs|sem)\b/i, "Marketing"],
-  [/\b(hospitality|hotel|lodging|restaurant|qsr|htdm|hlm|rfsm|qsrm)\b/i, "Hospitality"],
-  [/\b(management|business management|business administration|admin|aam|act|hrm|pse)\b/i, "Business Management and Administration"],
-  [/\b(entrepreneurship|entrepreneur|ent|eip|esb|ebg|efb)\b/i, "Entrepreneurship"],
-  [/\b(personal financial literacy|pfl)\b/i, "Personal Financial Literacy"],
-];
 
 function loadEnvFile(filePath: string) {
   if (!existsSync(filePath)) {
@@ -186,7 +151,7 @@ function classifyResource(filePath: string): ClassificationResult {
   const filenameText = toMatchText(filename);
   const pathText = toMatchText(relativePath);
   const normalizedPath = normalizeText(pathText).toLowerCase();
-  const acronymPattern = new RegExp(`(?:^|[^A-Za-z0-9])(${Object.keys(eventAcronyms).join("|")})(?:[^A-Za-z0-9]|$)`, "i");
+  const eventCode = detectDecaEventCodeFromText(pathText);
 
   if (
     /performance[-_\s]?indicators/i.test(filenameText) ||
@@ -228,11 +193,9 @@ function classifyResource(filePath: string): ClassificationResult {
     };
   }
 
-  const acronymMatch = pathText.match(acronymPattern);
-
-  if (acronymMatch) {
+  if (eventCode) {
     return {
-      reason: `filename or path contains event acronym ${acronymMatch[1].toUpperCase()}`,
+      reason: `filename or path contains event acronym ${eventCode}`,
       resourceType: "roleplay",
     };
   }
@@ -259,38 +222,6 @@ function detectYear(searchText: string): number | null {
   const fullYearMatch = searchText.match(/\b(20\d{2})\b/);
 
   return fullYearMatch ? Number(fullYearMatch[1]) : null;
-}
-
-function detectEventName(searchText: string): string | null {
-  for (const [acronym, eventName] of Object.entries(eventAcronyms)) {
-    if (new RegExp(`\\b${acronym}\\b`, "i").test(searchText)) {
-      return eventName;
-    }
-  }
-
-  const eventMatch = searchText.match(
-    /\b(?:event|series|roleplay|role play)[:\s-]+([A-Z][A-Za-z&/ -]{4,80})/i,
-  );
-
-  return eventMatch ? normalizeText(eventMatch[1]) : null;
-}
-
-function detectCluster(searchText: string): string | null {
-  if (/\bHS[_\s-]?Finance[_\s-]?Cluster\b/i.test(searchText)) {
-    return "Finance";
-  }
-
-  if (/\bC\d{2}[_\s-]?HS[_\s-]?FIN[_\s-]?exam\b/i.test(searchText)) {
-    return "Finance";
-  }
-
-  for (const [pattern, cluster] of clusterAliases) {
-    if (pattern.test(searchText)) {
-      return cluster;
-    }
-  }
-
-  return null;
 }
 
 function detectPerformanceIndicators(text: string): string[] | null {
@@ -350,21 +281,22 @@ function createMetadata(
   const originalFilename = path.basename(filePath);
   const relativePath = path.relative(RAW_PDFS_DIR, filePath);
   const folderText = path.dirname(relativePath).split(path.sep).join(" ");
-  const searchableText = `${originalFilename} ${folderText} ${text.slice(0, 4000)}`;
+  const detected = detectResourceMetadata(originalFilename, `${folderText} ${text.slice(0, 800)}`);
 
   const metadata: ImportMetadata = {
-    title: titleFromFilename(originalFilename),
+    title: detected.title || titleFromFilename(originalFilename),
     resource_type: classification.resourceType,
-    cluster: detectCluster(searchableText),
-    event_name: detectEventName(searchableText),
-    instructional_area: null,
-    performance_indicators: detectPerformanceIndicators(text),
+    cluster: detected.cluster,
+    event_category: detected.event_category,
+    event_code: detected.event_code,
+    event_name: detected.event_name,
+    instructional_area: detected.instructional_area,
+    performance_indicators:
+      classification.resourceType === "roleplay" ? detectPerformanceIndicators(text) : null,
     performance_indicators_reviewed: false,
-    year: detectYear(searchableText),
+    year: detected.year ?? detectYear(`${originalFilename} ${folderText}`),
     original_filename: originalFilename,
   };
-
-  metadata.instructional_area = getInstructionalAreaForResource(metadata);
 
   return metadata;
 }

@@ -80,7 +80,7 @@ export async function GET(request: Request, context: RouteContext) {
       await Promise.all([
         supabase
           .from("resources")
-          .select("id,title,cluster,event_name,year,resource_type,original_filename")
+          .select("id,title,cluster,event_code,event_name,event_category,year,resource_type,original_filename")
           .eq("id", attempt.resource_id)
           .single(),
         supabase

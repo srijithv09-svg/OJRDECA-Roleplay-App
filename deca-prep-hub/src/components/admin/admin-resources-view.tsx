@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { ResourceErrorState, ResourceLoadingState } from "@/components/resources/resource-states";
+import { decaEvents, getDecaEventByCode } from "@/lib/deca/events";
 import { getCurrentProfile } from "@/lib/services/profiles";
 import { ResourcesService } from "@/lib/services/resources";
 import type {
@@ -17,6 +18,8 @@ import type {
 
 type MetadataDraft = {
   cluster: string;
+  event_category: string;
+  event_code: string;
   event_name: string;
   instructional_area: string;
   performance_indicators: string;
@@ -26,7 +29,7 @@ type MetadataDraft = {
   year: string;
 };
 
-type MetadataTextField = "cluster" | "event_name" | "instructional_area" | "year";
+type MetadataTextField = "cluster" | "event_category" | "event_name" | "instructional_area" | "year";
 type ApprovalStatusFilter = "all" | "approved" | "pending" | "rejected";
 type SelectOption = {
   label: string;
@@ -35,6 +38,7 @@ type SelectOption = {
 
 const metadataTextFields: Array<[MetadataTextField, string]> = [
   ["cluster", "Cluster"],
+  ["event_category", "Event category"],
   ["event_name", "Event name"],
   ["instructional_area", "Instructional area"],
   ["year", "Year"],
@@ -52,6 +56,8 @@ const resourceTypeOptions: Array<"all" | SupabaseResourceType> = [
 function toDraft(resource: ResourceListItem): MetadataDraft {
   return {
     cluster: resource.cluster ?? "",
+    event_category: resource.event_category ?? "",
+    event_code: resource.event_code ?? "",
     event_name: resource.event_name ?? "",
     instructional_area: resource.instructional_area ?? "",
     performance_indicators: resource.performance_indicators?.join("\n") ?? "",
@@ -62,18 +68,30 @@ function toDraft(resource: ResourceListItem): MetadataDraft {
   };
 }
 
-function toMetadataUpdate(draft: MetadataDraft): ResourceMetadataUpdate {
+function toMetadataUpdate(
+  draft: MetadataDraft,
+  originalResource: ResourceListItem,
+): ResourceMetadataUpdate {
   const performanceIndicators = draft.performance_indicators
     .split(/\r?\n/)
     .map((indicator) => indicator.trim())
     .filter(Boolean);
+  const isRoleplay = draft.resource_type === "roleplay";
 
   return {
     cluster: draft.cluster.trim() || null,
+    event_category: draft.event_category.trim() || null,
+    event_code: draft.event_code.trim().toUpperCase() || null,
     event_name: draft.event_name.trim() || null,
     instructional_area: draft.instructional_area.trim() || null,
-    performance_indicators: performanceIndicators.length > 0 ? performanceIndicators : null,
-    performance_indicators_reviewed: draft.performance_indicators_reviewed,
+    performance_indicators: isRoleplay
+      ? performanceIndicators.length > 0
+        ? performanceIndicators
+        : null
+      : originalResource.performance_indicators,
+    performance_indicators_reviewed: isRoleplay
+      ? draft.performance_indicators_reviewed
+      : originalResource.performance_indicators_reviewed,
     resource_type: draft.resource_type,
     title: draft.title.trim(),
     year: draft.year.trim() ? Number(draft.year) : null,
@@ -111,6 +129,8 @@ function searchableText(resource: ResourceListItem) {
     resource.title,
     resource.original_filename,
     resource.event_name,
+    resource.event_code,
+    resource.event_category,
     resource.cluster,
     resource.instructional_area,
     resource.resource_type,
@@ -377,7 +397,7 @@ export function AdminResourcesView() {
     try {
       const updatedResource = await ResourcesService.updateMetadata(
         editingResource.id,
-        toMetadataUpdate(draft),
+        toMetadataUpdate(draft, editingResource),
       );
       patchResources([updatedResource]);
       closeEditor();
@@ -593,7 +613,9 @@ function ResourceApprovalCard({
   resource: ResourceListItem;
 }) {
   const hasReviewedIndicators =
-    resource.performance_indicators_reviewed && resource.performance_indicators?.length;
+    resource.resource_type === "roleplay" &&
+    resource.performance_indicators_reviewed &&
+    resource.performance_indicators?.length;
 
   return (
     <Card>
@@ -612,6 +634,7 @@ function ResourceApprovalCard({
                 {resource.approval_status ?? "No status"}
               </Badge>
               <Badge tone="blue">{resource.resource_type}</Badge>
+              {resource.event_code ? <Badge>{resource.event_code}</Badge> : null}
               <Badge>{resource.year ?? "Year TBD"}</Badge>
             </div>
             <h2 className="mt-3 text-xl font-semibold text-slate-950">{resource.title}</h2>
@@ -659,9 +682,10 @@ function ResourceApprovalCard({
 
       <dl className="mt-5 grid gap-3 md:grid-cols-3">
         {[
+          ["Event code", resource.event_code],
+          ["Event name", resource.event_name],
+          ["Event category", resource.event_category],
           ["Cluster", resource.cluster],
-          ["Event", resource.event_name],
-          ["Instructional area", resource.instructional_area],
         ].map(([label, value]) => (
           <div className="rounded-lg bg-slate-50 p-3 text-sm" key={label}>
             <dt className="font-semibold text-slate-800">{label}</dt>
@@ -671,37 +695,39 @@ function ResourceApprovalCard({
       </dl>
 
       <div className="mt-4 grid gap-3 lg:grid-cols-2">
-        <div className="rounded-lg border border-slate-100 bg-white p-3">
-          <p className="text-sm font-semibold text-slate-800">Performance indicators</p>
-          {hasReviewedIndicators ? (
-            <ul className="mt-2 space-y-1 text-sm text-slate-600">
-              {resource.performance_indicators?.map((indicator) => (
-                <li key={indicator}>{indicator}</li>
-              ))}
-            </ul>
-          ) : (
-            <p className="mt-2 text-sm text-slate-500">
-              Performance indicators pending review
-            </p>
-          )}
-          {resource.performance_indicators?.length ? (
-            <details className="mt-3">
-              <summary className="cursor-pointer text-sm font-semibold text-slate-700">
-                Raw extracted indicators
-              </summary>
-              <ul className="mt-2 grid gap-2">
-                {resource.performance_indicators.map((indicator) => (
-                  <li
-                    className="rounded-lg border border-slate-100 bg-slate-50 p-3 text-sm text-slate-600"
-                    key={indicator}
-                  >
-                    {indicator}
-                  </li>
+        {resource.resource_type === "roleplay" ? (
+          <div className="rounded-lg border border-slate-100 bg-white p-3">
+            <p className="text-sm font-semibold text-slate-800">Performance indicators</p>
+            {hasReviewedIndicators ? (
+              <ul className="mt-2 space-y-1 text-sm text-slate-600">
+                {resource.performance_indicators?.map((indicator) => (
+                  <li key={indicator}>{indicator}</li>
                 ))}
               </ul>
-            </details>
-          ) : null}
-        </div>
+            ) : (
+              <p className="mt-2 text-sm text-slate-500">
+                Performance indicators pending review
+              </p>
+            )}
+            {resource.performance_indicators?.length ? (
+              <details className="mt-3">
+                <summary className="cursor-pointer text-sm font-semibold text-slate-700">
+                  Raw extracted indicators
+                </summary>
+                <ul className="mt-2 grid gap-2">
+                  {resource.performance_indicators.map((indicator) => (
+                    <li
+                      className="rounded-lg border border-slate-100 bg-slate-50 p-3 text-sm text-slate-600"
+                      key={indicator}
+                    >
+                      {indicator}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ) : null}
+          </div>
+        ) : null}
 
         <details className="rounded-lg border border-slate-100 bg-slate-50 p-3">
           <summary className="cursor-pointer text-sm font-semibold text-slate-800">
@@ -739,6 +765,25 @@ function MetadataEditModal({
   onDraftChange: (draft: MetadataDraft) => void;
   onSave: () => void;
 }) {
+  const isRoleplayDraft = draft.resource_type === "roleplay";
+  function selectEventCode(eventCode: string) {
+    const selectedEvent = getDecaEventByCode(eventCode);
+
+    if (!selectedEvent) {
+      onDraftChange({ ...draft, event_code: "" });
+      return;
+    }
+
+    onDraftChange({
+      ...draft,
+      cluster: selectedEvent.cluster,
+      event_category: selectedEvent.category,
+      event_code: selectedEvent.code,
+      event_name: selectedEvent.name,
+      resource_type: "roleplay",
+    });
+  }
+
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4">
       <form
@@ -796,6 +841,22 @@ function MetadataEditModal({
             </select>
           </label>
 
+          <label className="grid gap-2 text-sm font-semibold text-slate-800">
+            Event code
+            <select
+              className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm font-normal text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+              onChange={(event) => selectEventCode(event.target.value)}
+              value={draft.event_code}
+            >
+              <option value="">Unknown / Manual</option>
+              {decaEvents.map((event) => (
+                <option key={event.code} value={event.code}>
+                  {event.code} - {event.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
           {metadataTextFields.map(([key, label]) => (
             <label className="grid gap-2 text-sm font-semibold text-slate-800" key={key}>
               {label}
@@ -808,31 +869,40 @@ function MetadataEditModal({
             </label>
           ))}
 
-          <label className="grid gap-2 text-sm font-semibold text-slate-800 md:col-span-2">
-            Performance indicators
-            <textarea
-              className="min-h-32 rounded-md border border-slate-200 px-3 py-2 text-sm font-normal outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-              onChange={(event) =>
-                onDraftChange({ ...draft, performance_indicators: event.target.value })
-              }
-              value={draft.performance_indicators}
-            />
-          </label>
+          {isRoleplayDraft ? (
+            <>
+              <label className="grid gap-2 text-sm font-semibold text-slate-800 md:col-span-2">
+                Performance indicators
+                <textarea
+                  className="min-h-32 rounded-md border border-slate-200 px-3 py-2 text-sm font-normal outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                  onChange={(event) =>
+                    onDraftChange({ ...draft, performance_indicators: event.target.value })
+                  }
+                  value={draft.performance_indicators}
+                />
+              </label>
 
-          <label className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 text-sm font-semibold text-slate-800 md:col-span-2">
-            <input
-              checked={draft.performance_indicators_reviewed}
-              className="h-4 w-4 rounded border-slate-300 text-blue-700 focus:ring-blue-500"
-              onChange={(event) =>
-                onDraftChange({
-                  ...draft,
-                  performance_indicators_reviewed: event.target.checked,
-                })
-              }
-              type="checkbox"
-            />
-            Mark performance indicators as reviewed
-          </label>
+              <label className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 text-sm font-semibold text-slate-800 md:col-span-2">
+                <input
+                  checked={draft.performance_indicators_reviewed}
+                  className="h-4 w-4 rounded border-slate-300 text-blue-700 focus:ring-blue-500"
+                  onChange={(event) =>
+                    onDraftChange({
+                      ...draft,
+                      performance_indicators_reviewed: event.target.checked,
+                    })
+                  }
+                  type="checkbox"
+                />
+                Mark performance indicators as reviewed
+              </label>
+            </>
+          ) : (
+            <div className="rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-600 md:col-span-2">
+              Performance indicators are only edited and displayed for roleplay resources.
+              Existing indicator data is preserved but hidden for exams, references, and unknown resources.
+            </div>
+          )}
         </div>
 
         <div className="mt-5 flex flex-wrap justify-end gap-2">
