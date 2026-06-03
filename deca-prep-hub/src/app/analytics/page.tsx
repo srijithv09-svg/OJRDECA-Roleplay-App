@@ -15,6 +15,7 @@ import {
 import type {
   AnalyticsAreaSummary,
   AnalyticsAttemptSummary,
+  RoleplayAttemptSummary,
   StudentAnalyticsSummary,
 } from "@/lib/types";
 
@@ -128,6 +129,23 @@ function AttemptHistoryRow({
         </button>
       </div>
     </div>
+  );
+}
+
+function RoleplayAttemptRow({ attempt }: { attempt: RoleplayAttemptSummary }) {
+  return (
+    <Link
+      className="flex flex-col gap-2 rounded-lg border border-slate-100 p-3 transition hover:border-blue-200 hover:bg-blue-50 sm:flex-row sm:items-center sm:justify-between"
+      href={`/roleplays/attempts/${attempt.id}`}
+    >
+      <div>
+        <p className="font-semibold text-slate-950">{attempt.resource_title}</p>
+        <p className="mt-1 text-sm text-slate-500">
+          {attempt.event_code ?? "Event TBD"} - {formatDate(attempt.created_at)}
+        </p>
+      </div>
+      <Badge tone="blue">Confidence {attempt.confidence_rating ?? "N/A"}</Badge>
+    </Link>
   );
 }
 
@@ -261,6 +279,48 @@ export default function AnalyticsPage() {
           label="Most recent"
           value={analytics.mostRecentScore === null ? "N/A" : `${analytics.mostRecentScore}%`}
         />
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+        <Card>
+          <CardHeader eyebrow="Roleplay practice" title="Recent roleplay attempts" />
+          {analytics.recentRoleplayAttempts.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-5 text-sm leading-6 text-slate-600">
+              No roleplay attempts yet. Open an approved roleplay and save a practice response to
+              start building this history.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {analytics.recentRoleplayAttempts.map((attempt) => (
+                <RoleplayAttemptRow attempt={attempt} key={attempt.id} />
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Card>
+          <CardHeader eyebrow="Roleplays" title="Most practiced events" />
+          <p className="mb-4 text-4xl font-bold text-slate-950">
+            {analytics.roleplayAttemptsCompleted}
+          </p>
+          {analytics.mostPracticedEventCodes.length === 0 ? (
+            <p className="text-sm leading-6 text-slate-600">
+              Event-code practice counts appear after you save roleplay attempts.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {analytics.mostPracticedEventCodes.map((event) => (
+                <div
+                  className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 p-3 text-sm"
+                  key={event.event_code}
+                >
+                  <span className="font-semibold text-slate-950">{event.event_code}</span>
+                  <span className="text-slate-600">{event.attempts} attempts</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1.5fr_1fr]">

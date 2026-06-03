@@ -6,6 +6,7 @@ export type ProfileRole = "student" | "admin";
 export type ExamCorrectAnswer = "A" | "B" | "C" | "D" | "E";
 export type ExamSelectedAnswer = ExamCorrectAnswer | "UNANSWERED";
 export type ExamKeyStatus = "no-key" | "partial" | "complete";
+export type AttemptProcessingStatus = "none" | "pending" | "complete" | "failed";
 
 export type Profile = {
   id: string;
@@ -92,6 +93,35 @@ export type ExamAttemptAnswer = {
   instructional_area: string | null;
 };
 
+export type RoleplayAttempt = {
+  id: string;
+  user_id: string;
+  resource_id: string;
+  response_notes: string | null;
+  performance_indicator_notes: string | null;
+  self_reflection: string | null;
+  judge_feedback: string | null;
+  audio_path: string | null;
+  transcript: string | null;
+  transcript_status: AttemptProcessingStatus;
+  ai_feedback_status: AttemptProcessingStatus;
+  ai_overall_score: number | null;
+  ai_feedback_json: Record<string, unknown> | null;
+  strengths: string[] | null;
+  growth_areas: string[] | null;
+  confidence_rating: number | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type RoleplayAttemptInput = {
+  response_notes?: string | null;
+  performance_indicator_notes?: string | null;
+  self_reflection?: string | null;
+  judge_feedback?: string | null;
+  confidence_rating?: number | null;
+};
+
 export type InstructionalAreaBreakdown = {
   instructional_area: string;
   correct_count: number;
@@ -134,6 +164,12 @@ export type StudentAnalyticsSummary = {
   averageScore: number;
   bestScore: number | null;
   mostRecentScore: number | null;
+  roleplayAttemptsCompleted: number;
+  recentRoleplayAttempts: RoleplayAttemptSummary[];
+  mostPracticedEventCodes: Array<{
+    event_code: string;
+    attempts: number;
+  }>;
   recentAttempts: AnalyticsAttemptSummary[];
   attemptHistory: AnalyticsAttemptSummary[];
   weakAreas: AnalyticsAreaSummary[];
@@ -162,6 +198,40 @@ export type ExamAttemptResult = {
   resource: PublicExamResource;
   answers: ExamAttemptAnswer[];
   breakdown: InstructionalAreaBreakdown[];
+};
+
+export type PublicRoleplayResource = Pick<
+  ResourceListItem,
+  | "cluster"
+  | "event_category"
+  | "event_code"
+  | "event_name"
+  | "id"
+  | "original_filename"
+  | "performance_indicators"
+  | "performance_indicators_reviewed"
+  | "resource_type"
+  | "title"
+  | "year"
+>;
+
+export type RoleplayAttemptResult = {
+  attempt: RoleplayAttempt;
+  resource: PublicRoleplayResource;
+};
+
+export type RoleplayAttemptSummary = {
+  id: string;
+  resource_id: string;
+  resource_title: string;
+  event_code: string | null;
+  event_name: string | null;
+  event_category: string | null;
+  cluster: string | null;
+  confidence_rating: number | null;
+  transcript_status: AttemptProcessingStatus;
+  ai_feedback_status: AttemptProcessingStatus;
+  created_at: string | null;
 };
 
 export type PublicExamResource = Pick<
@@ -226,6 +296,31 @@ export type Database = {
         Row: ExamAttemptAnswer;
         Insert: Partial<Database["public"]["Tables"]["exam_attempt_answers"]["Row"]>;
         Update: Partial<Database["public"]["Tables"]["exam_attempt_answers"]["Row"]>;
+        Relationships: [];
+      };
+      roleplay_attempts: {
+        Row: RoleplayAttempt;
+        Insert: {
+          id?: string;
+          user_id: string;
+          resource_id: string;
+          response_notes?: string | null;
+          performance_indicator_notes?: string | null;
+          self_reflection?: string | null;
+          judge_feedback?: string | null;
+          audio_path?: string | null;
+          transcript?: string | null;
+          transcript_status?: AttemptProcessingStatus;
+          ai_feedback_status?: AttemptProcessingStatus;
+          ai_overall_score?: number | null;
+          ai_feedback_json?: Record<string, unknown> | null;
+          strengths?: string[] | null;
+          growth_areas?: string[] | null;
+          confidence_rating?: number | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["roleplay_attempts"]["Insert"]>;
         Relationships: [];
       };
     };

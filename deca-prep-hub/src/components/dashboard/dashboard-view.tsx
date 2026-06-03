@@ -9,6 +9,7 @@ import { getProfileDisplayName } from "@/lib/profile-display";
 import { AnalyticsService } from "@/lib/services/analytics";
 import { EXAM_ATTEMPTS_CHANGED_EVENT } from "@/lib/services/exam-attempts";
 import { getCurrentProfile } from "@/lib/services/profiles";
+import { ROLEPLAY_ATTEMPTS_CHANGED_EVENT } from "@/lib/services/roleplay-attempts";
 import type {
   AnalyticsAreaSummary,
   AnalyticsAttemptSummary,
@@ -196,10 +197,12 @@ export function DashboardView() {
     }
 
     window.addEventListener(EXAM_ATTEMPTS_CHANGED_EVENT, refreshDashboard);
+    window.addEventListener(ROLEPLAY_ATTEMPTS_CHANGED_EVENT, refreshDashboard);
     window.addEventListener("focus", refreshDashboard);
 
     return () => {
       window.removeEventListener(EXAM_ATTEMPTS_CHANGED_EVENT, refreshDashboard);
+      window.removeEventListener(ROLEPLAY_ATTEMPTS_CHANGED_EVENT, refreshDashboard);
       window.removeEventListener("focus", refreshDashboard);
     };
   }, []);
@@ -299,7 +302,7 @@ export function DashboardView() {
         </Card>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-3">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard eyebrow="Attempts" title="Exams completed" value={analytics.examsCompleted} />
         <StatCard
           eyebrow="Average"
@@ -310,6 +313,11 @@ export function DashboardView() {
           eyebrow="Best"
           title="Best score"
           value={analytics.bestScore === null ? "N/A" : `${analytics.bestScore}%`}
+        />
+        <StatCard
+          eyebrow="Roleplays"
+          title="Practice attempts"
+          value={analytics.roleplayAttemptsCompleted}
         />
       </section>
 
@@ -331,25 +339,48 @@ export function DashboardView() {
         </Card>
 
         <Card>
-          <CardHeader eyebrow="Instructional areas" title="Strong and weak areas" />
-          <div className="grid gap-5">
-            <div>
-              <p className="mb-2 text-sm font-semibold text-slate-800">Strong</p>
-              <AreaList
-                areas={analytics.strongAreas}
-                emptyLabel="Strong areas appear after correct answers are saved."
-                mode="strong"
-              />
+          <CardHeader eyebrow="Roleplay practice" title="Latest attempts" />
+          {analytics.recentRoleplayAttempts.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-5 text-sm leading-6 text-slate-600">
+              No roleplay attempts yet. Save a written practice response to see it here.
             </div>
-            <div>
-              <p className="mb-2 text-sm font-semibold text-slate-800">Needs work</p>
-              <AreaList
-                areas={analytics.weakAreas}
-                emptyLabel="Weak areas appear after missed answers are saved."
-                mode="weak"
-              />
+          ) : (
+            <div className="space-y-3">
+              {analytics.recentRoleplayAttempts.map((attempt) => (
+                <div
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-100 p-3"
+                  key={attempt.id}
+                >
+                  <div>
+                    <p className="font-semibold text-slate-950">{attempt.resource_title}</p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {attempt.event_code ?? "Event TBD"} - {formatDate(attempt.created_at)}
+                    </p>
+                  </div>
+                  <ButtonLink href={`/roleplays/attempts/${attempt.id}`}>Open</ButtonLink>
+                </div>
+              ))}
             </div>
-          </div>
+          )}
+        </Card>
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader eyebrow="Instructional areas" title="Strong areas" />
+          <AreaList
+            areas={analytics.strongAreas}
+            emptyLabel="Strong areas appear after correct answers are saved."
+            mode="strong"
+          />
+        </Card>
+        <Card>
+          <CardHeader eyebrow="Instructional areas" title="Needs work" />
+          <AreaList
+            areas={analytics.weakAreas}
+            emptyLabel="Weak areas appear after missed answers are saved."
+            mode="weak"
+          />
         </Card>
       </section>
 

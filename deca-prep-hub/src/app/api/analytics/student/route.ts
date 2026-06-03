@@ -17,33 +17,53 @@ export async function GET(request: Request) {
       .select("id,user_id,resource_id,score,total_questions,percentage,completed_at")
       .eq("user_id", user.id)
       .order("completed_at", { ascending: false });
+    const { data: roleplayAttempts, error: roleplayAttemptsError } = await supabase
+      .from("roleplay_attempts")
+      .select(
+        "id,user_id,resource_id,response_notes,performance_indicator_notes,self_reflection,judge_feedback,audio_path,transcript,transcript_status,ai_feedback_status,ai_overall_score,ai_feedback_json,strengths,growth_areas,confidence_rating,created_at,updated_at",
+      )
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
 
     if (attemptsError) {
       return NextResponse.json({ error: attemptsError.message }, { status: 500 });
     }
 
-    const attemptRows = attempts ?? [];
+    if (roleplayAttemptsError) {
+      return NextResponse.json({ error: roleplayAttemptsError.message }, { status: 500 });
+    }
 
-    if (attemptRows.length === 0) {
+    const attemptRows = attempts ?? [];
+    const roleplayAttemptRows = roleplayAttempts ?? [];
+
+    if (attemptRows.length === 0 && roleplayAttemptRows.length === 0) {
       return NextResponse.json(
         buildStudentAnalytics({
           attempts: [],
           answers: [],
+          roleplayAttempts: [],
           resources: [],
         }),
       );
     }
 
     const attemptIds = attemptRows.map((attempt) => attempt.id);
-    const resourceIds = Array.from(new Set(attemptRows.map((attempt) => attempt.resource_id)));
+    const resourceIds = Array.from(
+      new Set([
+        ...attemptRows.map((attempt) => attempt.resource_id),
+        ...roleplayAttemptRows.map((attempt) => attempt.resource_id),
+      ]),
+    );
     const [{ data: answers, error: answersError }, { data: resources, error: resourcesError }] =
       await Promise.all([
-        supabase
-          .from("exam_attempt_answers")
-          .select(
-            "id,attempt_id,question_number,selected_answer,correct_answer,is_correct,instructional_area",
-          )
-          .in("attempt_id", attemptIds),
+        attemptIds.length > 0
+          ? supabase
+              .from("exam_attempt_answers")
+              .select(
+                "id,attempt_id,question_number,selected_answer,correct_answer,is_correct,instructional_area",
+              )
+              .in("attempt_id", attemptIds)
+          : Promise.resolve({ data: [], error: null }),
         supabase.from("resources").select("*").in("id", resourceIds),
       ]);
 
@@ -59,6 +79,7 @@ export async function GET(request: Request) {
       buildStudentAnalytics({
         attempts: attemptRows,
         answers: answers ?? [],
+        roleplayAttempts: roleplayAttemptRows,
         resources: resources ?? [],
       }),
     );

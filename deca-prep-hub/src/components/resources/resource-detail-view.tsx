@@ -8,7 +8,8 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { ExamAttemptsService } from "@/lib/services/exam-attempts";
 import { ResourcesService, type PublicResourceListItem } from "@/lib/services/resources";
-import type { ExamAttempt } from "@/lib/types";
+import { RoleplayAttemptsService } from "@/lib/services/roleplay-attempts";
+import type { ExamAttempt, RoleplayAttemptSummary } from "@/lib/types";
 import { ResourceEmptyState, ResourceErrorState, ResourceLoadingState } from "./resource-states";
 
 function formatValue(value: number | string | null | undefined) {
@@ -55,6 +56,7 @@ export function ResourceDetailView() {
   >("idle");
   const [examQuestionCount, setExamQuestionCount] = useState(0);
   const [recentAttempts, setRecentAttempts] = useState<ExamAttempt[]>([]);
+  const [recentRoleplayAttempts, setRecentRoleplayAttempts] = useState<RoleplayAttemptSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -81,6 +83,7 @@ export function ResourceDetailView() {
           setExamKeyState("idle");
           setExamQuestionCount(0);
           setRecentAttempts([]);
+          setRecentRoleplayAttempts([]);
           setError(null);
           return;
         }
@@ -148,10 +151,31 @@ export function ResourceDetailView() {
               setRecentAttempts([]);
             }
           }
+        } else if (nextResource.resource_type === "roleplay") {
+          setExamKeyState("idle");
+          setExamQuestionCount(0);
+          setRecentAttempts([]);
+
+          try {
+            const attempts = await RoleplayAttemptsService.getStudentRoleplayAttemptsForResource(
+              nextResource.id,
+            );
+
+            if (!isActive) {
+              return;
+            }
+
+            setRecentRoleplayAttempts(attempts);
+          } catch {
+            if (isActive) {
+              setRecentRoleplayAttempts([]);
+            }
+          }
         } else {
           setExamKeyState("idle");
           setExamQuestionCount(0);
           setRecentAttempts([]);
+          setRecentRoleplayAttempts([]);
         }
       } catch (caughtError) {
         if (!isActive) {
@@ -169,6 +193,7 @@ export function ResourceDetailView() {
         setExamKeyState("idle");
         setExamQuestionCount(0);
         setRecentAttempts([]);
+        setRecentRoleplayAttempts([]);
       } finally {
         if (isActive) {
           setIsLoading(false);
@@ -190,6 +215,7 @@ export function ResourceDetailView() {
     setExamKeyState("idle");
     setExamQuestionCount(0);
     setRecentAttempts([]);
+    setRecentRoleplayAttempts([]);
     setReloadKey((currentKey) => currentKey + 1);
   }
 
@@ -251,12 +277,12 @@ export function ResourceDetailView() {
               </a>
             ) : null}
             {resource.resource_type === "roleplay" ? (
-              <button
-                className="inline-flex min-h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700"
-                type="button"
+              <Link
+                className="inline-flex min-h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
+                href={`/roleplays/${resource.id}/practice`}
               >
-                Practice roleplay
-              </button>
+                Practice Roleplay
+              </Link>
             ) : null}
             {resource.resource_type === "exam" ? (
               examKeyState === "available" ? (
@@ -390,22 +416,67 @@ export function ResourceDetailView() {
           ) : null}
 
           {isRoleplay ? (
-            <Card>
-              <CardHeader eyebrow="Indicators" title="Performance indicators" />
-              {hasReviewedIndicators ? (
-                <ul className="space-y-2 text-sm text-slate-600">
-                  {resource.performance_indicators?.map((indicator) => (
-                    <li className="rounded-lg border border-slate-100 p-3" key={indicator}>
-                      {indicator}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm leading-6 text-slate-600">
-                  Performance indicators pending review
-                </p>
-              )}
-            </Card>
+            <>
+              <Card>
+                <CardHeader
+                  action={
+                    <Link
+                      className="rounded-md bg-blue-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-blue-800"
+                      href={`/roleplays/${resource.id}/practice`}
+                    >
+                      Practice Roleplay
+                    </Link>
+                  }
+                  eyebrow="Practice"
+                  title="Your roleplay attempts"
+                />
+                {recentRoleplayAttempts.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-5 text-sm leading-6 text-slate-600">
+                    No saved attempts for this roleplay yet. Start a practice attempt to save your
+                    response, reflection, and future feedback data.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {recentRoleplayAttempts.map((attempt) => (
+                      <Link
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-100 p-3 text-sm transition hover:border-blue-200 hover:bg-blue-50"
+                        href={`/roleplays/attempts/${attempt.id}`}
+                        key={attempt.id}
+                      >
+                        <span className="font-medium text-slate-700">
+                          {attempt.created_at
+                            ? new Intl.DateTimeFormat("en-US", {
+                                dateStyle: "medium",
+                              }).format(new Date(attempt.created_at))
+                            : "Date unavailable"}
+                        </span>
+                        <span className="font-semibold text-slate-950">
+                          Confidence {attempt.confidence_rating ?? "N/A"} - AI{" "}
+                          {attempt.ai_feedback_status}
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </Card>
+
+              <Card>
+                <CardHeader eyebrow="Indicators" title="Performance indicators" />
+                {hasReviewedIndicators ? (
+                  <ul className="space-y-2 text-sm text-slate-600">
+                    {resource.performance_indicators?.map((indicator) => (
+                      <li className="rounded-lg border border-slate-100 p-3" key={indicator}>
+                        {indicator}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm leading-6 text-slate-600">
+                    Performance indicators pending review
+                  </p>
+                )}
+              </Card>
+            </>
           ) : null}
         </div>
       </section>

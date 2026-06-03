@@ -255,6 +255,8 @@ Student-visible pages:
 /resources/[id]
 /exams/[id]/take
 /exams/attempts/[attemptId]
+/roleplays/[id]/practice
+/roleplays/attempts/[attemptId]
 
 Auth utility routes:
 
@@ -320,6 +322,28 @@ Storage bucket:
 resources
 
 This bucket holds uploaded PDFs.
+
+Roleplay audio storage bucket:
+
+roleplay-audio
+
+This bucket holds optional student roleplay practice recordings. It should remain
+private. Audio access is mediated by server API routes that verify the signed-in
+@ojrsd.net user owns the roleplay_attempts row before uploading, deleting, or
+creating signed playback URLs.
+
+Migration:
+
+supabase/migrations/20260601001000_create_roleplay_audio_bucket.sql
+
+Storage path format:
+
+roleplay-attempts/{user_id}/{attempt_id}/{timestamp}.webm
+
+The app does not expose SUPABASE_SERVICE_ROLE_KEY in frontend code. Browser code
+records audio with MediaRecorder, then sends the Blob to a server route after the
+attempt is saved. The server uploads to Supabase Storage with the service role
+only after checking attempt ownership.
 
 PDF access is handled through signed URLs. The actual signed URL path must be the object path inside the bucket, not including the bucket name.
 
@@ -724,7 +748,10 @@ event_category
 cluster
 year
 Open / Download PDF button
-Practice roleplay button placeholder/future feature
+Practice Roleplay button linking to /roleplays/[id]/practice
+
+Approved roleplay detail pages should show recent roleplay attempts for the
+current user when available. Students should only see their own attempts.
 
 Student exam cards should show:
 
@@ -879,6 +906,110 @@ Example student answers:
 Expected score:
 
 3 / 5 = 60%
+
+Roleplay Practice Attempts
+
+Implemented non-AI roleplay practice flow:
+
+/resources/[id] approved roleplay detail
+â†’ Practice Roleplay
+â†’ /roleplays/[id]/practice
+â†’ save response/reflection
+â†’ /roleplays/attempts/[attemptId]
+
+Routes/APIs:
+
+/roleplays/[id]/practice
+/roleplays/attempts/[attemptId]
+GET /api/roleplays/[id]/attempts
+POST /api/roleplays/[id]/attempts
+GET /api/roleplays/attempts/[attemptId]
+PUT /api/roleplays/attempts/[attemptId]
+DELETE /api/roleplays/attempts/[attemptId]
+GET /api/roleplays/attempts/[attemptId]/audio
+POST /api/roleplays/attempts/[attemptId]/audio
+DELETE /api/roleplays/attempts/[attemptId]/audio
+
+Service file:
+
+src/lib/services/roleplay-attempts.ts
+
+Audio service helpers:
+
+uploadRoleplayAttemptAudio()
+getRoleplayAttemptAudioSignedUrl()
+removeRoleplayAttemptAudio()
+
+Database table:
+
+roleplay_attempts
+- id uuid primary key default gen_random_uuid()
+- user_id uuid references auth.users(id) on delete cascade
+- resource_id uuid references resources(id) on delete cascade
+- response_notes text nullable
+- performance_indicator_notes text nullable
+- self_reflection text nullable
+- judge_feedback text nullable
+- audio_path text nullable
+- transcript text nullable
+- transcript_status text default 'none'
+- ai_feedback_status text default 'none'
+- ai_overall_score numeric nullable
+- ai_feedback_json jsonb nullable
+- strengths text[] nullable
+- growth_areas text[] nullable
+- confidence_rating integer nullable
+- created_at timestamp with time zone default now()
+- updated_at timestamp with time zone default now()
+
+Constraints:
+
+transcript_status in: none, pending, complete, failed
+ai_feedback_status in: none, pending, complete, failed
+confidence_rating must be between 1 and 5 when present
+
+Migration:
+
+supabase/migrations/20260601000000_create_roleplay_attempts.sql
+
+RLS/security:
+
+RLS is enabled on roleplay_attempts.
+Authenticated students can insert only rows where user_id = auth.uid().
+Students can select/update/delete only their own attempts.
+Server API routes also verify @ojrsd.net auth and check attempt ownership before
+returning, updating, or deleting an attempt.
+No service-role key is exposed to frontend code.
+Admin aggregate access for roleplay attempts is not implemented yet.
+
+Practice page behavior:
+
+Shows roleplay metadata and PDF open/download button.
+Includes a prep timer placeholder.
+Captures written response/transcript text.
+Captures what went well, what to improve, judge/partner feedback, and 1-5 confidence.
+Provides optional browser audio recording using MediaRecorder.
+Students can start recording, stop recording, play back the recording, and delete/re-record before saving.
+Audio upload happens after the attempt row is saved; if upload fails, the text attempt remains saved and the UI shows a warning.
+Editing an attempt supports replacing or removing attached audio.
+Provides disabled "Generate AI feedback" Coming soon button.
+Editing uses /roleplays/[id]/practice?attemptId=...
+
+Attempt detail behavior:
+
+Shows roleplay metadata, saved response notes, self-reflection, judge feedback,
+confidence rating, transcript status, AI feedback status, attached audio player when audio_path exists,
+a disabled "Generate transcript" Coming soon control, and an "AI feedback coming soon" card.
+Supports edit and delete for the owning student. Deleting an attempt also attempts to remove attached audio from roleplay-audio.
+
+Future audio/transcription/AI readiness:
+
+The table includes audio_path, transcript, transcript_status, ai_feedback_status,
+ai_overall_score, ai_feedback_json, strengths, and growth_areas.
+No Gemini/OpenAI calls are implemented.
+Audio recording/uploading is implemented, but transcription is not.
+Future AI/transcription should run through server-side routes only.
+
 Analytics
 
 Implemented real attempt-based analytics.
@@ -899,6 +1030,10 @@ strong instructional areas based on correct answers
 attempt history
 missed-question summary
 links to result pages
+roleplay practice section with total roleplay attempts
+recent roleplay attempts
+most practiced event codes
+no roleplay AI scores yet
 
 Admin analytics should show:
 
@@ -935,6 +1070,7 @@ approved exam count
 approved resource count
 recently approved resources
 student attempt stats where available
+recent roleplay attempts where available
 admin-only pending/rejected/resource/user stats where available
 
 Old fake score/streak widgets were removed or marked as coming soon.
@@ -1031,31 +1167,27 @@ If PowerShell blocks scripts, use:
 Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
 Current Recommended Next Feature
 
-The next feature after deployment/testing should likely be roleplay practice attempts without AI first.
+Roleplay practice attempts and optional browser audio recording are now implemented.
+The next feature after deployment/testing should likely be transcription support,
+but only through server-side routes and only after the saved attempt/audio workflow
+is stable in production.
 
 Suggested scope:
 
-Roleplay resource → Practice this roleplay → student writes response/reflection → save attempt → show attempt history → analytics later
+Roleplay attempt detail → existing audio_path → transcription job/API → transcript_status
+tracking → transcript saved to roleplay_attempts → later AI feedback generation
 
 Suggested prompt:
 
-Build roleplay practice attempts without AI yet.
+Add roleplay attempt transcription support without AI feedback yet.
 
 Requirements:
-1. Add "Practice Roleplay" button on approved roleplay resource detail pages.
-2. Create /roleplays/[id]/practice.
-3. Student can enter:
-   - response notes
-   - performance indicator notes
-   - self-reflection
-   - judge feedback if they practiced with someone
-4. Save attempt to Supabase.
-5. Create /roleplays/attempts/[attemptId] result/reflection page.
-6. Show recent roleplay attempts on dashboard/analytics.
-7. Students only see their own attempts.
-8. Keep UI consistent.
-9. Do not add AI yet.
-10. Do not expose SUPABASE_SERVICE_ROLE_KEY in frontend code.
+1. Keep existing roleplay attempt ownership checks.
+2. Use audio_path from the private roleplay-audio bucket.
+3. Save transcript text on roleplay_attempts.transcript.
+4. Use transcript_status values: none, pending, complete, failed.
+5. Do not add AI scoring/feedback in the transcription-only step.
+6. Do not expose SUPABASE_SERVICE_ROLE_KEY in frontend code.
 
 Later AI feedback can be added using Gemini or OpenAI through server-side API routes only.
 
@@ -1084,10 +1216,10 @@ roleplay_attempts
 - judge_feedback
 - transcript
 - audio_path
-- ai_score
-- ai_feedback
+- ai_overall_score
+- ai_feedback_json
 - strengths
-- weaknesses
+- growth_areas
 - created_at
 
 AI feedback should return structured JSON such as:
@@ -1182,11 +1314,13 @@ server-side grading
 exam result pages
 real student/admin analytics
 student attempt deletion / clean slate
+roleplay practice attempts without AI
+roleplay attempt dashboard/analytics sections
 
 Next likely priorities:
 
 Fix production deployment/root route if needed.
 Manually test full deployed auth/resource/exam flow.
 Polish UX for exam-taking/results.
-Build roleplay practice attempts without AI.
-Add AI feedback only after roleplay attempts are stable.
+Add audio recording/transcription only after roleplay attempts are stable.
+Add AI feedback only after transcription/response workflows are stable.

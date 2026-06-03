@@ -6,6 +6,8 @@ import type {
   ExamAttemptAnswer,
   MissedQuestionSummary,
   ResourceListItem,
+  RoleplayAttempt,
+  RoleplayAttemptSummary,
   StudentAnalyticsSummary,
   SupabaseResourceType,
 } from "@/lib/types";
@@ -23,6 +25,27 @@ function getAreaName(value: string | null | undefined) {
 
 function getResourceTitle(resource: ResourceListItem | undefined) {
   return resource?.title ?? "Unknown exam";
+}
+
+function toRoleplayAttemptSummary(
+  attempt: RoleplayAttempt,
+  resourcesById: Map<string, ResourceListItem>,
+): RoleplayAttemptSummary {
+  const resource = resourcesById.get(attempt.resource_id);
+
+  return {
+    id: attempt.id,
+    resource_id: attempt.resource_id,
+    resource_title: resource?.title ?? "Unknown roleplay",
+    event_code: resource?.event_code ?? null,
+    event_name: resource?.event_name ?? null,
+    event_category: resource?.event_category ?? null,
+    cluster: resource?.cluster ?? null,
+    confidence_rating: attempt.confidence_rating,
+    transcript_status: attempt.transcript_status,
+    ai_feedback_status: attempt.ai_feedback_status,
+    created_at: attempt.created_at,
+  };
 }
 
 function toAttemptSummary(
@@ -97,10 +120,12 @@ function buildAreaSummaries(
 export function buildStudentAnalytics({
   answers,
   attempts,
+  roleplayAttempts = [],
   resources,
 }: {
   answers: ExamAttemptAnswer[];
   attempts: ExamAttempt[];
+  roleplayAttempts?: RoleplayAttempt[];
   resources: ResourceListItem[];
 }): StudentAnalyticsSummary {
   const resourcesById = new Map(resources.map((resource) => [resource.id, resource]));
@@ -114,6 +139,22 @@ export function buildStudentAnalytics({
     toAttemptSummary(attempt, resourcesById),
   );
   const percentages = attemptHistory.map((attempt) => attempt.percentage);
+  const sortedRoleplayAttempts = [...roleplayAttempts].sort(
+    (first, second) =>
+      new Date(second.created_at ?? 0).getTime() - new Date(first.created_at ?? 0).getTime(),
+  );
+  const recentRoleplayAttempts = sortedRoleplayAttempts
+    .map((attempt) => toRoleplayAttemptSummary(attempt, resourcesById))
+    .slice(0, 5);
+  const eventCodeCounts = new Map<string, number>();
+
+  for (const attempt of roleplayAttempts) {
+    const eventCode = resourcesById.get(attempt.resource_id)?.event_code;
+
+    if (eventCode) {
+      eventCodeCounts.set(eventCode, (eventCodeCounts.get(eventCode) ?? 0) + 1);
+    }
+  }
   const averageScore =
     percentages.length > 0
       ? percentage(percentages.reduce((total, value) => total + value, 0) / percentages.length)
@@ -144,6 +185,15 @@ export function buildStudentAnalytics({
     averageScore,
     bestScore: percentages.length > 0 ? Math.max(...percentages) : null,
     mostRecentScore: attemptHistory[0]?.percentage ?? null,
+    roleplayAttemptsCompleted: roleplayAttempts.length,
+    recentRoleplayAttempts,
+    mostPracticedEventCodes: Array.from(eventCodeCounts.entries())
+      .map(([eventCode, count]) => ({
+        event_code: eventCode,
+        attempts: count,
+      }))
+      .sort((first, second) => second.attempts - first.attempts || first.event_code.localeCompare(second.event_code))
+      .slice(0, 5),
     recentAttempts: attemptHistory.slice(0, 5),
     attemptHistory,
     weakAreas: buildAreaSummaries(answers, "weak").slice(0, 8),
