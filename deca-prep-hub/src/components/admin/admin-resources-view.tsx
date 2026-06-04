@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { ResourceErrorState, ResourceLoadingState } from "@/components/resources/resource-states";
+import { isAdminRole } from "@/lib/auth";
 import { decaEvents, getDecaEventByCode } from "@/lib/deca/events";
 import { getCurrentProfile } from "@/lib/services/profiles";
 import { ResourcesService } from "@/lib/services/resources";
@@ -175,7 +176,7 @@ export function AdminResourcesView() {
 
         setProfile(nextProfile);
 
-        if (nextProfile?.role !== "admin") {
+        if (!isAdminRole(nextProfile?.role)) {
           setResources([]);
           setError(null);
           return;
@@ -413,10 +414,16 @@ export function AdminResourcesView() {
   }
 
   if (error && !profile) {
-    return <ResourceErrorState message={error} onRetry={retryLoad} />;
+    return (
+      <ResourceErrorState
+        message="Unable to verify account role."
+        onRetry={retryLoad}
+        title="Unable to verify account role"
+      />
+    );
   }
 
-  if (profile?.role !== "admin") {
+  if (!isAdminRole(profile?.role)) {
     return (
       <Card className="border-red-200 bg-red-50">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-red-700">

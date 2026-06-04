@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button-link";
 import { Card, CardHeader } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
+import { getRoleLabel, isAdminRole } from "@/lib/auth";
 import { getProfileDisplayName } from "@/lib/profile-display";
 import { AnalyticsService } from "@/lib/services/analytics";
 import { EXAM_ATTEMPTS_CHANGED_EVENT } from "@/lib/services/exam-attempts";
@@ -235,7 +236,7 @@ export function DashboardView() {
   }
 
   const { analytics, profile } = dashboard;
-  const isAdmin = profile.role === "admin";
+  const isAdmin = isAdminRole(profile.role);
   const displayName = getProfileDisplayName(profile) ?? "member";
   const hasAttempts = analytics.examsCompleted > 0;
 
@@ -296,7 +297,7 @@ export function DashboardView() {
             </div>
             <div className="rounded-lg bg-slate-50 p-3">
               <p className="font-semibold text-slate-800">Role</p>
-              <p className="mt-1 capitalize text-slate-600">{profile.role}</p>
+              <p className="mt-1 text-slate-600">{getRoleLabel(profile.role)}</p>
             </div>
           </div>
         </Card>

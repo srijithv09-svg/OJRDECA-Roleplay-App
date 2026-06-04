@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardHeader } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
+import { isAdminRole } from "@/lib/auth";
 import { decaEvents, getDecaEventByCode } from "@/lib/deca/events";
 import { detectResourceMetadata, type DetectedResourceMetadata } from "@/lib/resources/metadata-detection";
 import { getCurrentOwnProfile } from "@/lib/services/profiles";
@@ -207,7 +208,7 @@ export function AdminUploadView() {
     );
   }
 
-  if (profile?.role !== "admin") {
+  if (!isAdminRole(profile?.role)) {
     return (
       <Card className="border-red-200 bg-red-50">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-red-700">

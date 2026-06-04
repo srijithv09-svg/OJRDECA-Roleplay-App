@@ -43,13 +43,6 @@ export const ExamKeysService = {
       .order("year", { ascending: false })
       .order("title", { ascending: true });
 
-    console.log("[exam keys] approved exam query filters", {
-      approval_status: "approved",
-      resource_type: "exam",
-    });
-    console.log("[exam keys] approved exam query result", exams ?? null);
-    console.log("[exam keys] approved exam query error", examsError ?? null);
-
     if (examsError) {
       throw new Error(examsError.message);
     }

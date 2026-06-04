@@ -1,27 +1,17 @@
 import { NextResponse } from "next/server";
-import { requireAuthenticatedSchoolUser } from "@/lib/server/api-auth";
+import { requireAdminRequester } from "@/lib/server/api-auth";
 import { buildAdminAnalytics } from "@/lib/server/exam-analytics";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
-  const { error: authError, user } = await requireAuthenticatedSchoolUser(request);
+  const { error: authError, user } = await requireAdminRequester(request);
 
   if (authError || !user) {
-    return NextResponse.json({ error: authError }, { status: 401 });
+    return NextResponse.json({ error: authError }, { status: user ? 403 : 401 });
   }
 
   try {
     const supabase = getSupabaseAdminClient();
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("id,email,role,created_at")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    if (profileError || profile?.role !== "admin") {
-      return NextResponse.json({ error: "Admin access is required." }, { status: 403 });
-    }
-
     const [
       { data: attempts, error: attemptsError },
       { data: resources, error: resourcesError },

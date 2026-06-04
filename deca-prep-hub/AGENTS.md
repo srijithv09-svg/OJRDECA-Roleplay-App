@@ -185,25 +185,43 @@ https://<supabase-project-id>.supabase.co/auth/v1/callback
 
 User Roles
 
-There are two roles:
+There are three roles:
 
 student
 admin
+advisor
+
+Advisor is currently admin-equivalent. Use the shared `isAdminRole(role)` helper for admin-gated UI and server checks so both `admin` and `advisor` can access current admin tools. Keep `isAdvisorRole(role)` and `isStudentRole(role)` available for future role-specific behavior.
 
 profiles table shape:
 
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text unique,
-  role text check (role in ('student', 'admin')) default 'student',
-  created_at timestamp with time zone default now()
+  role text check (role in ('student', 'admin', 'advisor')) default 'student',
+  created_at timestamp with time zone default now(),
+  updated_at timestamp with time zone default now()
 );
 
-Admin role is assigned manually in Supabase SQL:
+`profiles.updated_at` is maintained by the `set_profiles_updated_at` trigger, which uses `public.set_updated_at()`. The repo migration is:
+
+supabase/migrations/20260603000000_add_advisor_role_and_profile_updates.sql
+
+The `profiles.role` check constraint must allow exactly `student`, `admin`, and `advisor`. The focused follow-up migration is:
+
+supabase/migrations/20260603001000_allow_advisor_profile_role.sql
+
+Profile-loading code should tolerate older environments where `updated_at` has not been applied yet. `getCurrentOwnProfile()` and server admin profile checks should try `id,email,role,created_at,updated_at`, then fall back to `id,email,role,created_at` and return `updated_at: null` instead of crashing pages with `column profiles.updated_at does not exist`.
+
+Admin/advisor roles can be assigned in `/admin/users` by an existing admin/advisor. Manual SQL remains possible:
 
 update public.profiles
 set role = 'admin'
 where email = 'student_email@ojrsd.net';
+
+update public.profiles
+set role = 'advisor'
+where email = 'advisor_email@ojrsd.net';
 
 Important RLS warning:
 
@@ -242,6 +260,14 @@ Admin checks should usually load only the current signed-in user’s own profile
 
 Do not broadly query all profiles from the frontend for access control.
 
+Do not create recursive `profiles` policies for admin reads. Admin-wide profile/user access must use server routes. User management uses server API routes that first verify the requester with the normal server Supabase client, then use `SUPABASE_SERVICE_ROLE_KEY` server-side only:
+
+GET /api/admin/users
+PATCH /api/admin/users/[id]/role
+POST /api/admin/users/[id]/role
+
+These routes list profiles, merge safe auth metadata such as `last_sign_in_at`, validate requested roles, and prevent removing the final admin/advisor. They also prevent accidental self-demotion when the requester is the only remaining admin-equivalent user.
+
 Current App Navigation
 
 Student-visible pages:
@@ -267,8 +293,9 @@ Admin-visible pages:
 /admin/resources
 /admin/analytics
 /admin/exam-keys
+/admin/users
 
-Admins should see all student links plus admin links. Students should not see admin links.
+Admins and advisors should see all student links plus admin links. Students should not see admin links. Header role labels should show `Admin`, `Advisor`, or `Student`.
 
 Database: Resources
 
@@ -693,7 +720,7 @@ Behavior:
 
 Admins can upload one or more PDF files.
 The client shows a pre-import metadata review table before upload.
-The API verifies the bearer token, requires an `@ojrsd.net` user, checks the current user's own `profiles.role`, and requires `admin`.
+The API verifies the bearer token, requires an `@ojrsd.net` user, checks the current user's own `profiles.role`, and requires admin-equivalent access through `isAdminRole(role)`.
 Uploads use the server-side Supabase admin client; never expose `SUPABASE_SERVICE_ROLE_KEY` in browser code.
 Files are uploaded to Supabase Storage bucket `resources`.
 Storage paths are generated as:
@@ -1249,7 +1276,7 @@ Avoid large rewrites unless asked.
 Keep changes scoped to the requested feature.
 Use TypeScript types.
 Use existing service-layer patterns.
-Keep student/admin permissions separate.
+Keep student/admin/advisor permissions separate. Advisor is currently admin-equivalent, but future advisor-specific permissions may differ.
 Never expose service role key in frontend.
 Use server routes/actions for sensitive operations.
 Add loading/error/empty states.
@@ -1299,7 +1326,7 @@ Supabase connection
 Google Auth
 Production-safe `/auth/callback` OAuth redirect flow
 @ojrsd.net restriction
-profiles roles: student/admin
+profiles roles: student/admin/advisor
 resources database
 PDF importer
 Supabase Storage uploads
@@ -1312,7 +1339,7 @@ admin exam answer key management
 student exam answer entry
 server-side grading
 exam result pages
-real student/admin analytics
+real student/admin/advisor analytics
 student attempt deletion / clean slate
 roleplay practice attempts without AI
 roleplay attempt dashboard/analytics sections

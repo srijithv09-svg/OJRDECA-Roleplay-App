@@ -12,7 +12,8 @@ export type IconName =
   | "moon"
   | "streak"
   | "sun"
-  | "upload";
+  | "upload"
+  | "users";
 
 const iconPaths: Record<IconName, string[]> = {
   analytics: [
@@ -69,6 +70,12 @@ const iconPaths: Record<IconName, string[]> = {
     "M12 16V4",
     "M7 9l5-5 5 5",
     "M5 16v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3",
+  ],
+  users: [
+    "M8 10a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z",
+    "M2 21a6 6 0 0 1 12 0",
+    "M17 11a3 3 0 1 0 0-6",
+    "M15 21a5 5 0 0 1 7-4.6",
   ],
 };
 

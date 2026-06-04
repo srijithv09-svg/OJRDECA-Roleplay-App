@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
+import { getRoleLabel } from "@/lib/auth";
 import { getProfileDisplayName } from "@/lib/profile-display";
 import { getCurrentProfile } from "@/lib/services/profiles";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -69,7 +70,7 @@ export function SettingsView() {
             {[
               ["Name", displayName],
               ["Email", profile?.email ?? "Loading account"],
-              ["Role", profile?.role ?? "student"],
+              ["Role", getRoleLabel(profile?.role)],
               ["Chapter", "Owen J. Roberts DECA"],
               ["Primary cluster", "Marketing"],
             ].map(([label, value]) => (

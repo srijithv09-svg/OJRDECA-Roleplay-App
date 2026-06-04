@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isAdminRole } from "@/lib/auth";
 import { getSupabaseAdminClient, getSupabaseServerClient } from "@/lib/supabase/server";
 import {
   createStoredResourcePdfSignedUrl,
@@ -46,7 +47,7 @@ async function requireAdmin(request: Request) {
     .eq("id", userId)
     .single();
 
-  if (profileError || profile?.role !== "admin") {
+  if (profileError || !isAdminRole(profile?.role)) {
     return { error: "Admin access is required to repair PDF paths.", userId: null };
   }
 
@@ -61,7 +62,7 @@ async function isAdminUser(userId: string) {
     .eq("id", userId)
     .single();
 
-  return !error && profile?.role === "admin";
+  return !error && isAdminRole(profile?.role);
 }
 
 export async function GET(request: Request, context: RouteContext) {

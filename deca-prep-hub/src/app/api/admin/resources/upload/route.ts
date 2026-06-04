@@ -4,6 +4,7 @@ import {
   sanitizeStorageFilename,
   type DetectedResourceMetadata,
 } from "@/lib/resources/metadata-detection";
+import { isAdminRole } from "@/lib/auth";
 import { getDecaEventByCode } from "@/lib/deca/events";
 import { requireAuthenticatedSchoolUser } from "@/lib/server/api-auth";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
@@ -87,7 +88,7 @@ async function verifyAdmin(userId: string) {
     throw new Error(error.message);
   }
 
-  return data?.role === "admin";
+  return isAdminRole(data?.role);
 }
 
 export async function POST(request: Request) {

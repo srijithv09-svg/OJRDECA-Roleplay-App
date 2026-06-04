@@ -38,13 +38,15 @@ export function ResourceEmptyState({ label }: { label: string }) {
 export function ResourceErrorState({
   message,
   onRetry,
+  title = "Unable to load resources",
 }: {
   message: string;
   onRetry: () => void;
+  title?: string;
 }) {
   return (
     <Card className="border-red-200 bg-red-50">
-      <h2 className="text-lg font-semibold text-red-950">Unable to load resources</h2>
+      <h2 className="text-lg font-semibold text-red-950">{title}</h2>
       <p className="mt-2 text-sm leading-6 text-red-800">{message}</p>
       <button
         className="mt-5 h-10 rounded-md bg-red-700 px-3 text-sm font-semibold text-white transition hover:bg-red-800"

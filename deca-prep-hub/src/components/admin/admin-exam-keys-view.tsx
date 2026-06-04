@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { ResourceErrorState, ResourceLoadingState } from "@/components/resources/resource-states";
+import { isAdminRole } from "@/lib/auth";
 import { getCurrentOwnProfile } from "@/lib/services/profiles";
 import { ExamKeysService } from "@/lib/services/exam-keys";
 import { ResourcesService } from "@/lib/services/resources";
@@ -247,21 +248,20 @@ export function AdminExamKeysView() {
 
         setProfile(nextProfile);
         setProfileError(null);
-      } catch (caughtError) {
+      } catch {
         if (!isActive) {
           return;
         }
 
-        console.error("[admin access] profile load failed", caughtError);
         setProfile(null);
         setExams([]);
-        setProfileError("Unable to verify admin access");
+        setProfileError("Unable to verify account role.");
         setExamError(null);
         setIsLoading(false);
         return;
       }
 
-      if (nextProfile?.role !== "admin") {
+      if (!isAdminRole(nextProfile?.role)) {
         setExams([]);
         setExamError(null);
         setIsLoading(false);
@@ -497,10 +497,16 @@ export function AdminExamKeysView() {
   }
 
   if (profileError) {
-    return <ResourceErrorState message={profileError} onRetry={retryLoad} />;
+    return (
+      <ResourceErrorState
+        message={profileError}
+        onRetry={retryLoad}
+        title="Unable to verify account role"
+      />
+    );
   }
 
-  if (profile?.role !== "admin") {
+  if (!isAdminRole(profile?.role)) {
     return (
       <Card className="border-red-200 bg-red-50">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-red-700">

@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { ResourceErrorState } from "@/components/resources/resource-states";
+import { isAdminRole } from "@/lib/auth";
 import { AnalyticsService } from "@/lib/services/analytics";
 import { getCurrentOwnProfile } from "@/lib/services/profiles";
 import type {
@@ -157,28 +158,44 @@ export function AdminAnalyticsView() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [analytics, setAnalytics] = useState<AdminAnalyticsSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let isActive = true;
 
     async function loadAnalytics() {
+      let nextProfile: Profile | null = null;
+
       try {
-        const nextProfile = await getCurrentOwnProfile();
+        nextProfile = await getCurrentOwnProfile();
 
         if (!isActive) {
           return;
         }
 
         setProfile(nextProfile);
-
-        if (nextProfile?.role !== "admin") {
-          setAnalytics(null);
-          setError(null);
+        setProfileError(null);
+      } catch {
+        if (!isActive) {
           return;
         }
 
+        setProfile(null);
+        setAnalytics(null);
+        setProfileError("Unable to verify account role.");
+        setAnalyticsError(null);
+        return;
+      }
+
+      if (!isAdminRole(nextProfile?.role)) {
+        setAnalytics(null);
+        setAnalyticsError(null);
+        return;
+      }
+
+      try {
         const nextAnalytics = await AnalyticsService.getAdminAnalytics();
 
         if (!isActive) {
@@ -186,14 +203,14 @@ export function AdminAnalyticsView() {
         }
 
         setAnalytics(nextAnalytics);
-        setError(null);
+        setAnalyticsError(null);
       } catch (caughtError) {
         if (!isActive) {
           return;
         }
 
         setAnalytics(null);
-        setError(
+        setAnalyticsError(
           caughtError instanceof Error ? caughtError.message : "Unable to load admin analytics.",
         );
       } finally {
@@ -221,7 +238,8 @@ export function AdminAnalyticsView() {
 
   function retryLoad() {
     setIsLoading(true);
-    setError(null);
+    setProfileError(null);
+    setAnalyticsError(null);
     setReloadKey((currentKey) => currentKey + 1);
   }
 
@@ -239,11 +257,17 @@ export function AdminAnalyticsView() {
     );
   }
 
-  if (error && !profile) {
-    return <ResourceErrorState message={error} onRetry={retryLoad} />;
+  if (profileError) {
+    return (
+      <ResourceErrorState
+        message={profileError}
+        onRetry={retryLoad}
+        title="Unable to verify account role"
+      />
+    );
   }
 
-  if (profile?.role !== "admin") {
+  if (!isAdminRole(profile?.role)) {
     return (
       <Card className="border-red-200 bg-red-50">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-red-700">
@@ -258,7 +282,13 @@ export function AdminAnalyticsView() {
   }
 
   if (!analytics) {
-    return <ResourceErrorState message="Unable to load admin analytics." onRetry={retryLoad} />;
+    return (
+      <ResourceErrorState
+        message={analyticsError ?? "Unable to load admin analytics."}
+        onRetry={retryLoad}
+        title="Unable to load admin analytics"
+      />
+    );
   }
 
   return (
@@ -269,7 +299,13 @@ export function AdminAnalyticsView() {
         title="Admin analytics"
       />
 
-      {error ? <ResourceErrorState message={error} onRetry={retryLoad} /> : null}
+      {analyticsError ? (
+        <ResourceErrorState
+          message={analyticsError}
+          onRetry={retryLoad}
+          title="Unable to load admin analytics"
+        />
+      ) : null}
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard eyebrow="Attempts" label="Total attempts" value={analytics.totalAttempts} />

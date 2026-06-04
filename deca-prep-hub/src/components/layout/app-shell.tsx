@@ -6,7 +6,12 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
-import { DOMAIN_ERROR_MESSAGE, isAllowedSchoolEmail } from "@/lib/auth";
+import {
+  DOMAIN_ERROR_MESSAGE,
+  getRoleLabel,
+  isAdminRole,
+  isAllowedSchoolEmail,
+} from "@/lib/auth";
 import { getProfileDisplayName, getProfileInitials } from "@/lib/profile-display";
 import { getCurrentProfile } from "@/lib/services/profiles";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -24,6 +29,7 @@ const navItems: Array<{ label: string; href: string; icon: IconName; adminOnly?:
   { label: "Admin Resources", href: "/admin/resources", icon: "exams", adminOnly: true },
   { label: "Exam Keys", href: "/admin/exam-keys", icon: "exams", adminOnly: true },
   { label: "Admin Analytics", href: "/admin/analytics", icon: "analytics", adminOnly: true },
+  { label: "Users", href: "/admin/users", icon: "users", adminOnly: true },
 ];
 
 function isActive(pathname: string, href: string) {
@@ -63,7 +69,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const isAuthEntryPage = isLoginPage || isRootPage || isAuthCallbackPage;
   const [authState, setAuthState] = useState<"checking" | "allowed" | "blocked">("checking");
   const [profile, setProfile] = useState<Profile | null>(null);
-  const visibleNavItems = navItems.filter((item) => !item.adminOnly || profile?.role === "admin");
+  const visibleNavItems = navItems.filter((item) => !item.adminOnly || isAdminRole(profile?.role));
   const displayName = getProfileDisplayName(profile) ?? profile?.email ?? "Student";
   const profileInitials = getProfileInitials(profile);
 
@@ -284,7 +290,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <p className="text-sm font-semibold text-slate-950">
                   {profile?.email ?? displayName}
                 </p>
-                <p className="text-xs capitalize text-slate-500">{profile?.role ?? "student"}</p>
+                <p className="text-xs text-slate-500">{getRoleLabel(profile?.role)}</p>
               </div>
               <ThemeToggle />
               <div className="grid h-10 w-10 place-items-center rounded-lg border border-blue-100 bg-blue-50 text-sm font-bold text-blue-700">

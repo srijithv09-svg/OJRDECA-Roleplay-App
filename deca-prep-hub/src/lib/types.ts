@@ -2,7 +2,7 @@ export type ResourceType = "Roleplay" | "Exam";
 
 export type SupabaseResourceType = "roleplay" | "exam" | "reference" | "unknown";
 export type ResourceApprovalStatus = "approved" | "pending" | "rejected" | string;
-export type ProfileRole = "student" | "admin";
+export type ProfileRole = "student" | "admin" | "advisor";
 export type ExamCorrectAnswer = "A" | "B" | "C" | "D" | "E";
 export type ExamSelectedAnswer = ExamCorrectAnswer | "UNANSWERED";
 export type ExamKeyStatus = "no-key" | "partial" | "complete";
@@ -13,6 +13,7 @@ export type Profile = {
   email: string | null;
   role: ProfileRole;
   created_at: string | null;
+  updated_at: string | null;
 };
 
 export type Difficulty = "Intro" | "Standard" | "Advanced";
@@ -257,12 +258,14 @@ export type Database = {
           email?: string | null;
           role?: ProfileRole;
           created_at?: string | null;
+          updated_at?: string | null;
         };
         Update: {
           id?: string;
           email?: string | null;
           role?: ProfileRole;
           created_at?: string | null;
+          updated_at?: string | null;
         };
         Relationships: [];
       };
