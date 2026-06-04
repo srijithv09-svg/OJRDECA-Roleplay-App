@@ -1,4 +1,5 @@
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { getFriendlyErrorMessage, logDeveloperError } from "@/lib/errors";
 import type {
   ExamAttempt,
   ExamAttemptResult,
@@ -36,7 +37,8 @@ async function getAccessToken() {
   const { data, error } = await supabase.auth.getSession();
 
   if (error) {
-    throw new Error(error.message);
+    logDeveloperError("[exam attempts] session lookup failed", error);
+    throw new Error(getFriendlyErrorMessage(error, "Unable to verify your session."));
   }
 
   if (!data.session?.access_token) {
@@ -59,7 +61,8 @@ async function fetchExamEndpoint<T>(path: string, options: RequestInit = {}) {
   const payload = (await response.json()) as T & { error?: string };
 
   if (!response.ok) {
-    throw new Error(payload.error ?? "Unable to complete the exam request.");
+    logDeveloperError(`[exam attempts] ${path} failed`, payload.error);
+    throw new Error(getFriendlyErrorMessage(payload.error, "Unable to complete the exam request."));
   }
 
   return payload;
@@ -100,7 +103,8 @@ export const ExamAttemptsService = {
       .limit(5);
 
     if (error) {
-      throw new Error(error.message);
+      logDeveloperError("[exam attempts] resource attempts failed", error);
+      throw new Error(getFriendlyErrorMessage(error, "Unable to load recent exam attempts."));
     }
 
     return data ?? [];

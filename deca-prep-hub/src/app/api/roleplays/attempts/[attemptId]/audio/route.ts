@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getFriendlyErrorMessage, logDeveloperError } from "@/lib/errors";
 import { requireAuthenticatedSchoolUser } from "@/lib/server/api-auth";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 
@@ -18,7 +19,14 @@ async function getOwnedAttempt(attemptId: string, userId: string) {
     .maybeSingle();
 
   if (error) {
-    return { attempt: null, error: NextResponse.json({ error: error.message }, { status: 500 }) };
+    logDeveloperError("[roleplay audio api] attempt lookup failed", error);
+    return {
+      attempt: null,
+      error: NextResponse.json(
+        { error: getFriendlyErrorMessage(error, "Unable to load this roleplay attempt.") },
+        { status: 500 },
+      ),
+    };
   }
 
   if (!attempt) {
@@ -87,7 +95,11 @@ export async function GET(request: Request, context: RouteContext) {
       .createSignedUrl(attempt.audio_path, 60 * 10);
 
     if (signedUrlError) {
-      return NextResponse.json({ error: signedUrlError.message }, { status: 500 });
+      logDeveloperError("[roleplay audio api] signed URL failed", signedUrlError);
+      return NextResponse.json(
+        { error: getFriendlyErrorMessage(signedUrlError, "Unable to load roleplay audio.") },
+        { status: 500 },
+      );
     }
 
     return NextResponse.json({ signedUrl: data.signedUrl });
@@ -148,7 +160,11 @@ export async function POST(request: Request, context: RouteContext) {
       });
 
     if (uploadError) {
-      return NextResponse.json({ error: uploadError.message }, { status: 500 });
+      logDeveloperError("[roleplay audio api] upload failed", uploadError);
+      return NextResponse.json(
+        { error: getFriendlyErrorMessage(uploadError, "Unable to upload roleplay audio.") },
+        { status: 500 },
+      );
     }
 
     const { error: updateError } = await supabase
@@ -158,7 +174,11 @@ export async function POST(request: Request, context: RouteContext) {
 
     if (updateError) {
       await supabase.storage.from(audioBucket).remove([audioPath]);
-      return NextResponse.json({ error: updateError.message }, { status: 500 });
+      logDeveloperError("[roleplay audio api] audio path update failed", updateError);
+      return NextResponse.json(
+        { error: getFriendlyErrorMessage(updateError, "Unable to attach roleplay audio.") },
+        { status: 500 },
+      );
     }
 
     if (attempt?.audio_path) {
@@ -202,7 +222,11 @@ export async function DELETE(request: Request, context: RouteContext) {
         .remove([attempt.audio_path]);
 
       if (removeError) {
-        return NextResponse.json({ error: removeError.message }, { status: 500 });
+        logDeveloperError("[roleplay audio api] remove failed", removeError);
+        return NextResponse.json(
+          { error: getFriendlyErrorMessage(removeError, "Unable to remove roleplay audio.") },
+          { status: 500 },
+        );
       }
     }
 
@@ -212,7 +236,11 @@ export async function DELETE(request: Request, context: RouteContext) {
       .eq("id", attemptId);
 
     if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 500 });
+      logDeveloperError("[roleplay audio api] clear audio path failed", updateError);
+      return NextResponse.json(
+        { error: getFriendlyErrorMessage(updateError, "Unable to remove roleplay audio.") },
+        { status: 500 },
+      );
     }
 
     return NextResponse.json({ removed: true });

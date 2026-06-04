@@ -6,6 +6,7 @@ import { ButtonLink } from "@/components/ui/button-link";
 import { Card, CardHeader } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { getRoleLabel, isAdminRole } from "@/lib/auth";
+import { getFriendlyErrorMessage } from "@/lib/errors";
 import { getProfileDisplayName } from "@/lib/profile-display";
 import { AnalyticsService } from "@/lib/services/analytics";
 import { EXAM_ATTEMPTS_CHANGED_EVENT } from "@/lib/services/exam-attempts";
@@ -78,10 +79,15 @@ function LoadingState() {
 }
 
 function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
+  const friendlyMessage = getFriendlyErrorMessage(
+    message,
+    "Unable to load dashboard data right now. Please try again.",
+  );
+
   return (
     <Card className="border-red-200 bg-red-50">
       <h2 className="text-lg font-semibold text-red-950">Unable to load dashboard</h2>
-      <p className="mt-2 text-sm leading-6 text-red-800">{message}</p>
+      <p className="mt-2 text-sm leading-6 text-red-800">{friendlyMessage}</p>
       <button
         className="mt-5 h-10 rounded-md bg-red-700 px-3 text-sm font-semibold text-white transition hover:bg-red-800"
         onClick={onRetry}
@@ -239,6 +245,8 @@ export function DashboardView() {
   const isAdmin = isAdminRole(profile.role);
   const displayName = getProfileDisplayName(profile) ?? "member";
   const hasAttempts = analytics.examsCompleted > 0;
+  const isExamAnalyticsUnavailable = Boolean(analytics.examAnalyticsUnavailable);
+  const isRoleplayPracticeUnavailable = Boolean(analytics.roleplayPracticeUnavailable);
 
   return (
     <>
@@ -261,9 +269,11 @@ export function DashboardView() {
         <Card className="!border-[var(--primary-soft-strong)] !bg-[var(--primary)] !text-white shadow-lg shadow-red-950/10 dark:!border-[var(--border-strong)] dark:shadow-black/30">
           <p className="text-sm font-semibold text-white/80">Exam performance</p>
           <h2 className="mt-3 text-3xl font-bold">
-            {hasAttempts
-              ? `${analytics.averageScore}% average score`
-              : "Start your first graded exam"}
+            {isExamAnalyticsUnavailable
+              ? "Exam analytics unavailable"
+              : hasAttempts
+                ? `${analytics.averageScore}% average score`
+                : "Start your first graded exam"}
           </h2>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-white/85">
             These numbers come from your saved exam attempts and update when an
@@ -271,10 +281,17 @@ export function DashboardView() {
           </p>
           <div className="mt-6 grid gap-3 sm:grid-cols-3">
             {[
-              [analytics.examsCompleted, "Exams completed"],
-              [analytics.bestScore === null ? "N/A" : `${analytics.bestScore}%`, "Best score"],
+              [isExamAnalyticsUnavailable ? "N/A" : analytics.examsCompleted, "Exams completed"],
               [
-                analytics.mostRecentScore === null ? "N/A" : `${analytics.mostRecentScore}%`,
+                isExamAnalyticsUnavailable || analytics.bestScore === null
+                  ? "N/A"
+                  : `${analytics.bestScore}%`,
+                "Best score",
+              ],
+              [
+                isExamAnalyticsUnavailable || analytics.mostRecentScore === null
+                  ? "N/A"
+                  : `${analytics.mostRecentScore}%`,
                 "Most recent",
               ],
             ].map(([value, label]) => (
@@ -304,28 +321,40 @@ export function DashboardView() {
       </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard eyebrow="Attempts" title="Exams completed" value={analytics.examsCompleted} />
+        <StatCard
+          eyebrow="Attempts"
+          title="Exams completed"
+          value={isExamAnalyticsUnavailable ? "N/A" : analytics.examsCompleted}
+        />
         <StatCard
           eyebrow="Average"
           title="Average exam score"
-          value={hasAttempts ? `${analytics.averageScore}%` : "N/A"}
+          value={!isExamAnalyticsUnavailable && hasAttempts ? `${analytics.averageScore}%` : "N/A"}
         />
         <StatCard
           eyebrow="Best"
           title="Best score"
-          value={analytics.bestScore === null ? "N/A" : `${analytics.bestScore}%`}
+          value={
+            isExamAnalyticsUnavailable || analytics.bestScore === null
+              ? "N/A"
+              : `${analytics.bestScore}%`
+          }
         />
         <StatCard
           eyebrow="Roleplays"
           title="Practice attempts"
-          value={analytics.roleplayAttemptsCompleted}
+          value={isRoleplayPracticeUnavailable ? "N/A" : analytics.roleplayAttemptsCompleted}
         />
       </section>
 
       <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
         <Card>
           <CardHeader eyebrow="Recent attempts" title="Latest scores" />
-          {analytics.recentAttempts.length === 0 ? (
+          {isExamAnalyticsUnavailable ? (
+            <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-5 text-sm leading-6 text-slate-600">
+              Exam analytics unavailable
+            </div>
+          ) : analytics.recentAttempts.length === 0 ? (
             <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-5 text-sm leading-6 text-slate-600">
               No exam attempts yet. Take an exam with an answer key to populate
               your dashboard analytics.
@@ -341,7 +370,11 @@ export function DashboardView() {
 
         <Card>
           <CardHeader eyebrow="Roleplay practice" title="Latest attempts" />
-          {analytics.recentRoleplayAttempts.length === 0 ? (
+          {isRoleplayPracticeUnavailable ? (
+            <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-5 text-sm leading-6 text-slate-600">
+              Roleplay practice data unavailable
+            </div>
+          ) : analytics.recentRoleplayAttempts.length === 0 ? (
             <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-5 text-sm leading-6 text-slate-600">
               No roleplay attempts yet. Save a written practice response to see it here.
             </div>
@@ -370,16 +403,24 @@ export function DashboardView() {
         <Card>
           <CardHeader eyebrow="Instructional areas" title="Strong areas" />
           <AreaList
-            areas={analytics.strongAreas}
-            emptyLabel="Strong areas appear after correct answers are saved."
+            areas={isExamAnalyticsUnavailable ? [] : analytics.strongAreas}
+            emptyLabel={
+              isExamAnalyticsUnavailable
+                ? "Exam analytics unavailable"
+                : "Strong areas appear after correct answers are saved."
+            }
             mode="strong"
           />
         </Card>
         <Card>
           <CardHeader eyebrow="Instructional areas" title="Needs work" />
           <AreaList
-            areas={analytics.weakAreas}
-            emptyLabel="Weak areas appear after missed answers are saved."
+            areas={isExamAnalyticsUnavailable ? [] : analytics.weakAreas}
+            emptyLabel={
+              isExamAnalyticsUnavailable
+                ? "Exam analytics unavailable"
+                : "Weak areas appear after missed answers are saved."
+            }
             mode="weak"
           />
         </Card>

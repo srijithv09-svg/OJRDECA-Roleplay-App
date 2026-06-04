@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getFriendlyErrorMessage, logDeveloperError } from "@/lib/errors";
 import { requireAuthenticatedSchoolUser } from "@/lib/server/api-auth";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import type { RoleplayAttemptInput, RoleplayAttemptSummary } from "@/lib/types";
@@ -103,11 +104,12 @@ export async function GET(request: Request, context: RouteContext) {
     ]);
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      logDeveloperError("[roleplay attempts api] recent attempts failed", error);
+      return NextResponse.json([]);
     }
 
     if (resourceError) {
-      return NextResponse.json({ error: resourceError.message }, { status: 500 });
+      logDeveloperError("[roleplay attempts api] resource summary failed", resourceError);
     }
 
     return NextResponse.json((data ?? []).map((row) => toSummary(row, resource)));
@@ -157,7 +159,11 @@ export async function POST(request: Request, context: RouteContext) {
       .maybeSingle();
 
     if (resourceError) {
-      return NextResponse.json({ error: resourceError.message }, { status: 500 });
+      logDeveloperError("[roleplay attempts api] practice resource lookup failed", resourceError);
+      return NextResponse.json(
+        { error: getFriendlyErrorMessage(resourceError, "Unable to verify this roleplay.") },
+        { status: 500 },
+      );
     }
 
     if (!resource) {
@@ -182,7 +188,11 @@ export async function POST(request: Request, context: RouteContext) {
       .single();
 
     if (attemptError) {
-      return NextResponse.json({ error: attemptError.message }, { status: 500 });
+      logDeveloperError("[roleplay attempts api] create attempt failed", attemptError);
+      return NextResponse.json(
+        { error: getFriendlyErrorMessage(attemptError, "Unable to save this roleplay attempt.") },
+        { status: 500 },
+      );
     }
 
     return NextResponse.json({ attemptId: attempt.id });

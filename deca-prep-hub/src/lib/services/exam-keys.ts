@@ -1,3 +1,4 @@
+import { getFriendlyErrorMessage, logDeveloperError } from "@/lib/errors";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import type {
   ExamAnswerKeyInput,
@@ -44,7 +45,8 @@ export const ExamKeysService = {
       .order("title", { ascending: true });
 
     if (examsError) {
-      throw new Error(examsError.message);
+      logDeveloperError("[exam keys] approved exam resources failed", examsError);
+      throw new Error(getFriendlyErrorMessage(examsError, "Unable to load approved exams."));
     }
 
     const examRows = exams ?? [];
@@ -60,7 +62,8 @@ export const ExamKeysService = {
       .in("resource_id", resourceIds);
 
     if (answerKeyError) {
-      throw new Error(answerKeyError.message);
+      logDeveloperError("[exam keys] answer key counts failed", answerKeyError);
+      throw new Error(getFriendlyErrorMessage(answerKeyError, "Unable to load answer key status."));
     }
 
     const countsByResourceId = new Map<string, number>();
@@ -89,7 +92,8 @@ export const ExamKeysService = {
       .order("question_number", { ascending: true });
 
     if (error) {
-      throw new Error(error.message);
+      logDeveloperError("[exam keys] answer key lookup failed", error);
+      throw new Error(getFriendlyErrorMessage(error, "Unable to load this answer key."));
     }
 
     return (data ?? []).map((row) => normalizeAnswerKeyRow(row));
@@ -120,7 +124,8 @@ export const ExamKeysService = {
       .order("question_number", { ascending: true });
 
     if (error) {
-      throw new Error(error.message);
+      logDeveloperError("[exam keys] answer key upsert failed", error);
+      throw new Error(getFriendlyErrorMessage(error, "Unable to save this answer key."));
     }
 
     return (data ?? []).map((row) => normalizeAnswerKeyRow(row));
@@ -139,7 +144,8 @@ export const ExamKeysService = {
       .in("question_number", questionNumbers);
 
     if (error) {
-      throw new Error(error.message);
+      logDeveloperError("[exam keys] answer key delete failed", error);
+      throw new Error(getFriendlyErrorMessage(error, "Unable to delete answer key rows."));
     }
   },
 

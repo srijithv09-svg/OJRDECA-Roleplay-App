@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { requireAuthenticatedSchoolUser } from "@/lib/server/api-auth";
 import { buildStudentAnalytics } from "@/lib/server/exam-analytics";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
+import type {
+  ExamAttempt,
+  ExamAttemptAnswer,
+  ResourceListItem,
+  RoleplayAttempt,
+} from "@/lib/types";
 
 export async function GET(request: Request) {
   const { error: authError, user } = await requireAuthenticatedSchoolUser(request);
@@ -12,40 +18,27 @@ export async function GET(request: Request) {
 
   try {
     const supabase = getSupabaseAdminClient();
-    const { data: attempts, error: attemptsError } = await supabase
-      .from("exam_attempts")
-      .select("id,user_id,resource_id,score,total_questions,percentage,completed_at")
-      .eq("user_id", user.id)
-      .order("completed_at", { ascending: false });
-    const { data: roleplayAttempts, error: roleplayAttemptsError } = await supabase
-      .from("roleplay_attempts")
-      .select(
-        "id,user_id,resource_id,response_notes,performance_indicator_notes,self_reflection,judge_feedback,audio_path,transcript,transcript_status,ai_feedback_status,ai_overall_score,ai_feedback_json,strengths,growth_areas,confidence_rating,created_at,updated_at",
-      )
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
+    const [examAttemptsResult, roleplayAttemptsResult] = await Promise.all([
+      supabase
+        .from("exam_attempts")
+        .select("id,user_id,resource_id,score,total_questions,percentage,completed_at")
+        .eq("user_id", user.id)
+        .order("completed_at", { ascending: false }),
+      supabase
+        .from("roleplay_attempts")
+        .select(
+          "id,user_id,resource_id,response_notes,performance_indicator_notes,self_reflection,judge_feedback,audio_path,transcript,transcript_status,ai_feedback_status,ai_overall_score,ai_feedback_json,strengths,growth_areas,confidence_rating,created_at,updated_at",
+        )
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false }),
+    ]);
 
-    if (attemptsError) {
-      return NextResponse.json({ error: attemptsError.message }, { status: 500 });
-    }
-
-    if (roleplayAttemptsError) {
-      return NextResponse.json({ error: roleplayAttemptsError.message }, { status: 500 });
-    }
-
-    const attemptRows = attempts ?? [];
-    const roleplayAttemptRows = roleplayAttempts ?? [];
-
-    if (attemptRows.length === 0 && roleplayAttemptRows.length === 0) {
-      return NextResponse.json(
-        buildStudentAnalytics({
-          attempts: [],
-          answers: [],
-          roleplayAttempts: [],
-          resources: [],
-        }),
-      );
-    }
+    let examAnalyticsUnavailable = Boolean(examAttemptsResult.error);
+    const roleplayPracticeUnavailable = Boolean(roleplayAttemptsResult.error);
+    const attemptRows = (examAttemptsResult.error ? [] : (examAttemptsResult.data ?? [])) as ExamAttempt[];
+    const roleplayAttemptRows = (
+      roleplayAttemptsResult.error ? [] : (roleplayAttemptsResult.data ?? [])
+    ) as RoleplayAttempt[];
 
     const attemptIds = attemptRows.map((attempt) => attempt.id);
     const resourceIds = Array.from(
@@ -56,7 +49,7 @@ export async function GET(request: Request) {
     );
     const [{ data: answers, error: answersError }, { data: resources, error: resourcesError }] =
       await Promise.all([
-        attemptIds.length > 0
+        attemptIds.length > 0 && !examAnalyticsUnavailable
           ? supabase
               .from("exam_attempt_answers")
               .select(
@@ -64,23 +57,23 @@ export async function GET(request: Request) {
               )
               .in("attempt_id", attemptIds)
           : Promise.resolve({ data: [], error: null }),
-        supabase.from("resources").select("*").in("id", resourceIds),
+        resourceIds.length > 0
+          ? supabase.from("resources").select("*").in("id", resourceIds)
+          : Promise.resolve({ data: [], error: null }),
       ]);
 
     if (answersError) {
-      return NextResponse.json({ error: answersError.message }, { status: 500 });
-    }
-
-    if (resourcesError) {
-      return NextResponse.json({ error: resourcesError.message }, { status: 500 });
+      examAnalyticsUnavailable = true;
     }
 
     return NextResponse.json(
       buildStudentAnalytics({
-        attempts: attemptRows,
-        answers: answers ?? [],
+        attempts: examAnalyticsUnavailable ? [] : attemptRows,
+        answers: examAnalyticsUnavailable ? [] : ((answers ?? []) as ExamAttemptAnswer[]),
+        examAnalyticsUnavailable,
         roleplayAttempts: roleplayAttemptRows,
-        resources: resources ?? [],
+        roleplayPracticeUnavailable,
+        resources: resourcesError ? [] : ((resources ?? []) as ResourceListItem[]),
       }),
     );
   } catch (caughtError) {

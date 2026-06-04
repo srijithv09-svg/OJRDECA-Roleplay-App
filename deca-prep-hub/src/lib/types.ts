@@ -165,6 +165,8 @@ export type StudentAnalyticsSummary = {
   averageScore: number;
   bestScore: number | null;
   mostRecentScore: number | null;
+  examAnalyticsUnavailable?: boolean;
+  roleplayPracticeUnavailable?: boolean;
   roleplayAttemptsCompleted: number;
   recentRoleplayAttempts: RoleplayAttemptSummary[];
   mostPracticedEventCodes: Array<{

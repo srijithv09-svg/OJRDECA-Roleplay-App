@@ -1,4 +1,5 @@
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { getFriendlyErrorMessage, logDeveloperError } from "@/lib/errors";
 import type {
   RoleplayAttempt,
   RoleplayAttemptInput,
@@ -19,7 +20,8 @@ async function getAccessToken() {
   const { data, error } = await supabase.auth.getSession();
 
   if (error) {
-    throw new Error(error.message);
+    logDeveloperError("[roleplay attempts] session lookup failed", error);
+    throw new Error(getFriendlyErrorMessage(error, "Unable to verify your session."));
   }
 
   if (!data.session?.access_token) {
@@ -42,7 +44,10 @@ async function fetchRoleplayEndpoint<T>(path: string, options: RequestInit = {})
   const payload = (await response.json()) as T & { error?: string };
 
   if (!response.ok) {
-    throw new Error(payload.error ?? "Unable to complete the roleplay request.");
+    logDeveloperError(`[roleplay attempts] ${path} failed`, payload.error);
+    throw new Error(
+      getFriendlyErrorMessage(payload.error, "Unable to complete the roleplay request."),
+    );
   }
 
   return payload;
@@ -99,7 +104,8 @@ export const RoleplayAttemptsService = {
     const payload = (await response.json()) as { audioPath?: string; error?: string };
 
     if (!response.ok || !payload.audioPath) {
-      throw new Error(payload.error ?? "Unable to upload roleplay audio.");
+      logDeveloperError(`[roleplay attempts] audio upload failed`, payload.error);
+      throw new Error(getFriendlyErrorMessage(payload.error, "Unable to upload roleplay audio."));
     }
 
     notifyRoleplayAttemptsChanged();

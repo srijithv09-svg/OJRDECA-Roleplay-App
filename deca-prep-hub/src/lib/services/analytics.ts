@@ -1,4 +1,5 @@
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { getFriendlyErrorMessage, logDeveloperError } from "@/lib/errors";
 import type { AdminAnalyticsSummary, StudentAnalyticsSummary } from "@/lib/types";
 
 async function getAccessToken() {
@@ -6,7 +7,8 @@ async function getAccessToken() {
   const { data, error } = await supabase.auth.getSession();
 
   if (error) {
-    throw new Error(error.message);
+    logDeveloperError("[analytics] session lookup failed", error);
+    throw new Error(getFriendlyErrorMessage(error, "Unable to verify your session."));
   }
 
   if (!data.session?.access_token) {
@@ -27,7 +29,8 @@ async function fetchAnalyticsEndpoint<T>(path: string) {
   const payload = (await response.json()) as T & { error?: string };
 
   if (!response.ok) {
-    throw new Error(payload.error ?? "Unable to load analytics.");
+    logDeveloperError(`[analytics] ${path} failed`, payload.error);
+    throw new Error(getFriendlyErrorMessage(payload.error, "Unable to load analytics."));
   }
 
   return payload;

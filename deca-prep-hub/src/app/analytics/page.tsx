@@ -243,6 +243,8 @@ export default function AnalyticsPage() {
   }
 
   const hasAttempts = analytics.examsCompleted > 0;
+  const isExamAnalyticsUnavailable = Boolean(analytics.examAnalyticsUnavailable);
+  const isRoleplayPracticeUnavailable = Boolean(analytics.roleplayPracticeUnavailable);
 
   return (
     <>
@@ -263,28 +265,43 @@ export default function AnalyticsPage() {
         />
       ) : null}
 
-      {!hasAttempts ? <EmptyAnalyticsCard /> : null}
+      {!hasAttempts && !isExamAnalyticsUnavailable ? <EmptyAnalyticsCard /> : null}
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Exams completed" value={analytics.examsCompleted} />
+        <StatCard
+          label="Exams completed"
+          value={isExamAnalyticsUnavailable ? "N/A" : analytics.examsCompleted}
+        />
         <StatCard
           label="Average score"
-          value={hasAttempts ? `${analytics.averageScore}%` : "N/A"}
+          value={!isExamAnalyticsUnavailable && hasAttempts ? `${analytics.averageScore}%` : "N/A"}
         />
         <StatCard
           label="Best score"
-          value={analytics.bestScore === null ? "N/A" : `${analytics.bestScore}%`}
+          value={
+            isExamAnalyticsUnavailable || analytics.bestScore === null
+              ? "N/A"
+              : `${analytics.bestScore}%`
+          }
         />
         <StatCard
           label="Most recent"
-          value={analytics.mostRecentScore === null ? "N/A" : `${analytics.mostRecentScore}%`}
+          value={
+            isExamAnalyticsUnavailable || analytics.mostRecentScore === null
+              ? "N/A"
+              : `${analytics.mostRecentScore}%`
+          }
         />
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
         <Card>
           <CardHeader eyebrow="Roleplay practice" title="Recent roleplay attempts" />
-          {analytics.recentRoleplayAttempts.length === 0 ? (
+          {isRoleplayPracticeUnavailable ? (
+            <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-5 text-sm leading-6 text-slate-600">
+              Roleplay practice data unavailable
+            </div>
+          ) : analytics.recentRoleplayAttempts.length === 0 ? (
             <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-5 text-sm leading-6 text-slate-600">
               No roleplay attempts yet. Open an approved roleplay and save a practice response to
               start building this history.
@@ -301,9 +318,13 @@ export default function AnalyticsPage() {
         <Card>
           <CardHeader eyebrow="Roleplays" title="Most practiced events" />
           <p className="mb-4 text-4xl font-bold text-slate-950">
-            {analytics.roleplayAttemptsCompleted}
+            {isRoleplayPracticeUnavailable ? "N/A" : analytics.roleplayAttemptsCompleted}
           </p>
-          {analytics.mostPracticedEventCodes.length === 0 ? (
+          {isRoleplayPracticeUnavailable ? (
+            <p className="text-sm leading-6 text-slate-600">
+              Roleplay practice data unavailable
+            </p>
+          ) : analytics.mostPracticedEventCodes.length === 0 ? (
             <p className="text-sm leading-6 text-slate-600">
               Event-code practice counts appear after you save roleplay attempts.
             </p>
@@ -326,7 +347,14 @@ export default function AnalyticsPage() {
       <section className="grid gap-4 xl:grid-cols-[1.5fr_1fr]">
         <Card>
           <CardHeader eyebrow="Trend" title="Score trend" />
-          {analytics.attemptHistory.length === 0 ? (
+          {isExamAnalyticsUnavailable ? (
+            <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4">
+              <p className="font-semibold text-slate-800">Exam analytics unavailable</p>
+              <p className="mt-1 text-sm leading-6 text-slate-600">
+                Roleplay practice data will still appear if it is available.
+              </p>
+            </div>
+          ) : analytics.attemptHistory.length === 0 ? (
             <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4">
               <p className="font-semibold text-slate-800">No trend yet</p>
               <p className="mt-1 text-sm leading-6 text-slate-600">
@@ -355,7 +383,14 @@ export default function AnalyticsPage() {
 
         <Card>
           <CardHeader eyebrow="Misses" title="Missed question summary" />
-          {analytics.missedQuestions.length === 0 ? (
+          {isExamAnalyticsUnavailable ? (
+            <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4">
+              <p className="font-semibold text-slate-800">Exam analytics unavailable</p>
+              <p className="mt-1 text-sm leading-6 text-slate-600">
+                Missed questions cannot be loaded right now.
+              </p>
+            </div>
+          ) : analytics.missedQuestions.length === 0 ? (
             <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4">
               <p className="font-semibold text-slate-800">
                 {hasAttempts ? "No missed questions saved" : "No missed questions yet"}
@@ -387,14 +422,22 @@ export default function AnalyticsPage() {
 
       <section className="grid gap-4 lg:grid-cols-2">
         <AreaCard
-          areas={analytics.strongAreas}
-          emptyLabel="Strong areas appear after correct answers are saved."
+          areas={isExamAnalyticsUnavailable ? [] : analytics.strongAreas}
+          emptyLabel={
+            isExamAnalyticsUnavailable
+              ? "Exam analytics unavailable"
+              : "Strong areas appear after correct answers are saved."
+          }
           title="Strong instructional areas"
           tone="green"
         />
         <AreaCard
-          areas={analytics.weakAreas}
-          emptyLabel="Weak areas appear after incorrect answers are saved."
+          areas={isExamAnalyticsUnavailable ? [] : analytics.weakAreas}
+          emptyLabel={
+            isExamAnalyticsUnavailable
+              ? "Exam analytics unavailable"
+              : "Weak areas appear after incorrect answers are saved."
+          }
           title="Weak instructional areas"
           tone="amber"
         />
@@ -402,7 +445,11 @@ export default function AnalyticsPage() {
 
       <Card>
         <CardHeader eyebrow="History" title="Attempt history" />
-        {analytics.attemptHistory.length === 0 ? (
+        {isExamAnalyticsUnavailable ? (
+          <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-5 text-sm leading-6 text-slate-600">
+            Exam analytics unavailable
+          </div>
+        ) : analytics.attemptHistory.length === 0 ? (
           <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-5 text-sm leading-6 text-slate-600">
             No attempts yet. Open an exam with an answer key to start building your analytics.
           </div>

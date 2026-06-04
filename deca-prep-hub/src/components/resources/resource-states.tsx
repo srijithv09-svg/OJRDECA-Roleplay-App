@@ -1,4 +1,5 @@
 import { Card } from "@/components/ui/card";
+import { getFriendlyErrorMessage } from "@/lib/errors";
 
 export function ResourceLoadingState() {
   return (
@@ -44,10 +45,12 @@ export function ResourceErrorState({
   onRetry: () => void;
   title?: string;
 }) {
+  const friendlyMessage = getFriendlyErrorMessage(message);
+
   return (
     <Card className="border-red-200 bg-red-50">
       <h2 className="text-lg font-semibold text-red-950">{title}</h2>
-      <p className="mt-2 text-sm leading-6 text-red-800">{message}</p>
+      <p className="mt-2 text-sm leading-6 text-red-800">{friendlyMessage}</p>
       <button
         className="mt-5 h-10 rounded-md bg-red-700 px-3 text-sm font-semibold text-white transition hover:bg-red-800"
         onClick={onRetry}

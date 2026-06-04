@@ -11,6 +11,8 @@
     "cleanup:non-roleplay-pis": "tsx scripts/cleanup-non-roleplay-performance-indicators.ts",
     "repair:event-metadata": "tsx scripts/repair-deca-event-metadata.ts",
     "repair:instructional-areas": "tsx scripts/repair-instructional-areas.ts",
+    "check:db": "tsx scripts/check-database-health.ts",
+    "smoke:routes": "tsx scripts/smoke-routes.ts",
     "start": "next start",
     "lint": "eslint"
   },

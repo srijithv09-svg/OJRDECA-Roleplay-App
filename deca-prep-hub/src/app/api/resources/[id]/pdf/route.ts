@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { isAdminRole } from "@/lib/auth";
+import { getFriendlyErrorMessage, logDeveloperError } from "@/lib/errors";
 import { getSupabaseAdminClient, getSupabaseServerClient } from "@/lib/supabase/server";
 import {
   createStoredResourcePdfSignedUrl,
@@ -82,7 +83,11 @@ export async function GET(request: Request, context: RouteContext) {
       .single();
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 404 });
+      logDeveloperError("[resource pdf api] resource lookup failed", error);
+      return NextResponse.json(
+        { error: getFriendlyErrorMessage(error, "Unable to load this resource PDF.") },
+        { status: 404 },
+      );
     }
 
     if (resource.approval_status !== "approved" && !(await isAdminUser(userId))) {

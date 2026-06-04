@@ -120,12 +120,16 @@ function buildAreaSummaries(
 export function buildStudentAnalytics({
   answers,
   attempts,
+  examAnalyticsUnavailable = false,
   roleplayAttempts = [],
+  roleplayPracticeUnavailable = false,
   resources,
 }: {
   answers: ExamAttemptAnswer[];
   attempts: ExamAttempt[];
+  examAnalyticsUnavailable?: boolean;
   roleplayAttempts?: RoleplayAttempt[];
+  roleplayPracticeUnavailable?: boolean;
   resources: ResourceListItem[];
 }): StudentAnalyticsSummary {
   const resourcesById = new Map(resources.map((resource) => [resource.id, resource]));
@@ -185,6 +189,8 @@ export function buildStudentAnalytics({
     averageScore,
     bestScore: percentages.length > 0 ? Math.max(...percentages) : null,
     mostRecentScore: attemptHistory[0]?.percentage ?? null,
+    examAnalyticsUnavailable,
+    roleplayPracticeUnavailable,
     roleplayAttemptsCompleted: roleplayAttempts.length,
     recentRoleplayAttempts,
     mostPracticedEventCodes: Array.from(eventCodeCounts.entries())

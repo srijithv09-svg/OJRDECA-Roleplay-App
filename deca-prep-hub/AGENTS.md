@@ -1098,6 +1098,24 @@ approved resource count
 recently approved resources
 student attempt stats where available
 recent roleplay attempts where available
+
+Database migration and health check notes:
+
+- Migration files in `supabase/migrations` are source-controlled SQL history; they are not automatically applied to the live Supabase project unless the Supabase CLI migration workflow or the Supabase SQL Editor is used.
+- The `roleplay_attempts` table must exist in Supabase before deployed code queries roleplay practice data. Apply `supabase/migrations/20260601000000_create_roleplay_attempts.sql` when setting up or repairing an environment.
+- When adding a new table or required column, apply the migration to Supabase before merging/deploying app code that calls it through the Data API.
+- Run `npm run check:db` before deployment. The script uses `SUPABASE_SERVICE_ROLE_KEY` locally/server-side only and checks required tables plus key columns.
+- Run `npm run smoke:routes` against a running local server before deployment. It requests the main page routes and fails on server errors without requiring Google login.
+- Dashboard and student analytics should degrade gracefully when optional analytics tables fail. A roleplay analytics failure should show "Roleplay practice data unavailable" without breaking exam analytics; an exam analytics failure should not prevent roleplay practice data from rendering if it loaded.
+- If a freshly applied table still returns "Could not find the table ... in the schema cache", reload/refresh the Supabase PostgREST schema cache and rerun `npm run check:db`.
+- Stability testing workflow before adding features:
+  1. Apply any pending Supabase migrations to the target project.
+  2. Run `npm run check:db`.
+  3. Run `npm run lint`, `npx tsc --noEmit`, and `npm run build`.
+  4. Start the local app and run `npm run smoke:routes`.
+  5. Manually verify authenticated flows with student, admin, and advisor accounts where available.
+- Known limitation: route smoke tests only verify that routes render/respond without server errors. They do not prove Google OAuth, role-gated UI, PDF signing, exam submission, or roleplay attempt submission for a real authenticated user.
+- Role and permission expectations: `student` can use approved resources, exams, analytics, and own roleplay attempts; `admin` and `advisor` can access admin navigation and management pages; non-`@ojrsd.net` users must be signed out or blocked.
 admin-only pending/rejected/resource/user stats where available
 
 Old fake score/streak widgets were removed or marked as coming soon.

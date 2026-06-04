@@ -1,3 +1,4 @@
+import { getFriendlyErrorMessage, logDeveloperError } from "@/lib/errors";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import type {
   ResourceApprovalStatus,
@@ -64,7 +65,8 @@ async function getAccessToken() {
   const { data, error } = await supabase.auth.getSession();
 
   if (error) {
-    throw new Error(error.message);
+    logDeveloperError("[resources] session lookup failed", error);
+    throw new Error(getFriendlyErrorMessage(error, "Unable to verify your session."));
   }
 
   if (!data.session?.access_token) {
@@ -87,7 +89,8 @@ async function fetchResourcePdfEndpoint<T>(id: string, options: RequestInit = {}
   const payload = (await response.json()) as T & { error?: string };
 
   if (!response.ok) {
-    throw new Error(payload.error ?? "Unable to load the resource PDF.");
+    logDeveloperError(`[resources] PDF endpoint failed for ${id}`, payload.error);
+    throw new Error(getFriendlyErrorMessage(payload.error, "Unable to load the resource PDF."));
   }
 
   return payload;
@@ -115,7 +118,8 @@ async function getResourceCount({
   const { count, error } = await withDebugTimeout(query, "Resource count");
 
   if (error) {
-    throw new Error(error.message);
+    logDeveloperError("[resources] count failed", error);
+    throw new Error(getFriendlyErrorMessage(error, "Unable to load resource counts."));
   }
 
   return count ?? 0;
@@ -148,7 +152,8 @@ export const ResourcesService = {
     const { data, error } = await withDebugTimeout(query, "Resources list");
 
     if (error) {
-      throw new Error(error.message);
+      logDeveloperError("[resources] list failed", error);
+      throw new Error(getFriendlyErrorMessage(error, "Unable to load resources."));
     }
 
     return data ?? [];
@@ -187,7 +192,8 @@ export const ResourcesService = {
     );
 
     if (error) {
-      throw new Error(error.message);
+      logDeveloperError("[resources] approved public list failed", error);
+      throw new Error(getFriendlyErrorMessage(error, "Unable to load approved resources."));
     }
 
     return data ?? [];
@@ -210,7 +216,7 @@ export const ResourcesService = {
       return data ?? [];
     }
 
-    console.warn("Recent approved resources query failed:", error.message);
+    logDeveloperError("[resources] recent approved resources query failed", error);
 
     const fallbackResources = await this.listResources({
       approvalStatus: "approved",
@@ -233,7 +239,8 @@ export const ResourcesService = {
     );
 
     if (error) {
-      throw new Error(error.message);
+      logDeveloperError("[resources] recent approved public resources failed", error);
+      throw new Error(getFriendlyErrorMessage(error, "Unable to load recent resources."));
     }
 
     return (data ?? []).map((resource) => ({
@@ -278,7 +285,8 @@ export const ResourcesService = {
     );
 
     if (error) {
-      throw new Error(error.message);
+      logDeveloperError("[resources] detail failed", error);
+      throw new Error(getFriendlyErrorMessage(error, "Unable to load this resource."));
     }
 
     return data;
@@ -298,7 +306,8 @@ export const ResourcesService = {
     );
 
     if (error) {
-      throw new Error(error.message);
+      logDeveloperError("[resources] approved detail failed", error);
+      throw new Error(getFriendlyErrorMessage(error, "Unable to load this approved resource."));
     }
 
     return data;
@@ -331,7 +340,8 @@ export const ResourcesService = {
     );
 
     if (error) {
-      throw new Error(error.message);
+      logDeveloperError("[resources] approval update failed", error);
+      throw new Error(getFriendlyErrorMessage(error, "Unable to update this resource."));
     }
 
     return data;
@@ -354,7 +364,8 @@ export const ResourcesService = {
     );
 
     if (error) {
-      throw new Error(error.message);
+      logDeveloperError("[resources] bulk approve failed", error);
+      throw new Error(getFriendlyErrorMessage(error, "Unable to approve selected resources."));
     }
 
     return data ?? [];
@@ -377,7 +388,8 @@ export const ResourcesService = {
     );
 
     if (error) {
-      throw new Error(error.message);
+      logDeveloperError("[resources] bulk reject failed", error);
+      throw new Error(getFriendlyErrorMessage(error, "Unable to reject selected resources."));
     }
 
     return data ?? [];
@@ -397,7 +409,8 @@ export const ResourcesService = {
     );
 
     if (error) {
-      throw new Error(error.message);
+      logDeveloperError("[resources] metadata update failed", error);
+      throw new Error(getFriendlyErrorMessage(error, "Unable to save resource metadata."));
     }
 
     return data;
