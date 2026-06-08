@@ -1,5 +1,13 @@
 export type ResourceType = "Roleplay" | "Exam";
 
+export type Json =
+  | boolean
+  | null
+  | number
+  | string
+  | Json[]
+  | { [key: string]: Json | undefined };
+
 export type SupabaseResourceType = "roleplay" | "exam" | "reference" | "unknown";
 export type ResourceApprovalStatus = "approved" | "pending" | "rejected" | string;
 export type ProfileRole = "student" | "admin" | "advisor";
@@ -7,6 +15,28 @@ export type ExamCorrectAnswer = "A" | "B" | "C" | "D" | "E";
 export type ExamSelectedAnswer = ExamCorrectAnswer | "UNANSWERED";
 export type ExamKeyStatus = "no-key" | "partial" | "complete";
 export type AttemptProcessingStatus = "none" | "pending" | "complete" | "failed";
+export type DecaEventType =
+  | "individual_series"
+  | "team_decision_making"
+  | "principles"
+  | "project"
+  | "operations_research"
+  | "other";
+export type LearningContentStatus = "draft" | "approved" | "archived";
+export type ReviewableContentStatus =
+  | "draft"
+  | "needs_review"
+  | "approved"
+  | "archived"
+  | "rejected";
+export type LadderStage = "recognize" | "define" | "connect" | "apply" | "explain" | "improve";
+export type QuestionType = "multiple_choice" | "matching" | "multiple_select" | "free_text";
+export type ConceptMasteryStatus =
+  | "not_started"
+  | "learning"
+  | "practicing"
+  | "almost_mastered"
+  | "mastered";
 
 export type Profile = {
   id: string;
@@ -122,6 +152,132 @@ export type RoleplayAttemptInput = {
   judge_feedback?: string | null;
   confidence_rating?: number | null;
 };
+
+export type DecaEvent = {
+  id: string;
+  code: string;
+  name: string;
+  cluster: string | null;
+  event_type: DecaEventType;
+  participants: number | null;
+  exam_cluster: string | null;
+  description: string | null;
+  is_pilot: boolean;
+  sort_order: number;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type KeySet = {
+  id: string;
+  event_id: string;
+  title: string;
+  description: string | null;
+  sort_order: number;
+  status: LearningContentStatus;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type Concept = {
+  id: string;
+  name: string;
+  slug: string;
+  cluster: string | null;
+  instructional_area: string | null;
+  student_friendly_definition: string | null;
+  detailed_explanation: string | null;
+  example: string | null;
+  common_misconceptions: string | null;
+  status: LearningContentStatus;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type KeySetConcept = {
+  key_set_id: string;
+  concept_id: string;
+  sort_order: number;
+};
+
+export type StructuredQuestion = {
+  id: string;
+  source_resource_id: string | null;
+  event_id: string | null;
+  concept_id: string | null;
+  question_type: QuestionType | string;
+  ladder_stage: LadderStage | null;
+  prompt: string;
+  choices: Json | null;
+  correct_answer: Json | null;
+  explanation: string | null;
+  difficulty: string | null;
+  status: ReviewableContentStatus;
+  ai_generated: boolean;
+  ai_extracted: boolean;
+  admin_reviewed: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type QuestionAttempt = {
+  id: string;
+  user_id: string;
+  question_id: string;
+  answer: Json | null;
+  is_correct: boolean | null;
+  feedback: string | null;
+  attempt_number: number;
+  created_at: string | null;
+};
+
+export type ConceptMastery = {
+  user_id: string;
+  concept_id: string;
+  status: ConceptMasteryStatus;
+  recognize_score: number | null;
+  define_score: number | null;
+  connect_score: number | null;
+  apply_score: number | null;
+  explain_score: number | null;
+  improve_score: number | null;
+  last_practiced_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type RoleplayScenario = {
+  id: string;
+  resource_id: string | null;
+  event_id: string | null;
+  title: string | null;
+  scenario_text: string | null;
+  participant_role: string | null;
+  judge_role: string | null;
+  business_context: string | null;
+  task: string | null;
+  instructional_area: string | null;
+  performance_indicators: Json | null;
+  status: ReviewableContentStatus;
+  ai_extracted: boolean;
+  admin_reviewed: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type ConceptMasteryInput = Partial<
+  Pick<
+    ConceptMastery,
+    | "apply_score"
+    | "connect_score"
+    | "define_score"
+    | "explain_score"
+    | "improve_score"
+    | "last_practiced_at"
+    | "recognize_score"
+    | "status"
+  >
+>;
 
 export type InstructionalAreaBreakdown = {
   instructional_area: string;
@@ -326,6 +482,150 @@ export type Database = {
           updated_at?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["roleplay_attempts"]["Insert"]>;
+        Relationships: [];
+      };
+      events: {
+        Row: DecaEvent;
+        Insert: {
+          id?: string;
+          code: string;
+          name: string;
+          cluster?: string | null;
+          event_type: DecaEventType;
+          participants?: number | null;
+          exam_cluster?: string | null;
+          description?: string | null;
+          is_pilot?: boolean;
+          sort_order?: number;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["events"]["Insert"]>;
+        Relationships: [];
+      };
+      key_sets: {
+        Row: KeySet;
+        Insert: {
+          id?: string;
+          event_id: string;
+          title: string;
+          description?: string | null;
+          sort_order?: number;
+          status?: LearningContentStatus;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["key_sets"]["Insert"]>;
+        Relationships: [];
+      };
+      concepts: {
+        Row: Concept;
+        Insert: {
+          id?: string;
+          name: string;
+          slug: string;
+          cluster?: string | null;
+          instructional_area?: string | null;
+          student_friendly_definition?: string | null;
+          detailed_explanation?: string | null;
+          example?: string | null;
+          common_misconceptions?: string | null;
+          status?: LearningContentStatus;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["concepts"]["Insert"]>;
+        Relationships: [];
+      };
+      key_set_concepts: {
+        Row: KeySetConcept;
+        Insert: {
+          key_set_id: string;
+          concept_id: string;
+          sort_order?: number;
+        };
+        Update: Partial<Database["public"]["Tables"]["key_set_concepts"]["Insert"]>;
+        Relationships: [];
+      };
+      questions: {
+        Row: StructuredQuestion;
+        Insert: {
+          id?: string;
+          source_resource_id?: string | null;
+          event_id?: string | null;
+          concept_id?: string | null;
+          question_type: QuestionType | string;
+          ladder_stage?: LadderStage | null;
+          prompt: string;
+          choices?: Json | null;
+          correct_answer?: Json | null;
+          explanation?: string | null;
+          difficulty?: string | null;
+          status?: ReviewableContentStatus;
+          ai_generated?: boolean;
+          ai_extracted?: boolean;
+          admin_reviewed?: boolean;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["questions"]["Insert"]>;
+        Relationships: [];
+      };
+      question_attempts: {
+        Row: QuestionAttempt;
+        Insert: {
+          id?: string;
+          user_id: string;
+          question_id: string;
+          answer?: Json | null;
+          is_correct?: boolean | null;
+          feedback?: string | null;
+          attempt_number?: number;
+          created_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["question_attempts"]["Insert"]>;
+        Relationships: [];
+      };
+      concept_mastery: {
+        Row: ConceptMastery;
+        Insert: {
+          user_id: string;
+          concept_id: string;
+          status?: ConceptMasteryStatus;
+          recognize_score?: number | null;
+          define_score?: number | null;
+          connect_score?: number | null;
+          apply_score?: number | null;
+          explain_score?: number | null;
+          improve_score?: number | null;
+          last_practiced_at?: string | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["concept_mastery"]["Insert"]>;
+        Relationships: [];
+      };
+      roleplay_scenarios: {
+        Row: RoleplayScenario;
+        Insert: {
+          id?: string;
+          resource_id?: string | null;
+          event_id?: string | null;
+          title?: string | null;
+          scenario_text?: string | null;
+          participant_role?: string | null;
+          judge_role?: string | null;
+          business_context?: string | null;
+          task?: string | null;
+          instructional_area?: string | null;
+          performance_indicators?: Json | null;
+          status?: ReviewableContentStatus;
+          ai_extracted?: boolean;
+          admin_reviewed?: boolean;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["roleplay_scenarios"]["Insert"]>;
         Relationships: [];
       };
     };

@@ -20,6 +20,28 @@ The current user/project owner is building this with:
 
 The project is intended for members with `@ojrsd.net` accounts only.
 
+## OJR DECA Roleplay Preparation App rebuild direction
+
+The app is shifting from a passive PDF library to a structured DECA learning platform direction called **OJR DECA Roleplay Preparation App**. Preserve the existing DECA Prep Hub codebase and working flows while this rebuild happens incrementally.
+
+- MCS (Marketing Communications Series) is the first pilot event.
+- BLTDM (Business Law and Ethics Team Decision Making) is the second pilot event.
+- The learning ladder is Recognize -> Define -> Connect -> Apply -> Explain -> Improve.
+- The future student flow should move from Event Pathway -> Key Set -> Concept -> Quick Checks -> Scenario Lock -> Free Response -> AI Feedback -> Revision -> Mastery Update.
+- Phase 1 migrations are additive learning-model foundations only.
+- Do not drop, rewrite, or backfill-replace existing `resources` or `profiles` tables.
+- The checked-in migrations may not contain the original baseline create-table SQL for `resources` and `profiles`; create a future baseline schema snapshot before deeper rebuild work.
+- Apply new Supabase migrations before deploying app code that queries new learning tables.
+- Gemini should be used only through server-side routes/services.
+- Do not expose `SUPABASE_SERVICE_ROLE_KEY` or `GEMINI_API_KEY` in frontend code or `NEXT_PUBLIC_*` variables.
+- AI-extracted content must be reviewable before student use.
+- Gemini outputs should never be silently treated as official truth.
+- AI-suggested answer keys are not official unless reviewed by an admin/advisor.
+- Admins and advisors should currently have the same management permissions. Use `isAdminRole(role)` for current admin-equivalent checks.
+- Do not implement Gemini API calls or student/admin behavior changes unless explicitly requested for a later phase.
+- Do not delete, rewrite, or break existing resource upload/import, approval, PDF download, exam, dashboard, analytics, auth, roleplay attempt, or theme functionality during the rebuild.
+- The rebuild planning artifact is `docs/ojr-deca-roleplay-prep-rebuild-plan.md`.
+
 Branding rules:
 
 - Use **OJR DECA** or **Owen J. Roberts DECA** for chapter branding.
@@ -1114,7 +1136,10 @@ Database migration and health check notes:
   3. Run `npm run lint`, `npx tsc --noEmit`, and `npm run build`.
   4. Start the local app and run `npm run smoke:routes`.
   5. Manually verify authenticated flows with student, admin, and advisor accounts where available.
-- Known limitation: route smoke tests only verify that routes render/respond without server errors. They do not prove Google OAuth, role-gated UI, PDF signing, exam submission, or roleplay attempt submission for a real authenticated user.
+- Route smoke tests are unauthenticated HTTP checks and require a running app server first. Start `npm run dev` or `npm run build && npm run start`, then run `npm run smoke:routes`. The default base URL is `http://localhost:3000`; override with `SMOKE_BASE_URL` or `BASE_URL`.
+- Expected unauthenticated smoke behavior: protected student routes and admin/advisor routes may return the app shell with HTTP 200 because auth redirects happen client-side, or they may return 30x redirects to `/login` if server-side routing changes later. Fake dynamic UUID routes may return 200 app shell, 30x redirect, or 404 not found, but must not return 5xx.
+- Smoke failures that should block deployment: status `0` fetch failures, public routes returning 5xx, protected/admin routes returning 5xx instead of app shell or redirect, and fake dynamic routes crashing the app. Status `0` means no HTTP response was received, usually because the app server is not running, the base URL is wrong, or the request timed out.
+- Known limitation: route smoke tests only verify that routes render/respond without server errors. They do not prove Google OAuth, role-gated UI, PDF signing, exam submission, roleplay attempt submission, or RLS behavior for a real authenticated user.
 - Role and permission expectations: `student` can use approved resources, exams, analytics, and own roleplay attempts; `admin` and `advisor` can access admin navigation and management pages; non-`@ojrsd.net` users must be signed out or blocked.
 admin-only pending/rejected/resource/user stats where available
 

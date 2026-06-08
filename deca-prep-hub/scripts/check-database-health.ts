@@ -9,7 +9,15 @@ type RequiredTable =
   | "exam_answer_keys"
   | "exam_attempts"
   | "exam_attempt_answers"
-  | "roleplay_attempts";
+  | "roleplay_attempts"
+  | "events"
+  | "key_sets"
+  | "concepts"
+  | "key_set_concepts"
+  | "questions"
+  | "question_attempts"
+  | "concept_mastery"
+  | "roleplay_scenarios";
 
 const requiredTables: RequiredTable[] = [
   "profiles",
@@ -18,6 +26,14 @@ const requiredTables: RequiredTable[] = [
   "exam_attempts",
   "exam_attempt_answers",
   "roleplay_attempts",
+  "events",
+  "key_sets",
+  "concepts",
+  "key_set_concepts",
+  "questions",
+  "question_attempts",
+  "concept_mastery",
+  "roleplay_scenarios",
 ];
 
 const keyColumns: Record<RequiredTable, string[]> = {
@@ -27,6 +43,30 @@ const keyColumns: Record<RequiredTable, string[]> = {
   exam_attempts: [],
   exam_attempt_answers: [],
   roleplay_attempts: ["transcript_status", "ai_feedback_status"],
+  events: ["code", "is_pilot"],
+  key_sets: ["event_id"],
+  concepts: ["slug"],
+  key_set_concepts: ["key_set_id", "concept_id"],
+  questions: ["question_type", "ladder_stage", "status"],
+  question_attempts: ["user_id"],
+  concept_mastery: ["status"],
+  roleplay_scenarios: ["performance_indicators", "status"],
+};
+const probeColumns: Record<RequiredTable, string> = {
+  profiles: "id",
+  resources: "id",
+  exam_answer_keys: "id",
+  exam_attempts: "id",
+  exam_attempt_answers: "id",
+  roleplay_attempts: "id",
+  events: "id",
+  key_sets: "id",
+  concepts: "id",
+  key_set_concepts: "key_set_id",
+  questions: "id",
+  question_attempts: "id",
+  concept_mastery: "user_id",
+  roleplay_scenarios: "id",
 };
 const allowedProfileRoles = ["student", "admin", "advisor"] as const;
 
@@ -67,7 +107,7 @@ async function main() {
   const okTables: RequiredTable[] = [];
 
   for (const table of requiredTables) {
-    const { error } = await supabase.from(table).select("id").limit(0);
+    const { error } = await supabase.from(table).select(probeColumns[table]).limit(0);
 
     if (error) {
       if (isConnectionError(error)) {
@@ -163,7 +203,7 @@ async function main() {
     console.log("");
     console.log("Recommended SQL/migration note:");
     console.log(
-      "Apply the missing Supabase migrations with the Supabase CLI or paste the matching SQL into the Supabase SQL Editor, then rerun npm run check:db. If roleplay_attempts was just created and the REST API still reports a schema-cache error, reload the PostgREST schema cache from Supabase before deploying code that queries it.",
+      "Apply the missing Supabase migrations with the Supabase CLI or paste the matching SQL into the Supabase SQL Editor, then rerun npm run check:db. If newly created tables such as roleplay_attempts or the Phase 1 learning tables still return schema-cache errors, reload the PostgREST schema cache from Supabase before deploying code that queries them.",
     );
     process.exitCode = 1;
   } else {
