@@ -17,7 +17,12 @@ type RequiredTable =
   | "questions"
   | "question_attempts"
   | "concept_mastery"
-  | "roleplay_scenarios";
+  | "roleplay_scenarios"
+  | "ai_extraction_jobs"
+  | "resource_classifications"
+  | "ai_extracted_answer_keys"
+  | "rubrics"
+  | "rubric_criteria";
 
 const requiredTables: RequiredTable[] = [
   "profiles",
@@ -34,6 +39,11 @@ const requiredTables: RequiredTable[] = [
   "question_attempts",
   "concept_mastery",
   "roleplay_scenarios",
+  "ai_extraction_jobs",
+  "resource_classifications",
+  "ai_extracted_answer_keys",
+  "rubrics",
+  "rubric_criteria",
 ];
 
 const keyColumns: Record<RequiredTable, string[]> = {
@@ -47,10 +57,30 @@ const keyColumns: Record<RequiredTable, string[]> = {
   key_sets: ["event_id"],
   concepts: ["slug"],
   key_set_concepts: ["key_set_id", "concept_id"],
-  questions: ["question_type", "ladder_stage", "status"],
+  questions: [
+    "source_resource_id",
+    "choices",
+    "correct_answer",
+    "question_type",
+    "ladder_stage",
+    "status",
+    "ai_extracted",
+    "admin_reviewed",
+  ],
   question_attempts: ["user_id"],
   concept_mastery: ["status"],
-  roleplay_scenarios: ["performance_indicators", "status"],
+  roleplay_scenarios: ["performance_indicators", "status", "ai_extracted", "admin_reviewed"],
+  ai_extraction_jobs: [
+    "job_type",
+    "status",
+    "raw_output_json",
+    "validated_output_json",
+    "confidence_score",
+  ],
+  resource_classifications: ["classification", "admin_confirmed"],
+  ai_extracted_answer_keys: ["answers", "status", "admin_reviewed"],
+  rubrics: ["rubric_type", "status", "ai_extracted", "admin_reviewed"],
+  rubric_criteria: ["rubric_id", "performance_levels", "sort_order"],
 };
 const probeColumns: Record<RequiredTable, string> = {
   profiles: "id",
@@ -67,6 +97,11 @@ const probeColumns: Record<RequiredTable, string> = {
   question_attempts: "id",
   concept_mastery: "user_id",
   roleplay_scenarios: "id",
+  ai_extraction_jobs: "id",
+  resource_classifications: "id",
+  ai_extracted_answer_keys: "id",
+  rubrics: "id",
+  rubric_criteria: "id",
 };
 const allowedProfileRoles = ["student", "admin", "advisor"] as const;
 

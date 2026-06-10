@@ -27,6 +27,7 @@ const navItems: Array<{ label: string; href: string; icon: IconName; adminOnly?:
   { label: "Settings", href: "/settings", icon: "settings" },
   { label: "Upload Resource", href: "/admin/upload", icon: "upload", adminOnly: true },
   { label: "Admin Resources", href: "/admin/resources", icon: "exams", adminOnly: true },
+  { label: "AI Review", href: "/admin/ai-review", icon: "analytics", adminOnly: true },
   { label: "Exam Keys", href: "/admin/exam-keys", icon: "exams", adminOnly: true },
   { label: "Admin Analytics", href: "/admin/analytics", icon: "analytics", adminOnly: true },
   { label: "Users", href: "/admin/users", icon: "users", adminOnly: true },

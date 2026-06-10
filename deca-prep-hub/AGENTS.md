@@ -104,6 +104,8 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 NEXT_PUBLIC_SITE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-2.5-flash
 ```
 
 Rules:
@@ -116,13 +118,21 @@ Vercel production should use `NEXT_PUBLIC_SITE_URL=https://ojrdeca-roleplay-app.
 If NEXT_PUBLIC_SITE_URL is unset, browser OAuth uses `window.location.origin` so preview/production domains still work.
 NEXT_PUBLIC_SITE_URL is required in Vercel production to keep OAuth redirects on the canonical app domain.
 SUPABASE_SERVICE_ROLE_KEY is sensitive and must never be used in frontend/browser code.
+GEMINI_API_KEY is sensitive and must never be used in frontend/browser code.
+GEMINI_MODEL is optional and defaults to `gemini-2.5-flash`.
 Service role key may be used only in:
 local scripts
 server routes
 server-side utilities
 admin-only backend logic
+Gemini keys may be used only in:
+local scripts
+server routes
+server-side AI utilities
+admin/advisor-controlled backend logic
 
 Never create a variable named NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY.
+Never create variables named NEXT_PUBLIC_GEMINI_API_KEY or NEXT_PUBLIC_GEMINI_MODEL.
 Never hardcode localhost for production OAuth redirects.
 
 Deployment Notes
@@ -1140,6 +1150,35 @@ Database migration and health check notes:
 - Expected unauthenticated smoke behavior: protected student routes and admin/advisor routes may return the app shell with HTTP 200 because auth redirects happen client-side, or they may return 30x redirects to `/login` if server-side routing changes later. Fake dynamic UUID routes may return 200 app shell, 30x redirect, or 404 not found, but must not return 5xx.
 - Smoke failures that should block deployment: status `0` fetch failures, public routes returning 5xx, protected/admin routes returning 5xx instead of app shell or redirect, and fake dynamic routes crashing the app. Status `0` means no HTTP response was received, usually because the app server is not running, the base URL is wrong, or the request timed out.
 - Known limitation: route smoke tests only verify that routes render/respond without server errors. They do not prove Google OAuth, role-gated UI, PDF signing, exam submission, roleplay attempt submission, or RLS behavior for a real authenticated user.
+- Phase 2 AI infrastructure uses `supabase/migrations/20260608184952_add_ai_infrastructure.sql`. Apply it before running code that creates AI jobs or classifications. `npm run check:db` includes `ai_extraction_jobs` and `resource_classifications`.
+- `ai_extraction_jobs` stores server-side Gemini job records, raw output, validated output, confidence, and errors. Students should not read this table. Admins/advisors can review/manage it, and server/service-role code can create/update jobs.
+- `resource_classifications` stores AI classification suggestions separately from official `resources` metadata. A classification never changes `resources.approval_status`, publishes content, or updates official resource metadata by itself.
+- `src/lib/ai/gemini/client.ts` is server-only and reads `GEMINI_API_KEY` plus optional `GEMINI_MODEL`. Missing keys, API errors, timeouts, invalid JSON, and schema failures should create/leave clear failed job state instead of crashing the app UI.
+- `POST /api/admin/ai/classify-resource` accepts `{ "resource_id": "..." }`, requires an authenticated admin/advisor bearer token, and returns only job/status/classification metadata. It must not return Gemini raw output or secrets.
+- Local Gemini classification test: `npm run test:gemini-classify -- <resource-id>`. This requires Supabase env vars, the Phase 2 migration, and `GEMINI_API_KEY`. If the key is absent after a job is created, the job should be marked failed with a clear missing-key message.
+- Phase 3 AI PDF extraction uses `supabase/migrations/20260608190804_add_ai_pdf_extraction_staging.sql`. Apply it before invoking answer-key or rubric extraction, then rerun `npm run check:db`.
+- Phase 3 extracts from server-side text input. It first uses `resources.detected_text` when available, then falls back to downloading the private Supabase Storage PDF server-side and parsing text with `pdf-parse`. Do not expose signed storage URLs or service-role credentials to the browser for extraction.
+- `POST /api/admin/ai/extract-resource` accepts `{ "resource_id": "...", "extraction_type": "exam|answer_key|roleplay|judge_rubric", "force": false }`, requires an authenticated admin/advisor bearer token, and returns a concise extraction summary.
+- Local extraction test: `npm run test:gemini-extract -- <resource-id> --type=exam`. Valid types are `exam`, `answer_key`, `roleplay`, and `judge_rubric`; `--force` creates a fresh Gemini job but does not delete or overwrite existing draft records.
+- Exam extraction stores AI-extracted questions in `questions` with `status = 'needs_review'`, `ai_extracted = true`, and `admin_reviewed = false`. Correct answers remain null unless added later through an official review flow.
+- Roleplay extraction stores draft scenarios in `roleplay_scenarios` with `status = 'needs_review'`, `ai_extracted = true`, and `admin_reviewed = false`.
+- Answer-key extraction stores suggestions in `ai_extracted_answer_keys`. It must never write to official `exam_answer_keys` during Phase 3.
+- Rubric extraction stores draft `rubrics` and `rubric_criteria`. Students should not read unapproved rubrics by default.
+- Duplicate behavior: extraction skips by default when AI-extracted records already exist for the resource/type. Forced extraction creates a new job for audit/review but avoids duplicating draft content.
+- Phase 3 does not include the full admin AI review center, extracted-content editors, student learning pathway, concept feedback, roleplay grading, or mastery updates. Those belong to later phases.
+- Phase 4 admin/advisor review UI lives under `/admin/ai-review`.
+- Review routes:
+  - `/admin/ai-review` for extraction job overview, metrics, filters, and job cards.
+  - `/admin/ai-review/jobs/[id]` for job metadata plus raw/validated JSON.
+  - `/admin/ai-review/questions` for AI-extracted question review.
+  - `/admin/ai-review/answer-keys` for AI-suggested practice key review.
+  - `/admin/ai-review/roleplays` for extracted roleplay scenario and performance indicator review.
+  - `/admin/ai-review/rubrics` for extracted rubric and criteria review.
+- Review mutations go through `PATCH /api/admin/ai/review`, which verifies admin/advisor server-side with `requireAdminRequester`.
+- Approving extracted questions/roleplays/rubrics sets `status = 'approved'` and `admin_reviewed = true`. Rejecting, archiving, or moving back to needs review sets `admin_reviewed = false`.
+- AI-extracted answer keys remain practice/suggested keys in `ai_extracted_answer_keys`. Phase 4 does not convert them into official `exam_answer_keys`; official conversion remains a later explicit workflow.
+- Students must not see `/admin/ai-review` navigation or unapproved AI-extracted records.
+- Phase 5 is expected to build the student MCS learning pathway using approved content only.
 - Role and permission expectations: `student` can use approved resources, exams, analytics, and own roleplay attempts; `admin` and `advisor` can access admin navigation and management pages; non-`@ojrsd.net` users must be signed out or blocked.
 admin-only pending/rejected/resource/user stats where available
 

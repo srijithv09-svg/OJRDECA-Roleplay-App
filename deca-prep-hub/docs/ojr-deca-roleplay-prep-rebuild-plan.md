@@ -598,49 +598,66 @@ Testing expectations:
 
 Goal:
 
-- Add server-side Gemini client, prompt registry, schemas, and validation helpers without calling Gemini from the browser.
+- Add server-side Gemini client, prompt registry, schemas, validation helpers, AI job tables, and a controlled admin/advisor resource classification path without calling Gemini from the browser.
 
 Major files likely affected:
 
 - `src/lib/ai/gemini/*`
 - `src/lib/ai/extraction/*`
 - `src/lib/ai/grading/*`
+- `src/app/api/admin/ai/classify-resource/route.ts`
+- `scripts/test-gemini-resource-classification.ts`
+- `supabase/migrations/*_add_ai_infrastructure.sql`
 - Environment documentation.
 
 Database changes:
 
-- Use `ai_extraction_jobs` from Phase 1 if present.
+- Add `ai_extraction_jobs` for server-side Gemini job state, raw output, validated output, confidence, and errors.
+- Add `resource_classifications` for AI classification suggestions that stay separate from official `resources` metadata until reviewed.
+- Enable RLS and keep students from reading AI job/classification output by default.
 
 Risks:
 
 - Accidentally exposing `GEMINI_API_KEY`.
 - Inconsistent structured outputs.
+- Treating classification suggestions as official resource metadata.
+- Running code before the Phase 2 migration is applied.
 
 Manual checks:
 
 - Verify no Gemini key appears in frontend bundles or `NEXT_PUBLIC_*` variables.
+- Apply the Phase 2 migration before invoking the classifier.
+- Run `npm run test:gemini-classify -- <resource-id>` only with a server-side Gemini key configured.
+- Confirm missing Gemini keys and malformed AI output are recorded as failed jobs instead of crashing app pages.
 
 Testing expectations:
 
 - Unit tests for schema validation if test tooling is added.
 - Lint, TypeScript, build.
+- `npm run check:db` after the Phase 2 migration is applied.
 
 ### Phase 3: Gemini PDF extraction
 
 Goal:
 
-- Extract classifications, exam questions, answer key suggestions, roleplay scenarios, performance indicators, and rubric suggestions into reviewable records.
+- Extract exam questions, answer key suggestions, roleplay scenarios, performance indicators, and rubric suggestions into reviewable records.
 
 Major files likely affected:
 
-- `src/app/api/admin/resources/[id]/extract/route.ts`
+- `src/app/api/admin/ai/extract-resource/route.ts`
 - `src/lib/ai/extraction/*`
 - `src/lib/services/resources.ts`
 - Admin review services.
+- `scripts/test-gemini-resource-extraction.ts`
+- `supabase/migrations/*_add_ai_pdf_extraction_staging.sql`
 
 Database changes:
 
 - Insert extraction jobs and extracted draft records.
+- Exam PDFs insert draft questions into `questions` with `status = needs_review`, `ai_extracted = true`, and `admin_reviewed = false`.
+- Roleplay PDFs insert draft scenarios into `roleplay_scenarios` with `status = needs_review`, `ai_extracted = true`, and `admin_reviewed = false`.
+- Answer key PDFs insert suggestions into `ai_extracted_answer_keys`, not official `exam_answer_keys`.
+- Rubric PDFs insert draft `rubrics` and `rubric_criteria`.
 
 Risks:
 
@@ -648,17 +665,28 @@ Risks:
 - Large PDFs or timeouts.
 - Duplicated extraction records.
 - Official answer keys confused with AI suggestions.
+- Poor PDF text extraction if OCR/text layers are incomplete.
 
 Manual checks:
 
 - Run extraction on one known MCS resource.
 - Confirm output remains needs-review.
 - Confirm students cannot see unapproved extraction records.
+- Confirm `resources.approval_status` is unchanged after extraction.
 
 Testing expectations:
 
 - Validation tests for malformed Gemini output.
 - Route auth tests if test tooling exists.
+- `npm run test:gemini-extract -- <resource-id> --type=exam` when `GEMINI_API_KEY` and the Phase 3 migration are configured.
+- `npm run check:db` after the Phase 3 migration is applied.
+
+Current Phase 3 implementation notes:
+
+- The pipeline uses extracted text, not Gemini Files API upload. It prefers `resources.detected_text`, then downloads the private `resources` Storage object server-side and parses it with `pdf-parse`.
+- The orchestrator chooses a type from an explicit admin override, latest stored classification, current `resources.resource_type`, or a fresh Gemini classification when needed.
+- Duplicate prevention skips existing draft AI content by default. `force=true` creates a new Gemini job but does not delete or overwrite draft extracted records.
+- Full review UI, extracted content editors, answer-key approval, student pathway, concept feedback, and roleplay grading remain Phase 4+.
 
 ### Phase 4: Admin AI review center
 
@@ -671,6 +699,7 @@ Major files likely affected:
 - New `/admin/ai-review` pages and components.
 - Review service files.
 - Existing admin navigation.
+- `src/app/api/admin/ai/review/route.ts`
 
 Database changes:
 
@@ -690,6 +719,16 @@ Testing expectations:
 
 - RLS and role-gated access checks.
 - Lint, TypeScript, build.
+
+Current Phase 4 implementation notes:
+
+- `/admin/ai-review` shows extraction job metrics, filters, job cards, errors, confidence, and links to review extracted content.
+- `/admin/ai-review/jobs/[id]` shows job metadata, raw JSON, validated JSON, and linked extracted record counts.
+- `/admin/ai-review/questions`, `/admin/ai-review/roleplays`, `/admin/ai-review/answer-keys`, and `/admin/ai-review/rubrics` provide review/edit modals for extracted records.
+- Review mutations use `PATCH /api/admin/ai/review` and verify admin/advisor server-side.
+- JSONB editing uses textarea JSON with validation before save.
+- AI answer keys are labeled practice/not official and remain in `ai_extracted_answer_keys`; conversion to official `exam_answer_keys` is intentionally not implemented yet.
+- Student learning pages, concept feedback, roleplay grading, mastery dashboards, and official answer-key conversion remain Phase 5+.
 
 ### Phase 5: Student MCS learning pathway
 

@@ -37,6 +37,29 @@ export type ConceptMasteryStatus =
   | "practicing"
   | "almost_mastered"
   | "mastered";
+export type AiExtractionJobType =
+  | "resource_classification"
+  | "exam_extraction"
+  | "answer_key_extraction"
+  | "roleplay_extraction"
+  | "rubric_extraction"
+  | "concept_feedback"
+  | "roleplay_transcript_grading";
+export type AiExtractionJobStatus =
+  | "pending"
+  | "processing"
+  | "completed"
+  | "failed"
+  | "needs_review"
+  | "approved"
+  | "rejected";
+export type ResourceClassificationType =
+  | "exam"
+  | "answer_key"
+  | "roleplay"
+  | "judge_rubric"
+  | "instructional_resource"
+  | "unknown";
 
 export type Profile = {
   id: string;
@@ -64,6 +87,7 @@ export type ResourceListItem = {
   performance_indicators: string[] | null;
   performance_indicators_reviewed: boolean | null;
   confidence_score: number | null;
+  detected_text?: string | null;
   import_notes: string | null;
   file_path: string | null;
   storage_path: string | null;
@@ -261,6 +285,82 @@ export type RoleplayScenario = {
   status: ReviewableContentStatus;
   ai_extracted: boolean;
   admin_reviewed: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type AiExtractionJob = {
+  id: string;
+  resource_id: string | null;
+  user_id: string | null;
+  job_type: AiExtractionJobType;
+  status: AiExtractionJobStatus;
+  model: string | null;
+  input_storage_path: string | null;
+  input_metadata: Json | null;
+  raw_output_json: Json | null;
+  validated_output_json: Json | null;
+  confidence_score: number | null;
+  error_message: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type ResourceClassification = {
+  id: string;
+  resource_id: string;
+  ai_extraction_job_id: string | null;
+  classification: ResourceClassificationType;
+  confidence: number | null;
+  reasoning_summary: string | null;
+  detected_event_code: string | null;
+  detected_event_name: string | null;
+  detected_year: number | null;
+  warnings: Json | null;
+  admin_confirmed: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type AiExtractedAnswerKey = {
+  id: string;
+  resource_id: string;
+  ai_extraction_job_id: string | null;
+  possible_exam_resource_id: string | null;
+  title: string | null;
+  detected_event_code: string | null;
+  detected_year: number | null;
+  answers: Json;
+  status: ReviewableContentStatus;
+  admin_reviewed: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type Rubric = {
+  id: string;
+  resource_id: string | null;
+  event_id: string | null;
+  ai_extraction_job_id: string | null;
+  title: string | null;
+  rubric_type: string | null;
+  status: ReviewableContentStatus;
+  ai_extracted: boolean;
+  admin_reviewed: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type RubricCriterion = {
+  id: string;
+  rubric_id: string;
+  name: string;
+  description: string | null;
+  max_points: number | null;
+  performance_levels: Json | null;
+  sort_order: number;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -626,6 +726,102 @@ export type Database = {
           updated_at?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["roleplay_scenarios"]["Insert"]>;
+        Relationships: [];
+      };
+      ai_extraction_jobs: {
+        Row: AiExtractionJob;
+        Insert: {
+          id?: string;
+          resource_id?: string | null;
+          user_id?: string | null;
+          job_type: AiExtractionJobType;
+          status?: AiExtractionJobStatus;
+          model?: string | null;
+          input_storage_path?: string | null;
+          input_metadata?: Json | null;
+          raw_output_json?: Json | null;
+          validated_output_json?: Json | null;
+          confidence_score?: number | null;
+          error_message?: string | null;
+          started_at?: string | null;
+          completed_at?: string | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["ai_extraction_jobs"]["Insert"]>;
+        Relationships: [];
+      };
+      resource_classifications: {
+        Row: ResourceClassification;
+        Insert: {
+          id?: string;
+          resource_id: string;
+          ai_extraction_job_id?: string | null;
+          classification: ResourceClassificationType;
+          confidence?: number | null;
+          reasoning_summary?: string | null;
+          detected_event_code?: string | null;
+          detected_event_name?: string | null;
+          detected_year?: number | null;
+          warnings?: Json | null;
+          admin_confirmed?: boolean;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["resource_classifications"]["Insert"]>;
+        Relationships: [];
+      };
+      ai_extracted_answer_keys: {
+        Row: AiExtractedAnswerKey;
+        Insert: {
+          id?: string;
+          resource_id: string;
+          ai_extraction_job_id?: string | null;
+          possible_exam_resource_id?: string | null;
+          title?: string | null;
+          detected_event_code?: string | null;
+          detected_year?: number | null;
+          answers: Json;
+          status?: ReviewableContentStatus;
+          admin_reviewed?: boolean;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["ai_extracted_answer_keys"]["Insert"]>;
+        Relationships: [];
+      };
+      rubrics: {
+        Row: Rubric;
+        Insert: {
+          id?: string;
+          resource_id?: string | null;
+          event_id?: string | null;
+          ai_extraction_job_id?: string | null;
+          title?: string | null;
+          rubric_type?: string | null;
+          status?: ReviewableContentStatus;
+          ai_extracted?: boolean;
+          admin_reviewed?: boolean;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["rubrics"]["Insert"]>;
+        Relationships: [];
+      };
+      rubric_criteria: {
+        Row: RubricCriterion;
+        Insert: {
+          id?: string;
+          rubric_id: string;
+          name: string;
+          description?: string | null;
+          max_points?: number | null;
+          performance_levels?: Json | null;
+          sort_order?: number;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["rubric_criteria"]["Insert"]>;
         Relationships: [];
       };
     };
