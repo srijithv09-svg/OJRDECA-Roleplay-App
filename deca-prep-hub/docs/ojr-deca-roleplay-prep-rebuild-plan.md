@@ -730,6 +730,30 @@ Current Phase 4 implementation notes:
 - AI answer keys are labeled practice/not official and remain in `ai_extracted_answer_keys`; conversion to official `exam_answer_keys` is intentionally not implemented yet.
 - Student learning pages, concept feedback, roleplay grading, mastery dashboards, and official answer-key conversion remain Phase 5+.
 
+### Phase 4.5: Connect admin upload to extraction
+
+Goal:
+
+- Let admins/advisors trigger Gemini extraction immediately after uploading PDFs, while keeping upload/resource approval behavior unchanged.
+
+Implementation notes:
+
+- `/admin/upload` still uses the existing PDF upload and metadata detection flow.
+- Uploaded resources are still created with `approval_status = pending`.
+- A post-upload "Run AI Extraction" action calls `POST /api/admin/ai/extract-resource`.
+- Each uploaded resource can use auto-detect or an explicit extraction type: exam, answer key, roleplay, or judge rubric.
+- An optional unchecked "Run AI extraction after upload" checkbox can run extraction after successful resource creation.
+- Extraction errors do not fail the upload and do not publish content.
+- Missing `GEMINI_API_KEY` is shown as a clear UI message.
+- Duplicate extraction reports existing content and links to AI Review; force re-extraction is explicit and does not overwrite reviewed content.
+
+Not included:
+
+- No student-facing learning pages.
+- No official answer-key conversion.
+- No Gemini grading.
+- No changes to resource approval status.
+
 ### Phase 5: Student MCS learning pathway
 
 Goal:

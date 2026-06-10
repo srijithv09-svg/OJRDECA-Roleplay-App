@@ -1178,6 +1178,11 @@ Database migration and health check notes:
 - Approving extracted questions/roleplays/rubrics sets `status = 'approved'` and `admin_reviewed = true`. Rejecting, archiving, or moving back to needs review sets `admin_reviewed = false`.
 - AI-extracted answer keys remain practice/suggested keys in `ai_extracted_answer_keys`. Phase 4 does not convert them into official `exam_answer_keys`; official conversion remains a later explicit workflow.
 - Students must not see `/admin/ai-review` navigation or unapproved AI-extracted records.
+- Phase 4.5 connects `/admin/upload` to the Phase 3 extraction API. Upload still creates `pending` resources through the existing metadata detection flow.
+- After upload, admins/advisors can run AI extraction per uploaded resource, choose auto-detect or an explicit type (`exam`, `answer_key`, `roleplay`, `judge_rubric`), and jump to `/admin/ai-review` or the extraction job detail.
+- `/admin/upload` also has an optional unchecked "Run AI extraction after upload" checkbox. Extraction failures must not mark the upload as failed or change `resources.approval_status`.
+- If Gemini is missing, the upload UI should show: "Gemini is not configured. Add GEMINI_API_KEY in the server environment to enable AI extraction."
+- Duplicate extraction should report existing extracted content and avoid creating duplicate draft records by default. Force re-extraction is explicit and creates a new job without overwriting reviewed content.
 - Phase 5 is expected to build the student MCS learning pathway using approved content only.
 - Role and permission expectations: `student` can use approved resources, exams, analytics, and own roleplay attempts; `admin` and `advisor` can access admin navigation and management pages; non-`@ojrsd.net` users must be signed out or blocked.
 admin-only pending/rejected/resource/user stats where available
