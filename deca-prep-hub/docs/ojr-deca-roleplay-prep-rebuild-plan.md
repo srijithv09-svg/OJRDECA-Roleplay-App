@@ -909,36 +909,58 @@ Testing expectations:
 
 Goal:
 
-- Grade saved roleplay attempts or transcripts against structured indicators/rubrics.
+- Generate Gemini-powered practice feedback for saved roleplay attempts using the student's transcript or written response, approved roleplay scenario context, approved individual performance indicators, and approved rubric criteria when available.
+- Feedback is practice guidance only, not official DECA judging.
 
 Major files likely affected:
 
-- `src/lib/ai/grading/roleplay-grader.ts`
-- `src/app/api/roleplay-attempts/[id]/grade/route.ts`
+- `src/lib/ai/grading/roleplay-transcript-feedback.ts`
+- `src/app/api/roleplay-attempts/[id]/ai-feedback/route.ts`
 - Roleplay attempt detail components.
+- Gemini schemas/prompts for roleplay transcript feedback.
 
 Database changes:
 
-- Use or extend `roleplay_ai_feedback`.
-- Possibly update `roleplay_attempts.ai_feedback_status`, `ai_overall_score`, `ai_feedback_json`, `strengths`, and `growth_areas`.
+- No new table is required for Phase 7. Use existing `roleplay_attempts` columns:
+  - `ai_feedback_status`
+  - `ai_overall_score`
+  - `ai_feedback_json`
+  - `strengths`
+  - `growth_areas`
+  - `judge_feedback`
+- The database status values are `none`, `pending`, `complete`, and `failed`; Phase 7 maps processing/completed behavior onto `pending` and `complete`.
+
+Implemented behavior:
+
+- Students can request feedback only for their own attempts.
+- Admins/advisors may request feedback for any attempt through the server-side role check.
+- The API rejects attempts with no transcript or written response.
+- Completed feedback is reused by default and is not regenerated automatically.
+- Missing approved scenario, PI, or rubric context does not block feedback; the UI/API carries warnings and Gemini uses general DECA-style practice categories when needed.
+- Successful feedback populates roleplay analytics-compatible fields: overall score, strengths, growth areas, and feedback summary.
+- Quota, missing key, timeout, and invalid output failures are normalized and leave the saved attempt intact.
 
 Risks:
 
 - Student transcripts and recordings are sensitive.
 - AI grading may be inconsistent.
 - Missing rubric links reduce feedback quality.
+- Students may mistake practice feedback for official scoring; UI copy must continue to label it clearly.
 
 Manual checks:
 
 - Grade an owned attempt only.
 - Confirm another student cannot access or grade it.
 - Confirm failures leave attempt data intact.
+- Confirm saved feedback appears after refresh without regenerating.
+- Confirm missing context warnings do not crash the flow.
 
 Testing expectations:
 
 - Ownership checks.
 - Schema validation.
 - Lint, TypeScript, build.
+- Full readiness dashboard, BLTDM team workflow, and official answer-key conversion remain later phases.
 
 ### Phase 8: Readiness dashboard and polish
 

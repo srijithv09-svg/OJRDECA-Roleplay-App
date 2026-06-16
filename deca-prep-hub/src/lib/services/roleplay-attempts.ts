@@ -82,6 +82,30 @@ export const RoleplayAttemptsService = {
     return fetchRoleplayEndpoint<RoleplayAttemptResult>(`/api/roleplays/attempts/${attemptId}`);
   },
 
+  async generateAiFeedback(attemptId: string): Promise<{
+    attempt: RoleplayAttempt;
+    feedback: unknown;
+    reused: boolean;
+    warnings: string[];
+  }> {
+    const result = await fetchRoleplayEndpoint<{
+      attempt: RoleplayAttempt;
+      feedback: unknown;
+      reused?: boolean;
+      warnings?: string[];
+    }>(`/api/roleplay-attempts/${attemptId}/ai-feedback`, {
+      method: "POST",
+    });
+    notifyRoleplayAttemptsChanged();
+
+    return {
+      attempt: result.attempt,
+      feedback: result.feedback,
+      reused: result.reused ?? false,
+      warnings: result.warnings ?? [],
+    };
+  },
+
   async deleteRoleplayAttempt(attemptId: string): Promise<void> {
     await fetchRoleplayEndpoint<{ deleted: boolean }>(`/api/roleplays/attempts/${attemptId}`, {
       method: "DELETE",

@@ -38,6 +38,33 @@ export type ConceptRevisionFeedbackPromptInput = ConceptFeedbackPromptInput & {
   revisedResponse: string;
 };
 
+export type RoleplayTranscriptFeedbackPromptInput = {
+  aboveAndBeyondContext: string | null;
+  approvedPerformanceIndicators: Array<{
+    id: string | null;
+    instructionalArea: string | null;
+    text: string;
+  }>;
+  approvedRubricCriteria: Array<{
+    description: string | null;
+    id: string | null;
+    maxPoints: number | null;
+    name: string;
+  }>;
+  businessContext: string | null;
+  eventCode: string | null;
+  eventName: string | null;
+  instructionalArea: string | null;
+  judgeRole: string | null;
+  participantRole: string | null;
+  roleplayTitle: string | null;
+  scenarioText: string | null;
+  studentSupportingContext: string | null;
+  studentTranscriptOrResponse: string;
+  task: string | null;
+  warnings: string[];
+};
+
 function nullable(value: string | number | null | undefined) {
   return value === null || value === undefined || value === "" ? "unknown" : String(value);
 }
@@ -55,6 +82,43 @@ function metadataLines(metadata: ResourceExtractionPromptMetadata) {
     `instructionalArea: ${nullable(metadata.instructionalArea)}`,
     `year: ${nullable(metadata.year)}`,
   ];
+}
+
+function bulletList(values: string[]) {
+  return values.length > 0 ? values.map((value) => `- ${value}`).join("\n") : "- none";
+}
+
+function performanceIndicatorLines(
+  indicators: RoleplayTranscriptFeedbackPromptInput["approvedPerformanceIndicators"],
+) {
+  return indicators.length > 0
+    ? indicators
+        .map((indicator, index) =>
+          [
+            `${index + 1}. id: ${nullable(indicator.id)}`,
+            `   text: ${indicator.text}`,
+            `   instructionalArea: ${nullable(indicator.instructionalArea)}`,
+          ].join("\n"),
+        )
+        .join("\n")
+    : "none";
+}
+
+function rubricCriteriaLines(
+  criteria: RoleplayTranscriptFeedbackPromptInput["approvedRubricCriteria"],
+) {
+  return criteria.length > 0
+    ? criteria
+        .map((criterion, index) =>
+          [
+            `${index + 1}. criterionId: ${nullable(criterion.id)}`,
+            `   name: ${criterion.name}`,
+            `   maxPoints: ${nullable(criterion.maxPoints)}`,
+            `   description: ${nullable(criterion.description)}`,
+          ].join("\n"),
+        )
+        .join("\n")
+    : "none";
 }
 
 function buildExtractionPrompt({
@@ -307,5 +371,61 @@ export function buildConceptRevisionFeedbackPrompt(input: ConceptRevisionFeedbac
     "<<<REVISED_RESPONSE_END>>>",
     "",
     "Score each numeric field from 0 to 100. improvementScore should reflect improvement quality, not just final quality.",
+  ].join("\n");
+}
+
+export function buildRoleplayTranscriptFeedbackPrompt(
+  input: RoleplayTranscriptFeedbackPromptInput,
+) {
+  return [
+    "You are giving DECA roleplay practice feedback to a high school student.",
+    "Return structured JSON only. Do not include markdown, comments, or extra keys.",
+    "This is practice guidance, not official DECA judging and not an official competition score.",
+    "Be supportive, specific, and useful for revision. Do not be overly harsh.",
+    "Evaluate the student response using this DECA answer framework: Define -> Explain -> Connect to Scenario -> Above and Beyond / Visual.",
+    "Evaluate whether the student addressed each approved performance indicator.",
+    "Cite evidence from the student transcript only as short summaries. Do not quote long passages.",
+    "Do not invent facts beyond the scenario, resource metadata, approved PIs, rubric criteria, and student response.",
+    "If approved PIs or rubrics are missing, still provide general practice feedback and include a warning.",
+    "",
+    "Event and scenario context:",
+    `eventCode: ${nullable(input.eventCode)}`,
+    `eventName: ${nullable(input.eventName)}`,
+    `roleplayTitle: ${nullable(input.roleplayTitle)}`,
+    `participantRole: ${nullable(input.participantRole)}`,
+    `judgeRole: ${nullable(input.judgeRole)}`,
+    `instructionalArea: ${nullable(input.instructionalArea)}`,
+    `businessContext: ${nullable(input.businessContext)}`,
+    `task: ${nullable(input.task)}`,
+    `aboveAndBeyondContext: ${nullable(input.aboveAndBeyondContext)}`,
+    "",
+    "Scenario text:",
+    "<<<SCENARIO_START>>>",
+    nullable(input.scenarioText).slice(0, 16000),
+    "<<<SCENARIO_END>>>",
+    "",
+    "Approved performance indicators:",
+    performanceIndicatorLines(input.approvedPerformanceIndicators),
+    "",
+    "Approved rubric criteria:",
+    rubricCriteriaLines(input.approvedRubricCriteria),
+    "",
+    "Context warnings to include if relevant:",
+    bulletList(input.warnings),
+    "",
+    "Student supporting notes or reflection:",
+    "<<<SUPPORTING_CONTEXT_START>>>",
+    nullable(input.studentSupportingContext).slice(0, 8000),
+    "<<<SUPPORTING_CONTEXT_END>>>",
+    "",
+    "Student transcript or written response:",
+    "<<<STUDENT_RESPONSE_START>>>",
+    input.studentTranscriptOrResponse.slice(0, 30000),
+    "<<<STUDENT_RESPONSE_END>>>",
+    "",
+    "For each performanceIndicators item, use the approved PI id when available. If no approved PIs exist, return an empty performanceIndicators array and note the limitation in warnings.",
+    "For each rubricScores item, use criterionId when available. If no approved rubric exists, use general DECA practice categories and null criterionId values.",
+    "Score numeric fields from 0 to 100 unless maxPoints is provided for a rubric criterion.",
+    "Keep arrays concise and actionable.",
   ].join("\n");
 }

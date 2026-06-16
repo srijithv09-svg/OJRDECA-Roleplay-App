@@ -157,6 +157,46 @@ export const ConceptRevisionFeedbackResultSchema = z.object({
   finalFeedbackSummary: z.string().min(1),
 });
 
+export const RoleplayTranscriptFeedbackResultSchema = z.object({
+  overallScore: score100,
+  performanceIndicatorCoverageScore: score100,
+  scenarioConnectionScore: score100,
+  businessReasoningScore: score100,
+  decaVocabularyScore: score100,
+  organizationScore: score100,
+  professionalismScore: score100,
+  aboveAndBeyondScore: score100,
+  performanceIndicators: z.array(
+    z.object({
+      id: z.string().nullable().optional(),
+      text: z.string().min(1),
+      covered: z.boolean(),
+      coverageScore: score100,
+      evidence: z.string().min(1),
+      improvement: z.string().min(1),
+    }),
+  ),
+  rubricScores: z.array(
+    z.object({
+      criterionId: z.string().nullable().optional(),
+      name: z.string().min(1),
+      score: z.number().min(0),
+      maxPoints: z.number().nullable().optional(),
+      evidence: z.string().min(1),
+      improvement: z.string().min(1),
+    }),
+  ),
+  strengths: feedbackList,
+  growthAreas: feedbackList,
+  missedOpportunities: feedbackList,
+  vocabularySuggestions: feedbackList,
+  aboveAndBeyondIdeas: feedbackList,
+  revisedAnswerPlan: feedbackList,
+  feedbackSummary: z.string().min(1),
+  nextPracticeFocus: z.string().min(1),
+  warnings: feedbackList,
+});
+
 export type ResourceClassificationResult = z.infer<typeof ResourceClassificationResultSchema>;
 export type BasicGeminiHealthResult = z.infer<typeof BasicGeminiHealthResultSchema>;
 export type ExamExtractionResult = z.infer<typeof ExamExtractionResultSchema>;
@@ -166,6 +206,9 @@ export type RubricExtractionResult = z.infer<typeof RubricExtractionResultSchema
 export type ConceptFeedbackResult = z.infer<typeof ConceptFeedbackResultSchema>;
 export type ConceptRevisionFeedbackResult = z.infer<
   typeof ConceptRevisionFeedbackResultSchema
+>;
+export type RoleplayTranscriptFeedbackResult = z.infer<
+  typeof RoleplayTranscriptFeedbackResultSchema
 >;
 
 const nullableStringSchema = {
@@ -523,6 +566,83 @@ export const conceptRevisionFeedbackJsonSchema = {
     "improvementSummary",
     "masteryRecommendation",
     "finalFeedbackSummary",
+  ],
+  additionalProperties: false,
+};
+
+export const roleplayTranscriptFeedbackJsonSchema = {
+  type: "object",
+  properties: {
+    overallScore: score100Schema,
+    performanceIndicatorCoverageScore: score100Schema,
+    scenarioConnectionScore: score100Schema,
+    businessReasoningScore: score100Schema,
+    decaVocabularyScore: score100Schema,
+    organizationScore: score100Schema,
+    professionalismScore: score100Schema,
+    aboveAndBeyondScore: score100Schema,
+    performanceIndicators: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          id: nullableStringSchema,
+          text: { type: "string" },
+          covered: { type: "boolean" },
+          coverageScore: score100Schema,
+          evidence: { type: "string" },
+          improvement: { type: "string" },
+        },
+        required: ["id", "text", "covered", "coverageScore", "evidence", "improvement"],
+        additionalProperties: false,
+      },
+    },
+    rubricScores: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          criterionId: nullableStringSchema,
+          name: { type: "string" },
+          score: { type: "number", minimum: 0 },
+          maxPoints: { type: ["number", "null"] },
+          evidence: { type: "string" },
+          improvement: { type: "string" },
+        },
+        required: ["criterionId", "name", "score", "maxPoints", "evidence", "improvement"],
+        additionalProperties: false,
+      },
+    },
+    strengths: stringArraySchema,
+    growthAreas: stringArraySchema,
+    missedOpportunities: stringArraySchema,
+    vocabularySuggestions: stringArraySchema,
+    aboveAndBeyondIdeas: stringArraySchema,
+    revisedAnswerPlan: stringArraySchema,
+    feedbackSummary: { type: "string" },
+    nextPracticeFocus: { type: "string" },
+    warnings: stringArraySchema,
+  },
+  required: [
+    "overallScore",
+    "performanceIndicatorCoverageScore",
+    "scenarioConnectionScore",
+    "businessReasoningScore",
+    "decaVocabularyScore",
+    "organizationScore",
+    "professionalismScore",
+    "aboveAndBeyondScore",
+    "performanceIndicators",
+    "rubricScores",
+    "strengths",
+    "growthAreas",
+    "missedOpportunities",
+    "vocabularySuggestions",
+    "aboveAndBeyondIdeas",
+    "revisedAnswerPlan",
+    "feedbackSummary",
+    "nextPracticeFocus",
+    "warnings",
   ],
   additionalProperties: false,
 };

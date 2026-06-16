@@ -166,7 +166,7 @@ export type RoleplayAttempt = {
   transcript_status: AttemptProcessingStatus;
   ai_feedback_status: AttemptProcessingStatus;
   ai_overall_score: number | null;
-  ai_feedback_json: Record<string, unknown> | null;
+  ai_feedback_json: Json | null;
   strengths: string[] | null;
   growth_areas: string[] | null;
   confidence_rating: number | null;
@@ -623,7 +623,7 @@ export type Database = {
           transcript_status?: AttemptProcessingStatus;
           ai_feedback_status?: AttemptProcessingStatus;
           ai_overall_score?: number | null;
-          ai_feedback_json?: Record<string, unknown> | null;
+          ai_feedback_json?: Json | null;
           strengths?: string[] | null;
           growth_areas?: string[] | null;
           confidence_rating?: number | null;
