@@ -49,6 +49,30 @@ const routeGroups: Array<{ label: string; routes: SmokeRoute[] }> = [
       {
         expectedRedirect: true,
         group: "protected",
+        path: "/learn",
+        validStatuses: protectedStatuses,
+      },
+      {
+        expectedRedirect: true,
+        group: "protected",
+        path: "/learn/mcs",
+        validStatuses: protectedStatuses,
+      },
+      {
+        expectedRedirect: true,
+        group: "protected",
+        path: "/learn/bltdm",
+        validStatuses: protectedStatuses,
+      },
+      {
+        expectedRedirect: true,
+        group: "protected",
+        path: "/learn/aam",
+        validStatuses: protectedStatuses,
+      },
+      {
+        expectedRedirect: true,
+        group: "protected",
         path: "/roleplays",
         validStatuses: protectedStatuses,
       },
@@ -81,6 +105,12 @@ const routeGroups: Array<{ label: string; routes: SmokeRoute[] }> = [
   {
     label: "Admin/advisor protected routes",
     routes: [
+      {
+        expectedRedirect: true,
+        group: "admin-protected",
+        path: "/admin",
+        validStatuses: protectedStatuses,
+      },
       {
         expectedRedirect: true,
         group: "admin-protected",

@@ -43,9 +43,7 @@ function normalizeMetadata(file: File, metadataByFilename: Map<string, UploadMet
   const detected = detectResourceMetadata(file.name);
   const submitted = metadataByFilename.get(file.name);
   const submittedEvent = getDecaEventByCode(submitted?.event_code);
-  const resourceType = submittedEvent
-    ? "roleplay"
-    : submitted?.resource_type ?? detected.resource_type;
+  const resourceType = submitted?.resource_type ?? detected.resource_type;
 
   return {
     cluster: submittedEvent?.cluster ?? submitted?.cluster?.trim() ?? detected.cluster,

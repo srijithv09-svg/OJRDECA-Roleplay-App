@@ -192,6 +192,14 @@ export type DecaEvent = {
   updated_at: string | null;
 };
 
+export type EventAlias = {
+  id: string;
+  event_id: string;
+  alias: string;
+  alias_type: "code" | "name" | "filename_pattern" | "common_abbreviation" | "legacy" | null;
+  created_at: string | null;
+};
+
 export type KeySet = {
   id: string;
   event_id: string;
@@ -282,6 +290,23 @@ export type RoleplayScenario = {
   task: string | null;
   instructional_area: string | null;
   performance_indicators: Json | null;
+  status: ReviewableContentStatus;
+  ai_extracted: boolean;
+  admin_reviewed: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type RoleplayPerformanceIndicator = {
+  id: string;
+  roleplay_scenario_id: string;
+  resource_id: string | null;
+  event_id: string | null;
+  text: string;
+  instructional_area: string | null;
+  possible_concepts: Json | null;
+  confidence: number | null;
+  sort_order: number;
   status: ReviewableContentStatus;
   ai_extracted: boolean;
   admin_reviewed: boolean;
@@ -603,6 +628,18 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["events"]["Insert"]>;
         Relationships: [];
       };
+      event_aliases: {
+        Row: EventAlias;
+        Insert: {
+          id?: string;
+          event_id: string;
+          alias: string;
+          alias_type?: EventAlias["alias_type"];
+          created_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["event_aliases"]["Insert"]>;
+        Relationships: [];
+      };
       key_sets: {
         Row: KeySet;
         Insert: {
@@ -726,6 +763,27 @@ export type Database = {
           updated_at?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["roleplay_scenarios"]["Insert"]>;
+        Relationships: [];
+      };
+      roleplay_performance_indicators: {
+        Row: RoleplayPerformanceIndicator;
+        Insert: {
+          id?: string;
+          roleplay_scenario_id: string;
+          resource_id?: string | null;
+          event_id?: string | null;
+          text: string;
+          instructional_area?: string | null;
+          possible_concepts?: Json | null;
+          confidence?: number | null;
+          sort_order?: number;
+          status?: ReviewableContentStatus;
+          ai_extracted?: boolean;
+          admin_reviewed?: boolean;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["roleplay_performance_indicators"]["Insert"]>;
         Relationships: [];
       };
       ai_extraction_jobs: {

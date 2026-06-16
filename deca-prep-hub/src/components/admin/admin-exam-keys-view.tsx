@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { ButtonLink } from "@/components/ui/button-link";
 import { Card, CardHeader } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { ResourceErrorState, ResourceLoadingState } from "@/components/resources/resource-states";
@@ -523,6 +524,7 @@ export function AdminExamKeysView() {
   return (
     <>
       <PageHeader
+        actions={<ButtonLink href="/admin">Back to Admin</ButtonLink>}
         description="Create and maintain answer keys for approved exam PDFs before student grading is enabled."
         eyebrow="Admin"
         title="Exam answer keys"

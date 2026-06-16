@@ -426,8 +426,13 @@ export function DashboardView() {
         </Card>
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-3">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {[
+          {
+            title: "Continue learning",
+            description: "Open the current recommended MCS pilot pathway for concept practice.",
+            href: "/learn/mcs",
+          },
           {
             title: "Take a cluster exam",
             description: "Enter answers for an approved exam with an answer key.",

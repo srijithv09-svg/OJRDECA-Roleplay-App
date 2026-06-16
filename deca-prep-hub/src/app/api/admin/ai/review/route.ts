@@ -1,13 +1,27 @@
 import { NextResponse } from "next/server";
 import { requireAdminRequester } from "@/lib/server/api-auth";
 import type { Database, Json, ReviewableContentStatus, RubricCriterion } from "@/lib/types";
+import {
+  addPerformanceIndicator,
+  updatePerformanceIndicator,
+} from "@/lib/services/roleplay-performance-indicators";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 
-type ReviewEntity = "answer_key" | "question" | "roleplay" | "rubric";
+type ReviewEntity =
+  | "answer_key"
+  | "question"
+  | "roleplay"
+  | "roleplay_performance_indicator"
+  | "rubric";
 type ReviewRequest = {
   entity?: unknown;
   id?: unknown;
   updates?: unknown;
+};
+type AddPerformanceIndicatorRequest = {
+  entity?: unknown;
+  input?: unknown;
+  roleplay_scenario_id?: unknown;
 };
 
 const allowedStatuses = new Set<ReviewableContentStatus>([
@@ -60,12 +74,50 @@ function parseEntity(value: unknown): ReviewEntity {
     value === "answer_key" ||
     value === "question" ||
     value === "roleplay" ||
+    value === "roleplay_performance_indicator" ||
     value === "rubric"
   ) {
     return value;
   }
 
   throw new Error("Invalid review entity.");
+}
+
+function parsePossibleConcepts(value: unknown) {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null) {
+    return [];
+  }
+
+  if (!Array.isArray(value)) {
+    throw new Error("possible_concepts must be an array.");
+  }
+
+  return asJson(value);
+}
+
+function parsePerformanceIndicatorUpdates(updates: Record<string, unknown>) {
+  const status = parseStatus(updates.status);
+  const text = asOptionalString(updates.text);
+
+  if (text !== undefined && text !== null && text.trim().length === 0) {
+    throw new Error("Performance indicator text cannot be empty.");
+  }
+
+  return {
+    confidence: asOptionalNumber(updates.confidence),
+    event_id: asOptionalString(updates.event_id),
+    instructional_area: asOptionalString(updates.instructional_area),
+    possible_concepts: parsePossibleConcepts(updates.possible_concepts),
+    resource_id: asOptionalString(updates.resource_id),
+    sort_order: asOptionalNumber(updates.sort_order),
+    status,
+    text,
+    admin_reviewed: reviewedForStatus(status),
+  };
 }
 
 function reviewedForStatus(status?: ReviewableContentStatus) {
@@ -234,6 +286,15 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ roleplay: data });
     }
 
+    if (entity === "roleplay_performance_indicator") {
+      const updates = stripUndefined(
+        parsePerformanceIndicatorUpdates(body.updates),
+      ) as Database["public"]["Tables"]["roleplay_performance_indicators"]["Update"];
+      const data = await updatePerformanceIndicator(supabase, id, updates);
+
+      return NextResponse.json({ performanceIndicator: data });
+    }
+
     if (entity === "answer_key") {
       const updates = stripUndefined(parseAnswerKeyUpdates(body.updates)) as Database["public"]["Tables"]["ai_extracted_answer_keys"]["Update"];
       const { data, error } = await supabase
@@ -300,6 +361,90 @@ export async function PATCH(request: Request) {
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unable to update AI review item." },
+      { status: 400 },
+    );
+  }
+}
+
+export async function POST(request: Request) {
+  const { error: authError } = await requireAdminRequester(request);
+
+  if (authError) {
+    return NextResponse.json(
+      { error: authError },
+      { status: getAuthStatus(authError) },
+    );
+  }
+
+  let body: AddPerformanceIndicatorRequest;
+
+  try {
+    body = (await request.json()) as AddPerformanceIndicatorRequest;
+  } catch {
+    return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
+  }
+
+  try {
+    if (body.entity !== "roleplay_performance_indicator") {
+      throw new Error("Invalid review entity.");
+    }
+
+    const roleplayScenarioId = asString(body.roleplay_scenario_id);
+
+    if (!roleplayScenarioId) {
+      return NextResponse.json({ error: "roleplay_scenario_id is required." }, { status: 400 });
+    }
+
+    if (!isRecord(body.input)) {
+      return NextResponse.json({ error: "input must be an object." }, { status: 400 });
+    }
+
+    const text = asString(body.input.text);
+
+    if (!text || text.trim().length === 0) {
+      return NextResponse.json({ error: "text is required." }, { status: 400 });
+    }
+
+    const supabase = getSupabaseAdminClient();
+    const { data: scenario, error: scenarioError } = await supabase
+      .from("roleplay_scenarios")
+      .select("id,resource_id,event_id,instructional_area")
+      .eq("id", roleplayScenarioId)
+      .single();
+
+    if (scenarioError || !scenario) {
+      throw scenarioError ?? new Error("Roleplay scenario was not found.");
+    }
+
+    const { data: existingIndicators, error: indicatorError } = await supabase
+      .from("roleplay_performance_indicators")
+      .select("sort_order")
+      .eq("roleplay_scenario_id", roleplayScenarioId)
+      .order("sort_order", { ascending: false })
+      .limit(1);
+
+    if (indicatorError) {
+      throw indicatorError;
+    }
+
+    const nextSortOrder = (existingIndicators?.[0]?.sort_order ?? -1) + 1;
+    const performanceIndicator = await addPerformanceIndicator(supabase, {
+      confidence: asOptionalNumber(body.input.confidence) ?? null,
+      event_id: scenario.event_id,
+      instructional_area:
+        asOptionalString(body.input.instructional_area) ?? scenario.instructional_area,
+      possible_concepts: parsePossibleConcepts(body.input.possible_concepts) ?? [],
+      resource_id: scenario.resource_id,
+      roleplay_scenario_id: roleplayScenarioId,
+      sort_order: nextSortOrder,
+      status: parseStatus(body.input.status) ?? "needs_review",
+      text,
+    });
+
+    return NextResponse.json({ performanceIndicator }, { status: 201 });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Unable to add performance indicator." },
       { status: 400 },
     );
   }

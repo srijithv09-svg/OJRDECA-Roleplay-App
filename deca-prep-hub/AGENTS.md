@@ -26,6 +26,10 @@ The app is shifting from a passive PDF library to a structured DECA learning pla
 
 - MCS (Marketing Communications Series) is the first pilot event.
 - BLTDM (Business Law and Ethics Team Decision Making) is the second pilot event.
+- MCS and BLTDM are learning-reinforcement pilots only. They must not limit the broader resource preparation system.
+- Resource upload, metadata detection, AI extraction, and AI review should support the broader canonical DECA event catalog.
+- Unknown events should remain unmatched for admin review instead of defaulting to MCS or BLTDM.
+- Canonical event matching should use event code, event name, aliases, filename/path text, resource metadata, and Gemini-detected event code/name.
 - The learning ladder is Recognize -> Define -> Connect -> Apply -> Explain -> Improve.
 - The future student flow should move from Event Pathway -> Key Set -> Concept -> Quick Checks -> Scenario Lock -> Free Response -> AI Feedback -> Revision -> Mastery Update.
 - Phase 1 migrations are additive learning-model foundations only.
@@ -106,6 +110,9 @@ NEXT_PUBLIC_SITE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
 GEMINI_API_KEY=
 GEMINI_MODEL=gemini-2.5-flash
+GEMINI_TIMEOUT_MS=90000
+GEMINI_MAX_EXAM_CHUNKS=
+GEMINI_MAX_EXTRACTION_CHARS=
 ```
 
 Rules:
@@ -120,6 +127,8 @@ NEXT_PUBLIC_SITE_URL is required in Vercel production to keep OAuth redirects on
 SUPABASE_SERVICE_ROLE_KEY is sensitive and must never be used in frontend/browser code.
 GEMINI_API_KEY is sensitive and must never be used in frontend/browser code.
 GEMINI_MODEL is optional and defaults to `gemini-2.5-flash`.
+GEMINI_TIMEOUT_MS is optional and defaults to `90000` for server-side structured JSON calls.
+GEMINI_MAX_EXAM_CHUNKS and GEMINI_MAX_EXTRACTION_CHARS are optional local-development limiters for testing extraction without sending a full large PDF to Gemini.
 Service role key may be used only in:
 local scripts
 server routes
@@ -777,7 +786,7 @@ DECA event codes or roleplay signals => roleplay
 performance indicators / performance-indicators / exam blueprint / blueprint => reference
 otherwise => unknown
 
-Admin upload review supports manual classification/editing for title, resource_type, event_code, event_name, event_category, cluster, and year. Selecting a canonical event_code auto-fills event_name, event_category, cluster, and roleplay resource_type. Admins can still override event_name/category/cluster manually.
+Admin upload review supports manual classification/editing for title, resource_type, event_code, event_name, event_category, cluster, and year. Selecting a canonical event_code auto-fills event_name, event_category, and cluster without changing the chosen resource_type. Admins can still override event_name/category/cluster manually.
 
 Roleplay instructional areas should use:
 
@@ -1154,14 +1163,23 @@ Database migration and health check notes:
 - `ai_extraction_jobs` stores server-side Gemini job records, raw output, validated output, confidence, and errors. Students should not read this table. Admins/advisors can review/manage it, and server/service-role code can create/update jobs.
 - `resource_classifications` stores AI classification suggestions separately from official `resources` metadata. A classification never changes `resources.approval_status`, publishes content, or updates official resource metadata by itself.
 - `src/lib/ai/gemini/client.ts` is server-only and reads `GEMINI_API_KEY` plus optional `GEMINI_MODEL`. Missing keys, API errors, timeouts, invalid JSON, and schema failures should create/leave clear failed job state instead of crashing the app UI.
+- `GEMINI_TIMEOUT_MS` can be increased for slow server-side extraction calls, but large exam and answer-key PDFs should prefer chunked extraction instead of one huge prompt.
+- Gemini free-tier quota may be low. Full exam extraction can require several `generateContent` requests, so quota errors do not necessarily mean the app is broken. Roleplay PDFs are usually better early smoke tests because they tend to use fewer Gemini calls.
+- `gemini_quota_exceeded` errors should show a concise retry-later message in the UI and store `Gemini quota limit reached.` on the extraction job.
+- Extraction retries transient Gemini capacity errors such as 503/high demand once. It should not retry missing keys, auth failures, invalid JSON, or schema validation failures.
 - `POST /api/admin/ai/classify-resource` accepts `{ "resource_id": "..." }`, requires an authenticated admin/advisor bearer token, and returns only job/status/classification metadata. It must not return Gemini raw output or secrets.
 - Local Gemini classification test: `npm run test:gemini-classify -- <resource-id>`. This requires Supabase env vars, the Phase 2 migration, and `GEMINI_API_KEY`. If the key is absent after a job is created, the job should be marked failed with a clear missing-key message.
 - Phase 3 AI PDF extraction uses `supabase/migrations/20260608190804_add_ai_pdf_extraction_staging.sql`. Apply it before invoking answer-key or rubric extraction, then rerun `npm run check:db`.
 - Phase 3 extracts from server-side text input. It first uses `resources.detected_text` when available, then falls back to downloading the private Supabase Storage PDF server-side and parsing text with `pdf-parse`. Do not expose signed storage URLs or service-role credentials to the browser for extraction.
+- Large exam and answer-key PDFs are normalized and chunked before Gemini extraction. Exam-question extraction trims trailing built-in answer key/explanation sections such as `EXAM—KEY` before chunking. Default behavior switches to chunked extraction above 12,000 normalized characters and uses roughly 10,000-character chunks. Chunked results are merged, deduped by question number, and left as `needs_review`.
+- If `GEMINI_MAX_EXAM_CHUNKS` or `GEMINI_MAX_EXTRACTION_CHARS` is set, extraction is intentionally limited for local development and the job should warn that development settings limited the run.
 - `POST /api/admin/ai/extract-resource` accepts `{ "resource_id": "...", "extraction_type": "exam|answer_key|roleplay|judge_rubric", "force": false }`, requires an authenticated admin/advisor bearer token, and returns a concise extraction summary.
-- Local extraction test: `npm run test:gemini-extract -- <resource-id> --type=exam`. Valid types are `exam`, `answer_key`, `roleplay`, and `judge_rubric`; `--force` creates a fresh Gemini job but does not delete or overwrite existing draft records.
+- Local extraction test: `npm run test:gemini-extract -- <resource-id> --type=exam`. Valid types are `exam`, `answer_key`, `roleplay`, and `judge_rubric`; `--force` creates a fresh Gemini job but does not delete or overwrite existing draft records. Optional diagnostic flags: `--chunk-size=10000` and `--chunk-threshold=12000`.
+- Local PDF text-only test: `npm run test:pdf-text -- <resource-id>` verifies server-side PDF parsing without calling Gemini.
 - Exam extraction stores AI-extracted questions in `questions` with `status = 'needs_review'`, `ai_extracted = true`, and `admin_reviewed = false`. Correct answers remain null unless added later through an official review flow.
 - Roleplay extraction stores draft scenarios in `roleplay_scenarios` with `status = 'needs_review'`, `ai_extracted = true`, and `admin_reviewed = false`.
+- Roleplay performance indicators are stored as individual rows in `roleplay_performance_indicators` for review/edit/approve/reject/archive workflows. `roleplay_scenarios.performance_indicators` remains as synced JSONB compatibility output.
+- Students should only read approved roleplay performance indicators later. Draft, needs-review, rejected, and archived PI rows are for admin/advisor review only.
 - Answer-key extraction stores suggestions in `ai_extracted_answer_keys`. It must never write to official `exam_answer_keys` during Phase 3.
 - Rubric extraction stores draft `rubrics` and `rubric_criteria`. Students should not read unapproved rubrics by default.
 - Duplicate behavior: extraction skips by default when AI-extracted records already exist for the resource/type. Forced extraction creates a new job for audit/review but avoids duplicating draft content.
@@ -1174,16 +1192,22 @@ Database migration and health check notes:
   - `/admin/ai-review/answer-keys` for AI-suggested practice key review.
   - `/admin/ai-review/roleplays` for extracted roleplay scenario and performance indicator review.
   - `/admin/ai-review/rubrics` for extracted rubric and criteria review.
-- Review mutations go through `PATCH /api/admin/ai/review`, which verifies admin/advisor server-side with `requireAdminRequester`.
+- Review mutations go through `PATCH /api/admin/ai/review`, which verifies admin/advisor server-side with `requireAdminRequester`. Adding manual roleplay performance indicators uses `POST /api/admin/ai/review` with the same server-side authorization.
+- `/admin/ai-review/roleplays` reviews performance indicators as individual rows instead of making raw JSONB the primary editing experience.
 - Approving extracted questions/roleplays/rubrics sets `status = 'approved'` and `admin_reviewed = true`. Rejecting, archiving, or moving back to needs review sets `admin_reviewed = false`.
 - AI-extracted answer keys remain practice/suggested keys in `ai_extracted_answer_keys`. Phase 4 does not convert them into official `exam_answer_keys`; official conversion remains a later explicit workflow.
+- Approved roleplay performance indicator rows will later drive student preparation tasks and Gemini roleplay grading. Phase 4 does not implement those student/grading flows.
 - Students must not see `/admin/ai-review` navigation or unapproved AI-extracted records.
 - Phase 4.5 connects `/admin/upload` to the Phase 3 extraction API. Upload still creates `pending` resources through the existing metadata detection flow.
 - After upload, admins/advisors can run AI extraction per uploaded resource, choose auto-detect or an explicit type (`exam`, `answer_key`, `roleplay`, `judge_rubric`), and jump to `/admin/ai-review` or the extraction job detail.
 - `/admin/upload` also has an optional unchecked "Run AI extraction after upload" checkbox. Extraction failures must not mark the upload as failed or change `resources.approval_status`.
 - If Gemini is missing, the upload UI should show: "Gemini is not configured. Add GEMINI_API_KEY in the server environment to enable AI extraction."
 - Duplicate extraction should report existing extracted content and avoid creating duplicate draft records by default. Force re-extraction is explicit and creates a new job without overwriting reviewed content.
-- Phase 5 is expected to build the student MCS learning pathway using approved content only.
+- Phase 5 adds the student guided learning system under generic routes: `/learn`, `/learn/[eventCode]`, `/learn/[eventCode]/key-sets/[keySetId]`, and `/learn/[eventCode]/concepts/[conceptId]`. Keep services and components event-generic; MCS is the first active pilot, not the only possible learning event. BLTDM is the second planned pilot.
+- Phase 5 learning content is distinct from the canonical resource system. Resource upload, event matching, and AI extraction continue to support all canonical DECA events. Guided learning should show only enabled/pilot events with approved key sets, concepts, and questions.
+- Phase 5 saves question attempts through `POST /api/learn/question-attempts`, derives `user_id` server-side, rejects unapproved questions, and updates `concept_mastery` conservatively. Gemini concept feedback, AI revision scoring, readiness dashboards, BLTDM team workflows, and roleplay transcript grading are Phase 6+.
+- Phase 4.6 adds the broader canonical event catalog and `event_aliases` for resource preparation. This keeps event matching separate from the future MCS/BLTDM learning UI.
+- Phase 4.7 consolidates admin/advisor tools under `/admin`. The sidebar should prioritize the student mental model and show a single `Admin` item for admins/advisors instead of separate top-level links for upload, resources, AI review, exam keys, users, and admin analytics. The old admin routes still exist, remain protected, and are reachable from the `/admin` workspace.
 - Role and permission expectations: `student` can use approved resources, exams, analytics, and own roleplay attempts; `admin` and `advisor` can access admin navigation and management pages; non-`@ojrsd.net` users must be signed out or blocked.
 admin-only pending/rejected/resource/user stats where available
 

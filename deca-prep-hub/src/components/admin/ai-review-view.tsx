@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { ButtonLink } from "@/components/ui/button-link";
 import { Card, CardHeader } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { ResourceErrorState, ResourceLoadingState } from "@/components/resources/resource-states";
@@ -13,6 +14,8 @@ import {
   type AiReviewData,
   type AnswerKeyReviewUpdate,
   type QuestionReviewUpdate,
+  type RoleplayPerformanceIndicatorInput,
+  type RoleplayPerformanceIndicatorReviewUpdate,
   type RoleplayReviewUpdate,
   type RubricReviewUpdate,
 } from "@/lib/services/ai-review";
@@ -22,8 +25,10 @@ import type {
   AiExtractionJob,
   Concept,
   DecaEvent,
+  Json,
   Profile,
   ReviewableContentStatus,
+  RoleplayPerformanceIndicator,
   RoleplayScenario,
   Rubric,
   RubricCriterion,
@@ -34,7 +39,11 @@ type AiReviewMode = "answer-keys" | "jobs" | "overview" | "questions" | "rolepla
 type EditableItem =
   | { kind: "answer_key"; value: AiExtractedAnswerKey }
   | { kind: "question"; value: StructuredQuestion }
-  | { kind: "roleplay"; value: RoleplayScenario }
+  | {
+      kind: "roleplay";
+      performanceIndicators: RoleplayPerformanceIndicator[];
+      value: RoleplayScenario;
+    }
   | { criteria: RubricCriterion[]; kind: "rubric"; value: Rubric };
 
 const statusOptions: Array<"all" | ReviewableContentStatus> = [
@@ -95,6 +104,10 @@ function resourceLabel(resources: AiReviewData["resources"], id?: string | null)
 function eventLabel(events: DecaEvent[], id?: string | null) {
   const event = events.find((item) => item.id === id);
   return event ? `${event.code} - ${event.name}` : "No event";
+}
+
+function eventOptionLabel(event: DecaEvent) {
+  return `${event.code} - ${event.name}${event.is_pilot ? " (learning pilot)" : ""}`;
 }
 
 function conceptLabel(concepts: Concept[], id?: string | null) {
@@ -224,6 +237,40 @@ export function AiReviewView({ jobId, mode = "overview" }: { jobId?: string; mod
     }
   }
 
+  async function saveRoleplayPerformanceIndicator(
+    id: string,
+    updates: RoleplayPerformanceIndicatorReviewUpdate,
+  ) {
+    setIsSaving(true);
+    setError(null);
+
+    try {
+      return await AiReviewService.updateRoleplayPerformanceIndicator(id, updates);
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : "Unable to update performance indicator.");
+      throw caughtError;
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function addRoleplayPerformanceIndicator(
+    roleplayScenarioId: string,
+    input: RoleplayPerformanceIndicatorInput,
+  ) {
+    setIsSaving(true);
+    setError(null);
+
+    try {
+      return await AiReviewService.addRoleplayPerformanceIndicator(roleplayScenarioId, input);
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : "Unable to add performance indicator.");
+      throw caughtError;
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   async function saveAnswerKey(id: string, updates: AnswerKeyReviewUpdate) {
     setIsSaving(true);
     setError(null);
@@ -280,6 +327,7 @@ export function AiReviewView({ jobId, mode = "overview" }: { jobId?: string; mod
   return (
     <>
       <PageHeader
+        actions={<ButtonLink href="/admin">Back to Admin</ButtonLink>}
         description="Review Gemini extraction jobs and approve, reject, archive, or edit draft AI content before student use."
         eyebrow="Admin"
         title="AI Review"
@@ -342,7 +390,16 @@ export function AiReviewView({ jobId, mode = "overview" }: { jobId?: string; mod
       {mode === "roleplays" ? (
         <RoleplayReviewSection
           events={data.events}
-          onEdit={(roleplay) => setEditingItem({ kind: "roleplay", value: roleplay })}
+          onEdit={(roleplay) =>
+            setEditingItem({
+              kind: "roleplay",
+              performanceIndicators: data.roleplayPerformanceIndicators.filter(
+                (indicator) => indicator.roleplay_scenario_id === roleplay.id,
+              ),
+              value: roleplay,
+            })
+          }
+          performanceIndicators={data.roleplayPerformanceIndicators}
           resources={resources}
           roleplays={filterByStatus(data.roleplays, statusFilter)}
           setStatusFilter={setStatusFilter}
@@ -386,6 +443,8 @@ export function AiReviewView({ jobId, mode = "overview" }: { jobId?: string; mod
           isSaving={isSaving}
           onClose={() => setEditingItem(null)}
           onSaveAnswerKey={saveAnswerKey}
+          onSavePerformanceIndicator={saveRoleplayPerformanceIndicator}
+          onAddPerformanceIndicator={addRoleplayPerformanceIndicator}
           onSaveQuestion={saveQuestion}
           onSaveRoleplay={saveRoleplay}
           onSaveRubric={saveRubric}
@@ -754,6 +813,7 @@ function QuestionReviewSection({
 function RoleplayReviewSection({
   events,
   onEdit,
+  performanceIndicators,
   resources,
   roleplays,
   setStatusFilter,
@@ -761,6 +821,7 @@ function RoleplayReviewSection({
 }: {
   events: DecaEvent[];
   onEdit: (roleplay: RoleplayScenario) => void;
+  performanceIndicators: RoleplayPerformanceIndicator[];
   resources: AiReviewData["resources"];
   roleplays: RoleplayScenario[];
   setStatusFilter: (status: string) => void;
@@ -771,13 +832,24 @@ function RoleplayReviewSection({
       <ReviewStatusFilter setStatusFilter={setStatusFilter} statusFilter={statusFilter} />
       {roleplays.length === 0 ? <EmptyCard message="No extracted roleplays match this status." title="No roleplays found" /> : null}
       <div className="grid gap-4">
-        {roleplays.map((roleplay) => (
+        {roleplays.map((roleplay) => {
+          const roleplayIndicators = performanceIndicators.filter(
+            (indicator) => indicator.roleplay_scenario_id === roleplay.id,
+          );
+          const approvedIndicators = roleplayIndicators.filter(
+            (indicator) => indicator.status === "approved",
+          ).length;
+
+          return (
           <Card key={roleplay.id}>
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <div className="flex flex-wrap gap-2">
                   <Badge tone={getStatusTone(roleplay.status)}>{roleplay.status}</Badge>
                   <Badge tone="blue">AI-extracted</Badge>
+                  <Badge tone={approvedIndicators > 0 ? "green" : "amber"}>
+                    {approvedIndicators}/{roleplayIndicators.length} PIs approved
+                  </Badge>
                   {roleplay.admin_reviewed ? <Badge tone="green">Admin Reviewed</Badge> : <Badge>Needs Review</Badge>}
                 </div>
                 <h2 className="mt-3 text-lg font-semibold text-slate-950">{roleplay.title ?? "Untitled roleplay"}</h2>
@@ -791,7 +863,8 @@ function RoleplayReviewSection({
             </div>
             <p className="mt-4 line-clamp-4 text-sm leading-6 text-slate-700">{roleplay.scenario_text ?? "No scenario text"}</p>
           </Card>
-        ))}
+          );
+        })}
       </div>
     </>
   );
@@ -909,8 +982,10 @@ function ReviewEditorModal({
   editingItem,
   events,
   isSaving,
+  onAddPerformanceIndicator,
   onClose,
   onSaveAnswerKey,
+  onSavePerformanceIndicator,
   onSaveQuestion,
   onSaveRoleplay,
   onSaveRubric,
@@ -920,8 +995,16 @@ function ReviewEditorModal({
   editingItem: EditableItem;
   events: DecaEvent[];
   isSaving: boolean;
+  onAddPerformanceIndicator: (
+    roleplayScenarioId: string,
+    input: RoleplayPerformanceIndicatorInput,
+  ) => Promise<{ performanceIndicator: RoleplayPerformanceIndicator }>;
   onClose: () => void;
   onSaveAnswerKey: (id: string, updates: AnswerKeyReviewUpdate) => Promise<void>;
+  onSavePerformanceIndicator: (
+    id: string,
+    updates: RoleplayPerformanceIndicatorReviewUpdate,
+  ) => Promise<{ performanceIndicator: RoleplayPerformanceIndicator }>;
   onSaveQuestion: (id: string, updates: QuestionReviewUpdate) => Promise<void>;
   onSaveRoleplay: (id: string, updates: RoleplayReviewUpdate) => Promise<void>;
   onSaveRubric: (id: string, updates: RubricReviewUpdate) => Promise<void>;
@@ -950,9 +1033,12 @@ function ReviewEditorModal({
         error={error}
         events={events}
         isSaving={isSaving}
+        onAddPerformanceIndicator={onAddPerformanceIndicator}
         onClose={onClose}
         onError={setError}
+        onSavePerformanceIndicator={onSavePerformanceIndicator}
         onSave={onSaveRoleplay}
+        performanceIndicators={editingItem.performanceIndicators}
         roleplay={editingItem.value}
       />
     );
@@ -1119,7 +1205,7 @@ function QuestionEditor({
           <Field label="Event">
             <select className={inputClass} onChange={(event) => setEventId(event.target.value)} value={eventId}>
               <option value="">No event</option>
-              {events.map((event) => <option key={event.id} value={event.id}>{event.code} - {event.name}</option>)}
+              {events.map((event) => <option key={event.id} value={event.id}>{eventOptionLabel(event)}</option>)}
             </select>
           </Field>
           <Field label="Concept">
@@ -1141,17 +1227,29 @@ function RoleplayEditor({
   error,
   events,
   isSaving,
+  onAddPerformanceIndicator,
   onClose,
   onError,
+  onSavePerformanceIndicator,
   onSave,
+  performanceIndicators,
   roleplay,
 }: {
   error: string | null;
   events: DecaEvent[];
   isSaving: boolean;
+  onAddPerformanceIndicator: (
+    roleplayScenarioId: string,
+    input: RoleplayPerformanceIndicatorInput,
+  ) => Promise<{ performanceIndicator: RoleplayPerformanceIndicator }>;
   onClose: () => void;
   onError: (error: string | null) => void;
+  onSavePerformanceIndicator: (
+    id: string,
+    updates: RoleplayPerformanceIndicatorReviewUpdate,
+  ) => Promise<{ performanceIndicator: RoleplayPerformanceIndicator }>;
   onSave: (id: string, updates: RoleplayReviewUpdate) => Promise<void>;
+  performanceIndicators: RoleplayPerformanceIndicator[];
   roleplay: RoleplayScenario;
 }) {
   const [draft, setDraft] = useState({
@@ -1164,7 +1262,74 @@ function RoleplayEditor({
     task: roleplay.task ?? "",
     title: roleplay.title ?? "",
   });
-  const [performanceIndicators, setPerformanceIndicators] = useState(stringifyJson(roleplay.performance_indicators));
+  const [indicatorDrafts, setIndicatorDrafts] = useState(
+    [...performanceIndicators].sort((a, b) => a.sort_order - b.sort_order),
+  );
+  const [legacyPerformanceIndicators, setLegacyPerformanceIndicators] = useState(stringifyJson(roleplay.performance_indicators));
+  const [newIndicator, setNewIndicator] = useState({
+    instructional_area: roleplay.instructional_area ?? "",
+    possible_concepts: "",
+    text: "",
+  });
+
+  function jsonArrayToText(value: Json | null) {
+    return Array.isArray(value) ? value.map(String).join(", ") : "";
+  }
+
+  function textToJsonArray(value: string) {
+    return value
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+
+  function updateIndicatorDraft(id: string, updates: Partial<RoleplayPerformanceIndicator>) {
+    setIndicatorDrafts((currentIndicators) =>
+      currentIndicators.map((indicator) =>
+        indicator.id === id ? { ...indicator, ...updates } : indicator,
+      ),
+    );
+  }
+
+  async function saveIndicator(
+    indicator: RoleplayPerformanceIndicator,
+    status = indicator.status,
+  ) {
+    try {
+      onError(null);
+      const { performanceIndicator } = await onSavePerformanceIndicator(indicator.id, {
+        confidence: indicator.confidence,
+        instructional_area: indicator.instructional_area,
+        possible_concepts: indicator.possible_concepts,
+        status,
+        text: indicator.text,
+      });
+
+      updateIndicatorDraft(indicator.id, performanceIndicator);
+    } catch (caughtError) {
+      onError(caughtError instanceof Error ? caughtError.message : "Unable to save performance indicator.");
+    }
+  }
+
+  async function addIndicator() {
+    try {
+      onError(null);
+      const { performanceIndicator } = await onAddPerformanceIndicator(roleplay.id, {
+        instructional_area: newIndicator.instructional_area || null,
+        possible_concepts: textToJsonArray(newIndicator.possible_concepts),
+        text: newIndicator.text,
+      });
+
+      setIndicatorDrafts((currentIndicators) => [...currentIndicators, performanceIndicator]);
+      setNewIndicator({
+        instructional_area: roleplay.instructional_area ?? "",
+        possible_concepts: "",
+        text: "",
+      });
+    } catch (caughtError) {
+      onError(caughtError instanceof Error ? caughtError.message : "Unable to add performance indicator.");
+    }
+  }
 
   function submit(status: ReviewableContentStatus) {
     try {
@@ -1172,7 +1337,7 @@ function RoleplayEditor({
       void onSave(roleplay.id, {
         ...draft,
         event_id: draft.event_id || null,
-        performance_indicators: parseJsonField(performanceIndicators, "Performance indicators"),
+        performance_indicators: parseJsonField(legacyPerformanceIndicators, "Performance indicators"),
         status,
       });
     } catch (caughtError) {
@@ -1187,7 +1352,7 @@ function RoleplayEditor({
         <Field label="Event">
           <select className={inputClass} onChange={(event) => setDraft({ ...draft, event_id: event.target.value })} value={draft.event_id}>
             <option value="">No event</option>
-            {events.map((event) => <option key={event.id} value={event.id}>{event.code} - {event.name}</option>)}
+            {events.map((event) => <option key={event.id} value={event.id}>{eventOptionLabel(event)}</option>)}
           </select>
         </Field>
         <div className="grid gap-4 md:grid-cols-2">
@@ -1198,7 +1363,130 @@ function RoleplayEditor({
         </div>
         <Field label="Business context"><textarea className={textAreaClass} onChange={(event) => setDraft({ ...draft, business_context: event.target.value })} value={draft.business_context} /></Field>
         <Field label="Scenario text"><textarea className={textAreaClass} onChange={(event) => setDraft({ ...draft, scenario_text: event.target.value })} value={draft.scenario_text} /></Field>
-        <Field label="Performance indicators JSON"><textarea className={textAreaClass} onChange={(event) => setPerformanceIndicators(event.target.value)} value={performanceIndicators} /></Field>
+        <section className="grid gap-3">
+          <div>
+            <h3 className="text-base font-semibold text-slate-950">Performance Indicators</h3>
+          </div>
+          {indicatorDrafts.length === 0 ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+              No normalized performance indicators exist yet. Add one manually below.
+            </div>
+          ) : null}
+          {indicatorDrafts.map((indicator, index) => (
+            <div className="rounded-lg border border-slate-200 bg-white p-3" key={indicator.id}>
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <Badge tone="blue">PI {index + 1}</Badge>
+                <Badge tone={getStatusTone(indicator.status)}>{indicator.status}</Badge>
+                {indicator.admin_reviewed ? <Badge tone="green">Admin Reviewed</Badge> : <Badge>Needs Review</Badge>}
+                <Badge>{formatPercent(indicator.confidence)}</Badge>
+              </div>
+              <div className="grid gap-3">
+                <Field label="Indicator text">
+                  <textarea
+                    className={textAreaClass}
+                    onChange={(event) => updateIndicatorDraft(indicator.id, { text: event.target.value })}
+                    value={indicator.text}
+                  />
+                </Field>
+                <div className="grid gap-3 md:grid-cols-[1fr_1fr_120px]">
+                  <Field label="Instructional area">
+                    <input
+                      className={inputClass}
+                      onChange={(event) => updateIndicatorDraft(indicator.id, { instructional_area: event.target.value || null })}
+                      value={indicator.instructional_area ?? ""}
+                    />
+                  </Field>
+                  <Field label="Possible concepts">
+                    <input
+                      className={inputClass}
+                      onChange={(event) =>
+                        updateIndicatorDraft(indicator.id, {
+                          possible_concepts: textToJsonArray(event.target.value),
+                        })
+                      }
+                      value={jsonArrayToText(indicator.possible_concepts)}
+                    />
+                  </Field>
+                  <Field label="Confidence">
+                    <input
+                      className={inputClass}
+                      max="1"
+                      min="0"
+                      onChange={(event) =>
+                        updateIndicatorDraft(indicator.id, {
+                          confidence: event.target.value === "" ? null : Number(event.target.value),
+                        })
+                      }
+                      step="0.01"
+                      type="number"
+                      value={indicator.confidence ?? ""}
+                    />
+                  </Field>
+                </div>
+                <div className="flex flex-wrap justify-end gap-2">
+                  <button className="min-h-10 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700" onClick={() => void saveIndicator(indicator)} type="button">
+                    Save PI
+                  </button>
+                  {(["needs_review", "approved", "rejected", "archived"] as ReviewableContentStatus[]).map((status) => (
+                    <button
+                      className={
+                        status === "approved"
+                          ? "min-h-10 rounded-md bg-emerald-600 px-3 text-sm font-semibold text-white"
+                          : "min-h-10 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700"
+                      }
+                      key={status}
+                      onClick={() => void saveIndicator(indicator, status)}
+                      type="button"
+                    >
+                      {status === "approved" ? "Approve" : status}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+          <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3">
+            <h4 className="text-sm font-semibold text-slate-900">Add performance indicator</h4>
+            <div className="mt-3 grid gap-3">
+              <Field label="Indicator text">
+                <textarea
+                  className={textAreaClass}
+                  onChange={(event) => setNewIndicator({ ...newIndicator, text: event.target.value })}
+                  value={newIndicator.text}
+                />
+              </Field>
+              <div className="grid gap-3 md:grid-cols-2">
+                <Field label="Instructional area">
+                  <input
+                    className={inputClass}
+                    onChange={(event) => setNewIndicator({ ...newIndicator, instructional_area: event.target.value })}
+                    value={newIndicator.instructional_area}
+                  />
+                </Field>
+                <Field label="Possible concepts">
+                  <input
+                    className={inputClass}
+                    onChange={(event) => setNewIndicator({ ...newIndicator, possible_concepts: event.target.value })}
+                    value={newIndicator.possible_concepts}
+                  />
+                </Field>
+              </div>
+              <div className="flex justify-end">
+                <button className="min-h-10 rounded-md bg-blue-700 px-3 text-sm font-semibold text-white" onClick={() => void addIndicator()} type="button">
+                  Add PI
+                </button>
+              </div>
+            </div>
+          </div>
+          <details className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <summary className="cursor-pointer text-sm font-semibold text-slate-800">Developer details</summary>
+            <div className="mt-3">
+              <Field label="Legacy performance indicators JSON">
+                <textarea className={textAreaClass} onChange={(event) => setLegacyPerformanceIndicators(event.target.value)} value={legacyPerformanceIndicators} />
+              </Field>
+            </div>
+          </details>
+        </section>
       </div>
       <StatusActions onSubmit={submit} />
     </ModalShell>
@@ -1315,7 +1603,7 @@ function RubricEditor({
         <Field label="Event">
           <select className={inputClass} onChange={(event) => setEventId(event.target.value)} value={eventId}>
             <option value="">No event</option>
-            {events.map((event) => <option key={event.id} value={event.id}>{event.code} - {event.name}</option>)}
+            {events.map((event) => <option key={event.id} value={event.id}>{eventOptionLabel(event)}</option>)}
           </select>
         </Field>
         <div className="md:col-span-2">

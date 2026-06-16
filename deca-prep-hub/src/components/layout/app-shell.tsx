@@ -20,17 +20,14 @@ import { cn } from "@/lib/utils";
 
 const navItems: Array<{ label: string; href: string; icon: IconName; adminOnly?: boolean }> = [
   { label: "Dashboard", href: "/dashboard", icon: "dashboard" },
+  { label: "Learn", href: "/learn", icon: "streak" },
   { label: "Roleplays", href: "/roleplays", icon: "roleplays" },
   { label: "Exams", href: "/exams", icon: "exams" },
+  { label: "Resources", href: "/resources", icon: "search" },
   { label: "Analytics", href: "/analytics", icon: "analytics" },
   { label: "Calendar", href: "/calendar", icon: "calendar" },
   { label: "Settings", href: "/settings", icon: "settings" },
-  { label: "Upload Resource", href: "/admin/upload", icon: "upload", adminOnly: true },
-  { label: "Admin Resources", href: "/admin/resources", icon: "exams", adminOnly: true },
-  { label: "AI Review", href: "/admin/ai-review", icon: "analytics", adminOnly: true },
-  { label: "Exam Keys", href: "/admin/exam-keys", icon: "exams", adminOnly: true },
-  { label: "Admin Analytics", href: "/admin/analytics", icon: "analytics", adminOnly: true },
-  { label: "Users", href: "/admin/users", icon: "users", adminOnly: true },
+  { label: "Admin", href: "/admin", icon: "users", adminOnly: true },
 ];
 
 function isActive(pathname: string, href: string) {

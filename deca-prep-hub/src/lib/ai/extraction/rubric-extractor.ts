@@ -7,18 +7,15 @@ import {
 } from "@/lib/ai/gemini/schemas";
 import type { Json } from "@/lib/types";
 import {
-  buildInputMetadata,
-  createExtractionJob,
   generateAndValidateExtraction,
   getExtractionSupabase,
   getErrorMessage,
   getFailureCode,
   getJobStatus,
   getRawOutputFromError,
-  getResourceExtractionText,
-  loadResourceForExtraction,
   markExtractionJobFailed,
-  resolveEventIdByCode,
+  prepareResourceExtraction,
+  resolveCanonicalEventId,
   ResourceExtractionError,
   type ExtractionSummary,
   type ResourceExtractionOptions,
@@ -63,15 +60,9 @@ export async function extractRubricFromResource(
     };
   }
 
-  const resource = await loadResourceForExtraction(resourceId, supabase);
-  const { text, textSource } = await getResourceExtractionText(resource, supabase);
-  const inputMetadata = toJson(
-    buildInputMetadata({ extractionType: "judge_rubric", resource, textSource }),
-  );
-  const jobId = await createExtractionJob({
+  const { jobId, resource, text } = await prepareResourceExtraction({
     extractionType: "judge_rubric",
-    inputMetadata,
-    resource,
+    resourceId,
     supabase,
     userId,
   });
@@ -84,10 +75,12 @@ export async function extractRubricFromResource(
       schema: RubricExtractionResultSchema,
       supabase,
     });
-    const eventId = await resolveEventIdByCode(
-      result.detectedEventCode ?? resource.event_code,
+    const eventId = await resolveCanonicalEventId({
+      detectedEventCode: result.detectedEventCode,
+      detectedEventName: result.detectedEventName,
+      resource,
       supabase,
-    );
+    });
     let rubricsCreated = 0;
     let criteriaCreated = 0;
 

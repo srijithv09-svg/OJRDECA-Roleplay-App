@@ -92,7 +92,7 @@ export function buildResourceClassificationPrompt(metadata: ResourceClassificati
     `cluster: ${nullable(metadata.cluster)}`,
     `instructionalArea: ${nullable(metadata.instructionalArea)}`,
     `year: ${nullable(metadata.year)}`,
-    textExcerpt ? `textExcerpt: ${textExcerpt.slice(0, 4000)}` : "textExcerpt: unavailable",
+    textExcerpt ? `textExcerpt: ${textExcerpt.slice(0, 12000)}` : "textExcerpt: unavailable",
     "",
     "Use confidence from 0 to 1. Keep reasoningSummary short and suitable for an admin review log.",
   ].join("\n");
@@ -115,6 +115,41 @@ export function buildExamExtractionPrompt(metadata: ResourceExtractionPromptMeta
   });
 }
 
+export function buildExamChunkExtractionPrompt({
+  chunkCount,
+  chunkIndex,
+  metadata,
+  questionEnd,
+  questionStart,
+  text,
+}: {
+  chunkCount: number;
+  chunkIndex: number;
+  metadata: ResourceExtractionPromptMetadata;
+  questionEnd?: number;
+  questionStart?: number;
+  text: string;
+}) {
+  return buildExtractionPrompt({
+    metadata,
+    text,
+    instructions: [
+      `Extract exam questions from chunk ${chunkIndex} of ${chunkCount}.`,
+      questionStart && questionEnd
+        ? `This chunk appears to contain questions ${questionStart} through ${questionEnd}.`
+        : "Question range is unknown for this chunk.",
+      "Set resourceType to exam.",
+      "Extract only questions visible in this chunk.",
+      "Do not invent missing questions or complete a question from outside this chunk.",
+      "Preserve original question numbers exactly.",
+      "Preserve answer choice labels such as A, B, C, D, E.",
+      "Do not populate any correct answer field.",
+      "If a question appears incomplete at a chunk boundary, omit it unless question number, prompt, and at least two choices are visible.",
+      "Add warnings for incomplete or ambiguous questions.",
+    ],
+  });
+}
+
 export function buildAnswerKeyExtractionPrompt(
   metadata: ResourceExtractionPromptMetadata,
   text: string,
@@ -132,6 +167,33 @@ export function buildAnswerKeyExtractionPrompt(
       "Use answer labels A, B, C, D, or E only.",
       "Include possible matching information for the related exam when visible, but label this as possibleExamTitle/possibleExamYear only.",
       "AI-extracted answer keys are suggested draft data, not official answer keys.",
+    ],
+  });
+}
+
+export function buildAnswerKeyChunkExtractionPrompt({
+  chunkCount,
+  chunkIndex,
+  metadata,
+  text,
+}: {
+  chunkCount: number;
+  chunkIndex: number;
+  metadata: ResourceExtractionPromptMetadata;
+  text: string;
+}) {
+  return buildExtractionPrompt({
+    metadata,
+    text,
+    instructions: [
+      `Extract answer key rows from chunk ${chunkIndex} of ${chunkCount}.`,
+      "Set resourceType to answer_key.",
+      "Extract only answer rows visible in this chunk.",
+      "Do not generate answers by reasoning from question text.",
+      "Only use answers visible in the document.",
+      "Preserve question numbers exactly where possible.",
+      "Use answer labels A, B, C, D, or E only.",
+      "Add warnings for incomplete or ambiguous rows.",
     ],
   });
 }

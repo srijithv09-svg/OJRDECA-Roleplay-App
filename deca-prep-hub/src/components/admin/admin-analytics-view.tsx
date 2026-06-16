@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { ButtonLink } from "@/components/ui/button-link";
 import { Card, CardHeader } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { ResourceErrorState } from "@/components/resources/resource-states";
@@ -294,6 +295,7 @@ export function AdminAnalyticsView() {
   return (
     <>
       <PageHeader
+        actions={<ButtonLink href="/admin">Back to Admin</ButtonLink>}
         description="Monitor exam attempts, instructional area patterns, resource status, and chapter-wide activity."
         eyebrow="Admin"
         title="Admin analytics"

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { ButtonLink } from "@/components/ui/button-link";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { ResourceErrorState, ResourceLoadingState } from "@/components/resources/resource-states";
@@ -440,6 +441,7 @@ export function AdminResourcesView() {
   return (
     <>
       <PageHeader
+        actions={<ButtonLink href="/admin">Back to Admin</ButtonLink>}
         description="Review imported PDFs, tune metadata, and approve resources for student visibility."
         eyebrow="Admin"
         title="Resource approvals"
@@ -787,7 +789,6 @@ function MetadataEditModal({
       event_category: selectedEvent.category,
       event_code: selectedEvent.code,
       event_name: selectedEvent.name,
-      resource_type: "roleplay",
     });
   }
 
@@ -855,10 +856,11 @@ function MetadataEditModal({
               onChange={(event) => selectEventCode(event.target.value)}
               value={draft.event_code}
             >
-              <option value="">Unknown / Manual</option>
+              <option value="">No event matched - choose manually</option>
               {decaEvents.map((event) => (
                 <option key={event.code} value={event.code}>
                   {event.code} - {event.name}
+                  {event.code === "MCS" || event.code === "BLTDM" ? " (learning pilot)" : ""}
                 </option>
               ))}
             </select>

@@ -15,6 +15,7 @@
     "smoke:routes": "tsx scripts/smoke-routes.ts",
     "test:gemini-classify": "node --conditions react-server --import tsx scripts/test-gemini-resource-classification.ts",
     "test:gemini-extract": "node --conditions react-server --import tsx scripts/test-gemini-resource-extraction.ts",
+    "test:pdf-text": "node --conditions react-server --import tsx scripts/test-pdf-text-extraction.ts",
     "start": "next start",
     "lint": "eslint"
   },

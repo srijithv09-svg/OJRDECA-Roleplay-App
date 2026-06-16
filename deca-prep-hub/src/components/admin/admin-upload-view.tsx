@@ -45,6 +45,27 @@ type ExtractionState = {
   extraction?: ExtractionSummary;
   isLoading: boolean;
 };
+type ExtractionApiResponse =
+  | {
+      jobId: string | null;
+      ok: true;
+      status: string;
+      summary: ExtractionSummary;
+    }
+  | {
+      error: {
+        code: string;
+        details?: string;
+        message: string;
+        retryAfterSeconds?: number;
+      };
+      ok: false;
+    }
+  | {
+      code?: string;
+      error?: string;
+      extraction?: ExtractionSummary;
+    };
 
 const resourceTypeOptions: SupabaseResourceType[] = ["roleplay", "exam", "reference", "unknown"];
 const extractionTypeOptions: Array<{ label: string; value: ExtractionTypeOption }> = [
@@ -65,6 +86,69 @@ function draftFromFile(file: File): UploadDraft {
 
 function isPdf(file: File) {
   return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+}
+
+function isExtractionSuccess(payload: ExtractionApiResponse): payload is Extract<ExtractionApiResponse, { ok: true }> {
+  return "ok" in payload && payload.ok === true;
+}
+
+function isExtractionFailure(payload: ExtractionApiResponse): payload is Extract<ExtractionApiResponse, { ok: false }> {
+  return "ok" in payload && payload.ok === false;
+}
+
+function formatNonJsonExtractionError(response: Response, bodyText: string) {
+  const trimmedBody = bodyText.trim();
+  const explanation =
+    trimmedBody.startsWith("<!DOCTYPE") || trimmedBody.startsWith("<html")
+      ? "The server returned an HTML page instead of JSON."
+      : "The server returned a non-JSON response.";
+
+  return `AI extraction request failed (HTTP ${response.status}). ${explanation}`;
+}
+
+async function readExtractionApiResponse(response: Response) {
+  const contentType = response.headers.get("content-type") ?? "";
+  const bodyText = await response.text();
+
+  if (!contentType.toLowerCase().includes("application/json")) {
+    throw new Error(formatNonJsonExtractionError(response, bodyText));
+  }
+
+  try {
+    return (bodyText ? JSON.parse(bodyText) : {}) as ExtractionApiResponse;
+  } catch {
+    throw new Error(`AI extraction returned invalid JSON (HTTP ${response.status}).`);
+  }
+}
+
+function getExtractionFailureMessage(response: Response, payload: ExtractionApiResponse) {
+  if (isExtractionFailure(payload)) {
+    if (payload.error.code === "gemini_missing_key") {
+      return "Gemini is not configured. Add GEMINI_API_KEY in the server environment to enable AI extraction.";
+    }
+
+    if (payload.error.code === "pdf_text_extraction_failed") {
+      return "PDF text extraction failed. Try a different PDF or review server logs.";
+    }
+
+    if (payload.error.code === "gemini_quota_exceeded") {
+      return payload.error.retryAfterSeconds
+        ? `Gemini quota limit reached. Try again in about ${payload.error.retryAfterSeconds} seconds, or test with a shorter PDF.`
+        : "Gemini quota limit reached. Try again later.";
+    }
+
+    return `AI extraction request failed (HTTP ${response.status}). ${payload.error.message}`;
+  }
+
+  if (!isExtractionSuccess(payload) && payload.code === "gemini_missing_key") {
+    return "Gemini is not configured. Add GEMINI_API_KEY in the server environment to enable AI extraction.";
+  }
+
+  if (!isExtractionSuccess(payload) && payload.error) {
+    return `AI extraction request failed (HTTP ${response.status}). ${payload.error}`;
+  }
+
+  return `AI extraction request failed (HTTP ${response.status}).`;
 }
 
 export function AdminUploadView() {
@@ -131,7 +215,7 @@ export function AdminUploadView() {
         }
 
         const selectedEvent = getDecaEventByCode(patch.event_code);
-        const nextResourceType = selectedEvent ? "roleplay" : patch.resource_type ?? draft.resource_type;
+        const nextResourceType = patch.resource_type ?? draft.resource_type;
 
         return {
           ...draft,
@@ -269,28 +353,29 @@ export function AdminUploadView() {
           Authorization: `Bearer ${session.access_token}`,
           "Content-Type": "application/json",
         },
+        credentials: "include",
         method: "POST",
       });
-      const payload = (await response.json()) as {
-        code?: string;
-        error?: string;
-        extraction?: ExtractionSummary;
-      };
+      const payload = await readExtractionApiResponse(response);
 
       if (!response.ok) {
-        if (payload.code === "gemini_missing_key") {
-          throw new Error(
-            "Gemini is not configured. Add GEMINI_API_KEY in the server environment to enable AI extraction.",
-          );
-        }
+        throw new Error(getExtractionFailureMessage(response, payload));
+      }
 
-        throw new Error(payload.error ?? "Unable to run AI extraction.");
+      const extraction = isExtractionSuccess(payload)
+        ? payload.summary
+        : isExtractionFailure(payload)
+          ? undefined
+          : payload.extraction;
+
+      if (!extraction) {
+        throw new Error("AI extraction finished, but the response did not include a result summary.");
       }
 
       setExtractionStates((current) => ({
         ...current,
         [resourceId]: {
-          extraction: payload.extraction,
+          extraction,
           isLoading: false,
         },
       }));
@@ -338,7 +423,12 @@ export function AdminUploadView() {
   return (
     <>
       <PageHeader
-        actions={<LinkButton href="/admin/resources">Review pending resources</LinkButton>}
+        actions={
+          <>
+            <LinkButton href="/admin">Back to Admin</LinkButton>
+            <LinkButton href="/admin/resources">Review pending resources</LinkButton>
+          </>
+        }
         description="Upload PDFs, review detected metadata, and create pending resources for approval."
         eyebrow="Admin"
         title="Upload Resource"
@@ -476,10 +566,11 @@ export function AdminUploadView() {
                         }
                         value={draft.event_code ?? ""}
                       >
-                        <option value="">Unknown / Manual</option>
+                        <option value="">No event matched - choose manually</option>
                         {decaEvents.map((event) => (
                           <option key={event.code} value={event.code}>
-                            {event.code}
+                            {event.code} - {event.name}
+                            {event.code === "MCS" || event.code === "BLTDM" ? " (learning pilot)" : ""}
                           </option>
                         ))}
                       </select>

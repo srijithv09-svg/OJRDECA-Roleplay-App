@@ -22,6 +22,10 @@ Rebuild plan for shifting DECA Prep Hub from a passive PDF resource library towa
 Student-visible pages:
 
 - `/dashboard`: profile, exam analytics, roleplay attempt summary, and next actions.
+- `/learn`: guided learning pathway entry point. Shows learning-enabled/pilot events, with MCS as the recommended first active pathway.
+- `/learn/[eventCode]`: event learning pathway page for enabled learning events.
+- `/learn/[eventCode]/key-sets/[keySetId]`: approved key set concept list and progress.
+- `/learn/[eventCode]/concepts/[conceptId]`: concept lesson and approved practice questions.
 - `/roleplays`: approved roleplay resource library filtered from `resources`.
 - `/exams`: approved exam resource library filtered from `resources`.
 - `/resources`: resource review/library entry point.
@@ -36,8 +40,10 @@ Student-visible pages:
 
 Admin/advisor-visible pages:
 
+- `/admin`: consolidated admin workspace linking to resource management, upload, AI review, exam keys, users/roles, and admin analytics.
 - `/admin/upload`: upload one or more PDFs with metadata review before insert.
 - `/admin/resources`: review, approve, reject, bulk approve/reject, edit metadata, and inspect developer details.
+- `/admin/ai-review`: review AI extraction jobs and extracted draft content.
 - `/admin/exam-keys`: create and edit answer keys for approved exam PDFs.
 - `/admin/users`: list users and change roles while protecting final admin/advisor access.
 - `/admin/analytics`: aggregate exam/resource/user analytics.
@@ -129,6 +135,12 @@ Secondary pilot:
 
 - Business Law and Ethics Team Decision Making (BLTDM).
 - BLTDM provides contrast because it is a team decision-making event in the Business Management and Administration cluster and emphasizes law, ethics, contracts, liability, employment issues, and judgment-based decisions.
+
+Important separation:
+
+- MCS and BLTDM are pilot events for future learning reinforcement.
+- Resource preparation should support a broader canonical DECA event catalog for uploaded roleplays, exams, answer keys, rubrics, and extracted content.
+- Unknown or ambiguous resources should remain unmatched for admin review instead of defaulting to MCS or BLTDM.
 
 Core concept content should eventually include:
 
@@ -656,6 +668,7 @@ Database changes:
 - Insert extraction jobs and extracted draft records.
 - Exam PDFs insert draft questions into `questions` with `status = needs_review`, `ai_extracted = true`, and `admin_reviewed = false`.
 - Roleplay PDFs insert draft scenarios into `roleplay_scenarios` with `status = needs_review`, `ai_extracted = true`, and `admin_reviewed = false`.
+- Roleplay performance indicators insert individual draft rows into `roleplay_performance_indicators` while keeping `roleplay_scenarios.performance_indicators` synced as compatibility JSONB.
 - Answer key PDFs insert suggestions into `ai_extracted_answer_keys`, not official `exam_answer_keys`.
 - Rubric PDFs insert draft `rubrics` and `rubric_criteria`.
 
@@ -679,11 +692,20 @@ Testing expectations:
 - Validation tests for malformed Gemini output.
 - Route auth tests if test tooling exists.
 - `npm run test:gemini-extract -- <resource-id> --type=exam` when `GEMINI_API_KEY` and the Phase 3 migration are configured.
+- Use `GEMINI_TIMEOUT_MS` to tune server-side Gemini request timeout; it defaults to 90,000 ms.
+- Gemini free-tier quota may be low. Full exams may consume multiple requests; roleplay PDFs are better early extraction smoke tests.
+- Use `GEMINI_MAX_EXAM_CHUNKS` or `GEMINI_MAX_EXTRACTION_CHARS` locally to limit extraction size while testing. Limited runs are marked `needs_review` with a development-settings warning.
+- For large exam and answer-key PDFs, use the chunked extraction diagnostics from `npm run test:gemini-extract -- <resource-id> --type=exam --chunk-size=10000 --chunk-threshold=12000`.
 - `npm run check:db` after the Phase 3 migration is applied.
 
 Current Phase 3 implementation notes:
 
 - The pipeline uses extracted text, not Gemini Files API upload. It prefers `resources.detected_text`, then downloads the private `resources` Storage object server-side and parses it with `pdf-parse`.
+- Large exam and answer-key PDFs are normalized, split into chunks above 12,000 characters, sent to Gemini chunk by chunk, merged by question number, and stored as `needs_review`. Exam-question extraction trims trailing built-in answer key/explanation sections such as `EXAM—KEY` before chunking.
+- Chunk diagnostics are stored on `ai_extraction_jobs.input_metadata` and returned by the local extraction test script: text character count, estimated tokens, strategy, chunk count, and chunk size.
+- Gemini quota/rate-limit responses are normalized to `gemini_quota_exceeded`; the UI should show a concise retry-later message instead of raw provider JSON.
+- Gemini 503/high-demand capacity errors are retried once per chunk. Missing keys, invalid JSON, schema failures, and non-transient errors are not retried.
+- Extracted roleplay performance indicators are normalized into `roleplay_performance_indicators`. Admins/advisors review PIs individually, and approved PI rows are intended to power later student practice and Gemini grading.
 - The orchestrator chooses a type from an explicit admin override, latest stored classification, current `resources.resource_type`, or a fresh Gemini classification when needed.
 - Duplicate prevention skips existing draft AI content by default. `force=true` creates a new Gemini job but does not delete or overwrite draft extracted records.
 - Full review UI, extracted content editors, answer-key approval, student pathway, concept feedback, and roleplay grading remain Phase 4+.
@@ -725,6 +747,7 @@ Current Phase 4 implementation notes:
 - `/admin/ai-review` shows extraction job metrics, filters, job cards, errors, confidence, and links to review extracted content.
 - `/admin/ai-review/jobs/[id]` shows job metadata, raw JSON, validated JSON, and linked extracted record counts.
 - `/admin/ai-review/questions`, `/admin/ai-review/roleplays`, `/admin/ai-review/answer-keys`, and `/admin/ai-review/rubrics` provide review/edit modals for extracted records.
+- `/admin/ai-review/roleplays` shows performance indicators as editable review rows with individual status actions. Raw `roleplay_scenarios.performance_indicators` JSONB is retained only as a compatibility/developer fallback.
 - Review mutations use `PATCH /api/admin/ai/review` and verify admin/advisor server-side.
 - JSONB editing uses textarea JSON with validation before save.
 - AI answer keys are labeled practice/not official and remain in `ai_extracted_answer_keys`; conversion to official `exam_answer_keys` is intentionally not implemented yet.
@@ -754,11 +777,46 @@ Not included:
 - No Gemini grading.
 - No changes to resource approval status.
 
+### Phase 4.6: Canonical DECA event catalog and event matching
+
+Goal:
+
+- Support canonical event matching for the broader resource preparation system while keeping MCS and BLTDM as learning-system pilots only.
+
+Implementation notes:
+
+- The `events` table should contain common DECA events beyond the pilot rows, including AAM, ENT, ETDM, HRM, and other uploaded-resource events.
+- `event_aliases` supports matching from filenames, older metadata, common abbreviations, and Gemini output.
+- Upload detection and AI extraction should match by exact code, alias, normalized name, filename/path text, resource metadata, and Gemini-detected event code/name.
+- If no confident match exists, leave `event_id` null and show the resource as needing event review.
+- AI Review dropdowns should list the full canonical catalog and may mark MCS/BLTDM as learning pilots, but must not restrict selection to pilot events.
+
+Not included:
+
+- No `/learn` pages.
+- No concept learning pathway.
+- No Gemini concept feedback or roleplay grading.
+
+### Phase 4.7: Navigation cleanup and admin workspace consolidation
+
+Goal:
+
+- Keep the sidebar aligned to the student mental model while preserving all admin/advisor functionality.
+- Student navigation should prioritize Dashboard, Learn, Roleplays, Exams, Resources, Analytics, Calendar, and Settings.
+- Admins and advisors should see one top-level `Admin` item that points to `/admin`.
+- `/admin` is the admin workspace and links to resource management, upload, AI review, exam keys, users/roles, and admin analytics.
+- Existing admin routes remain intact and protected; they are reached from the workspace instead of cluttering the top-level sidebar.
+- When an admin/advisor is on `/admin/resources`, `/admin/upload`, `/admin/ai-review`, `/admin/exam-keys`, `/admin/analytics`, or `/admin/users`, the single Admin sidebar item should remain active.
+
 ### Phase 5: Student MCS learning pathway
 
 Goal:
 
-- Launch `/learn`, `/learn/mcs`, key set pages, and concept lesson pages for approved MCS content.
+- Launch generic `/learn`, `/learn/[eventCode]`, key set pages, and concept lesson pages with MCS as the first active pilot pathway.
+- Keep the learning system multi-event capable. MCS is the first active pilot, BLTDM is the second planned pilot, and future events can be enabled by marking events as learning pilots and adding approved key sets, concepts, and questions.
+- Keep canonical resource support and learning pathway support distinct: resource upload/extraction can support all canonical events, while guided learning shows only enabled/pilot learning events.
+- Show only approved learning content to students.
+- Save question attempts and update concept mastery conservatively without Gemini grading.
 
 Major files likely affected:
 
@@ -766,10 +824,20 @@ Major files likely affected:
 - `src/components/learn/*`
 - `src/lib/services/learn*`
 - `src/components/layout/app-shell.tsx`
+- `src/app/api/learn/question-attempts/route.ts`
 
 Database changes:
 
-- Seed or approve initial MCS key sets, concepts, and questions.
+- Seed or approve initial MCS key sets, concepts, and starter questions.
+- No schema change is required for Phase 5 because Phase 1 learning tables already exist.
+
+Phase 5 scope:
+
+- Supports `multiple_choice`, `matching`, `multiple_select`, and `free_text` practice questions.
+- MCS starter content covers promotion, target market, brand awareness, positioning, and message strategy.
+- `POST /api/learn/question-attempts` validates the authenticated user server-side, rejects unapproved questions, calculates attempt numbers, stores answers, and updates basic mastery.
+- Mastery is intentionally conservative: saved attempts move students from learning to practicing, mostly correct keyed checks plus free text can reach almost mastered, and Phase 5 does not claim full AI-scored mastery.
+- Gemini concept feedback, revision comparison, readiness dashboards, BLTDM team workflows, and roleplay transcript grading belong to Phase 6 or later.
 
 Risks:
 

@@ -1,12 +1,20 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { PDFParse } from "pdf-parse";
 import {
   generateStructuredGeminiJson,
   GeminiInfrastructureError,
   DEFAULT_GEMINI_MODEL,
+  getGeminiTimeoutMs,
 } from "@/lib/ai/gemini/client";
+import {
+  extractPdfTextFromBuffer,
+  PdfTextExtractionError,
+} from "@/lib/pdf/server-text-extraction";
+import {
+  matchEventFromGeminiExtraction,
+  matchEventFromResourceMetadata,
+} from "@/lib/services/event-matching";
 import { validateWithSchema } from "@/lib/ai/validation";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import type {
@@ -18,6 +26,7 @@ import type {
   ResourceListItem,
 } from "@/lib/types";
 import type { z } from "zod";
+import type { TextPreparationDiagnostics } from "./text-prep";
 
 export type SupabaseAdminClient = SupabaseClient<Database>;
 
@@ -52,6 +61,7 @@ export type ExtractionResource = Pick<
 >;
 
 export type ExtractionSummary = {
+  diagnostics?: TextPreparationDiagnostics;
   duplicate?: boolean;
   extractionType: ResourceExtractionType;
   jobId: string | null;
@@ -60,9 +70,12 @@ export type ExtractionSummary = {
   status: AiExtractionJobStatus | "skipped";
   warnings: string[];
   message?: string;
+  retryAfterSeconds?: number;
 };
 
 export type ResourceExtractionOptions = {
+  chunkSize?: number;
+  chunkThreshold?: number;
   force?: boolean;
   supabase?: SupabaseAdminClient;
   userId?: string | null;
@@ -73,8 +86,10 @@ export type ResourceExtractionErrorCode =
   | "gemini_api_error"
   | "gemini_invalid_response"
   | "gemini_missing_key"
+  | "gemini_quota_exceeded"
   | "gemini_timeout"
   | "job_create_failed"
+  | "pdf_text_extraction_failed"
   | "resource_not_found"
   | "schema_validation_failed"
   | "storage_download_failed"
@@ -86,12 +101,19 @@ export type ResourceExtractionErrorCode =
 export class ResourceExtractionError extends Error {
   code: ResourceExtractionErrorCode;
   jobId?: string;
+  retryAfterSeconds?: number;
 
-  constructor(code: ResourceExtractionErrorCode, message: string, jobId?: string) {
+  constructor(
+    code: ResourceExtractionErrorCode,
+    message: string,
+    jobId?: string,
+    retryAfterSeconds?: number,
+  ) {
     super(message);
     this.name = "ResourceExtractionError";
     this.code = code;
     this.jobId = jobId;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
 }
 
@@ -108,6 +130,20 @@ export function getExtractionSupabase(options?: Pick<ResourceExtractionOptions, 
 }
 
 export function getErrorMessage(error: unknown) {
+  if (
+    error instanceof GeminiInfrastructureError &&
+    error.code === "quota_exceeded"
+  ) {
+    return "Gemini quota limit reached.";
+  }
+
+  if (
+    error instanceof ResourceExtractionError &&
+    error.code === "gemini_quota_exceeded"
+  ) {
+    return "Gemini quota limit reached.";
+  }
+
   return error instanceof Error ? error.message : "Resource extraction failed.";
 }
 
@@ -125,6 +161,10 @@ export function getFailureCode(error: unknown): ResourceExtractionErrorCode {
       return "gemini_invalid_response";
     }
 
+    if (error.code === "quota_exceeded") {
+      return "gemini_quota_exceeded";
+    }
+
     return "gemini_api_error";
   }
 
@@ -139,18 +179,44 @@ export function getJobStatus(overallConfidence: number): AiExtractionJobStatus {
   return overallConfidence >= 0.75 ? "completed" : "needs_review";
 }
 
+export function getRetryAfterSeconds(error: unknown) {
+  if (
+    error instanceof GeminiInfrastructureError ||
+    error instanceof ResourceExtractionError
+  ) {
+    return error.retryAfterSeconds;
+  }
+
+  return undefined;
+}
+
+export function isQuotaExceededError(error: unknown) {
+  return getFailureCode(error) === "gemini_quota_exceeded";
+}
+
 export function buildInputMetadata({
+  diagnostics,
   extractionType,
   resource,
   textSource,
 }: {
+  diagnostics?: TextPreparationDiagnostics;
   extractionType: ResourceExtractionType;
   resource: ExtractionResource;
   textSource: string;
 }) {
   return {
+    chunk_count: diagnostics?.chunkCount ?? null,
+    chunk_size: diagnostics?.chunkSize ?? null,
+    development_limit_applied: diagnostics?.developmentLimitApplied ?? null,
+    development_max_chunks: diagnostics?.developmentMaxChunks ?? null,
+    development_max_extraction_chars: diagnostics?.developmentMaxExtractionChars ?? null,
+    exam_answer_key_section_trimmed: diagnostics?.answerKeySectionTrimmed ?? null,
     extraction_type: extractionType,
+    extraction_strategy: diagnostics?.strategy ?? null,
     extraction_version: 1,
+    gemini_model: DEFAULT_GEMINI_MODEL,
+    gemini_timeout_ms: getGeminiTimeoutMs(),
     resource_id: resource.id,
     title: resource.title,
     original_filename: resource.original_filename,
@@ -163,6 +229,10 @@ export function buildInputMetadata({
     instructional_area: resource.instructional_area,
     year: resource.year,
     import_notes: resource.import_notes,
+    original_text_char_count: diagnostics?.originalTextCharCount ?? null,
+    removed_trailing_text_char_count: diagnostics?.removedTrailingTextCharCount ?? null,
+    text_char_count: diagnostics?.textCharCount ?? null,
+    text_token_estimate: diagnostics?.tokenEstimate ?? null,
     text_source: textSource,
   };
 }
@@ -203,17 +273,6 @@ export async function loadResourceForExtraction(
   return data as ExtractionResource;
 }
 
-async function parsePdfBuffer(buffer: Buffer) {
-  const parser = new PDFParse({ data: buffer });
-
-  try {
-    const result = await parser.getText();
-    return result.text ?? "";
-  } finally {
-    await parser.destroy();
-  }
-}
-
 export async function getResourceExtractionText(
   resource: ExtractionResource,
   supabase: SupabaseAdminClient,
@@ -244,7 +303,18 @@ export async function getResourceExtractionText(
   }
 
   const buffer = Buffer.from(await data.arrayBuffer());
-  const text = (await parsePdfBuffer(buffer)).trim();
+  let text: string;
+
+  try {
+    text = (await extractPdfTextFromBuffer(buffer)).text.trim();
+  } catch (error) {
+    throw new ResourceExtractionError(
+      "pdf_text_extraction_failed",
+      error instanceof PdfTextExtractionError
+        ? error.message
+        : `PDF text extraction failed: ${getErrorMessage(error)}`,
+    );
+  }
 
   if (text.length < 100) {
     throw new ResourceExtractionError(
@@ -257,6 +327,143 @@ export async function getResourceExtractionText(
     text,
     textSource: "storage_pdf_parse",
   };
+}
+
+export async function updateExtractionJobInputMetadata({
+  inputMetadata,
+  jobId,
+  supabase,
+}: {
+  inputMetadata: Json;
+  jobId: string;
+  supabase: SupabaseAdminClient;
+}) {
+  const { error } = await supabase
+    .from("ai_extraction_jobs")
+    .update({ input_metadata: inputMetadata })
+    .eq("id", jobId);
+
+  if (error) {
+    throw new ResourceExtractionError("supabase_update_failed", error.message, jobId);
+  }
+}
+
+export async function updateExtractionJobDiagnostics({
+  diagnostics,
+  jobId,
+  supabase,
+  textSource,
+}: {
+  diagnostics: TextPreparationDiagnostics;
+  jobId: string;
+  supabase: SupabaseAdminClient;
+  textSource: string;
+}) {
+  const { data: job, error: selectError } = await supabase
+    .from("ai_extraction_jobs")
+    .select("input_metadata")
+    .eq("id", jobId)
+    .single();
+
+  if (selectError || !job) {
+    throw new ResourceExtractionError(
+      "supabase_update_failed",
+      selectError?.message ?? "Unable to load extraction job metadata.",
+      jobId,
+    );
+  }
+
+  const currentMetadata =
+    typeof job.input_metadata === "object" && job.input_metadata !== null
+      ? job.input_metadata
+      : {};
+
+  await updateExtractionJobInputMetadata({
+    inputMetadata: toJson({
+      ...currentMetadata,
+      chunk_count: diagnostics.chunkCount,
+      chunk_size: diagnostics.chunkSize,
+      development_limit_applied: diagnostics.developmentLimitApplied ?? null,
+      development_max_chunks: diagnostics.developmentMaxChunks ?? null,
+      development_max_extraction_chars: diagnostics.developmentMaxExtractionChars ?? null,
+      exam_answer_key_section_trimmed: diagnostics.answerKeySectionTrimmed ?? null,
+      extraction_strategy: diagnostics.strategy,
+      gemini_model: DEFAULT_GEMINI_MODEL,
+      gemini_timeout_ms: getGeminiTimeoutMs(),
+      original_text_char_count: diagnostics.originalTextCharCount ?? null,
+      removed_trailing_text_char_count: diagnostics.removedTrailingTextCharCount ?? null,
+      text_char_count: diagnostics.textCharCount,
+      text_source: textSource,
+      text_token_estimate: diagnostics.tokenEstimate,
+    }),
+    jobId,
+    supabase,
+  });
+}
+
+export async function prepareResourceExtraction({
+  extractionType,
+  resourceId,
+  supabase,
+  userId = null,
+}: {
+  extractionType: ResourceExtractionType;
+  resourceId: string;
+  supabase: SupabaseAdminClient;
+  userId?: string | null;
+}) {
+  const resource = await loadResourceForExtraction(resourceId, supabase);
+  const initialInputMetadata = toJson(
+    buildInputMetadata({
+      extractionType,
+      resource,
+      textSource: "pending_text_extraction",
+    }),
+  );
+  const jobId = await createExtractionJob({
+    extractionType,
+    inputMetadata: initialInputMetadata,
+    resource,
+    supabase,
+    userId,
+  });
+
+  try {
+    const { text, textSource } = await getResourceExtractionText(resource, supabase);
+    const inputMetadata = toJson(buildInputMetadata({ extractionType, resource, textSource }));
+
+    await updateExtractionJobInputMetadata({ inputMetadata, jobId, supabase });
+
+    return {
+      inputMetadata,
+      jobId,
+      resource,
+      text,
+      textSource,
+    };
+  } catch (error) {
+    const normalizedError =
+      error instanceof ResourceExtractionError
+        ? error
+        : new ResourceExtractionError(
+            "pdf_text_extraction_failed",
+            `PDF text extraction failed: ${getErrorMessage(error)}`,
+            jobId,
+          );
+
+    if (!normalizedError.jobId) {
+      normalizedError.jobId = jobId;
+    }
+
+    await markExtractionJobFailed({
+      error: normalizedError,
+      jobId,
+      rawOutputJson: null,
+      supabase,
+    });
+
+    throw normalizedError;
+  }
 }
 
 export async function createExtractionJob({
@@ -323,6 +530,44 @@ export async function markExtractionJobFailed({
   }
 }
 
+export async function mergeExtractionJobInputMetadata({
+  jobId,
+  metadata,
+  supabase,
+}: {
+  jobId: string;
+  metadata: Record<string, unknown>;
+  supabase: SupabaseAdminClient;
+}) {
+  const { data: job, error: selectError } = await supabase
+    .from("ai_extraction_jobs")
+    .select("input_metadata")
+    .eq("id", jobId)
+    .single();
+
+  if (selectError || !job) {
+    throw new ResourceExtractionError(
+      "supabase_update_failed",
+      selectError?.message ?? "Unable to load extraction job metadata.",
+      jobId,
+    );
+  }
+
+  const currentMetadata =
+    typeof job.input_metadata === "object" && job.input_metadata !== null
+      ? job.input_metadata
+      : {};
+
+  await updateExtractionJobInputMetadata({
+    inputMetadata: toJson({
+      ...currentMetadata,
+      ...metadata,
+    }),
+    jobId,
+    supabase,
+  });
+}
+
 export async function updateExtractionJobSuccess({
   confidenceScore,
   jobId,
@@ -360,36 +605,61 @@ export async function updateExtractionJobSuccess({
 
 export async function generateAndValidateExtraction<T>({
   jobId,
+  maxAttempts = 2,
   prompt,
+  markValidationFailure = true,
   responseJsonSchema,
   schema,
   supabase,
+  timeoutMs = getGeminiTimeoutMs(),
 }: {
   jobId: string;
+  maxAttempts?: number;
+  markValidationFailure?: boolean;
   prompt: string;
   responseJsonSchema: unknown;
   schema: z.ZodType<T>;
   supabase: SupabaseAdminClient;
+  timeoutMs?: number;
 }) {
-  const generated = await generateStructuredGeminiJson({
-    prompt,
-    responseJsonSchema,
-    timeoutMs: 60000,
-  });
+  let generated: Awaited<ReturnType<typeof generateStructuredGeminiJsonWithRetry>>;
+
+  try {
+    generated = await generateStructuredGeminiJsonWithRetry({
+      jobId,
+      maxAttempts,
+      prompt,
+      responseJsonSchema,
+      timeoutMs,
+    });
+  } catch (error) {
+    if (error instanceof GeminiInfrastructureError) {
+      throw new ResourceExtractionError(
+        getFailureCode(error),
+        getErrorMessage(error),
+        jobId,
+        error.retryAfterSeconds,
+      );
+    }
+
+    throw error;
+  }
   const validation = validateWithSchema(schema, generated.rawJson);
 
   if (!validation.ok) {
-    const validationError = new ResourceExtractionError(
+      const validationError = new ResourceExtractionError(
       "schema_validation_failed",
       validation.errorMessage,
       jobId,
     );
-    await markExtractionJobFailed({
-      error: validationError,
-      jobId,
-      rawOutputJson: toJson(generated.rawJson),
-      supabase,
-    });
+    if (markValidationFailure) {
+      await markExtractionJobFailed({
+        error: validationError,
+        jobId,
+        rawOutputJson: toJson(generated.rawJson),
+        supabase,
+      });
+    }
     throw validationError;
   }
 
@@ -397,6 +667,61 @@ export async function generateAndValidateExtraction<T>({
     generated,
     result: validation.data,
   };
+}
+
+function isRetryableGeminiError(error: unknown) {
+  if (!(error instanceof GeminiInfrastructureError) || error.code !== "api_error") {
+    return false;
+  }
+
+  return /503|UNAVAILABLE|high demand|temporarily unavailable/i.test(error.message);
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function generateStructuredGeminiJsonWithRetry({
+  jobId,
+  maxAttempts,
+  prompt,
+  responseJsonSchema,
+  timeoutMs,
+}: {
+  jobId: string;
+  maxAttempts: number;
+  prompt: string;
+  responseJsonSchema: unknown;
+  timeoutMs: number;
+}) {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= Math.max(1, maxAttempts); attempt += 1) {
+    try {
+      return await generateStructuredGeminiJson({
+        prompt,
+        responseJsonSchema,
+        timeoutMs,
+      });
+    } catch (error) {
+      lastError = error;
+
+      if (attempt >= maxAttempts || !isRetryableGeminiError(error)) {
+        throw error;
+      }
+
+      console.warn("[ai extract] retrying Gemini request", {
+        attempt,
+        code: error instanceof GeminiInfrastructureError ? error.code : "unknown",
+        job_id: jobId,
+      });
+      await sleep(1500 * attempt);
+    }
+  }
+
+  throw lastError;
 }
 
 export async function resolveEventIdByCode(
@@ -418,6 +743,31 @@ export async function resolveEventIdByCode(
   }
 
   return data.id;
+}
+
+export async function resolveCanonicalEventId({
+  detectedEventCode,
+  detectedEventName,
+  resource,
+  supabase,
+}: {
+  detectedEventCode?: string | null;
+  detectedEventName?: string | null;
+  resource: ExtractionResource;
+  supabase: SupabaseAdminClient;
+}) {
+  const event = detectedEventCode || detectedEventName
+    ? await matchEventFromGeminiExtraction(
+        supabase,
+        {
+          detectedEventCode,
+          detectedEventName,
+        },
+        resource,
+      )
+    : await matchEventFromResourceMetadata(supabase, resource);
+
+  return event?.id ?? null;
 }
 
 export async function getLatestClassification(

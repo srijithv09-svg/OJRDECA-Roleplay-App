@@ -1,4 +1,4 @@
-import { detectDecaEventCodeFromText, getDecaEventByCode } from "../deca/events";
+import { detectDecaEventFromText } from "../deca/events";
 import { getInstructionalAreaForResource } from "../deca/instructional-areas";
 import type { SupabaseResourceType } from "../types";
 
@@ -127,10 +127,10 @@ export function detectResourceMetadata(filename: string, extraText = ""): Detect
   const detectionText = `${filename} ${extraText}`;
   const title = normalizeForTitle(filename) || filename;
   const year = detectYear(detectionText);
-  const eventCode = detectDecaEventCodeFromText(detectionText);
-  const event = eventCode ? getDecaEventByCode(eventCode) : null;
+  const event = detectDecaEventFromText(detectionText);
+  const eventCode = event?.code ?? null;
   const resourceType = detectResourceType(detectionText, eventCode);
-  const cluster = resourceType === "roleplay" && event ? event.cluster : detectClusterFallback(detectionText);
+  const cluster = event ? event.cluster : detectClusterFallback(detectionText);
   const instructionalArea =
     resourceType === "roleplay"
       ? getInstructionalAreaForResource({
@@ -146,9 +146,9 @@ export function detectResourceMetadata(filename: string, extraText = ""): Detect
   return {
     cluster,
     confidence_score: confidenceScore,
-    event_category: resourceType === "roleplay" ? event?.category ?? null : null,
-    event_code: resourceType === "roleplay" ? eventCode : null,
-    event_name: resourceType === "roleplay" ? event?.name ?? null : null,
+    event_category: event?.category ?? null,
+    event_code: eventCode,
+    event_name: event?.name ?? null,
     import_notes: detectionNote({ eventCode, resourceType, year }),
     instructional_area: instructionalArea,
     original_filename: filename,

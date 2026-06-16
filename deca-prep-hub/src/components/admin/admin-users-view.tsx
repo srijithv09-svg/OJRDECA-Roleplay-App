@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { ButtonLink } from "@/components/ui/button-link";
 import { Card, CardHeader } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { ResourceErrorState } from "@/components/resources/resource-states";
@@ -320,6 +321,7 @@ export function AdminUsersView() {
   return (
     <>
       <PageHeader
+        actions={<ButtonLink href="/admin">Back to Admin</ButtonLink>}
         description="View logged-in OJR DECA users and assign student, admin, or advisor roles."
         eyebrow={getRoleLabel(profile?.role)}
         title="User management"

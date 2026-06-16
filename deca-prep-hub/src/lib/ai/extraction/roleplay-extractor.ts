@@ -4,21 +4,20 @@ import { buildRoleplayExtractionPrompt } from "@/lib/ai/gemini/prompts";
 import {
   RoleplayExtractionResultSchema,
   roleplayExtractionJsonSchema,
+  type RoleplayExtractionResult,
 } from "@/lib/ai/gemini/schemas";
+import { insertRoleplayPerformanceIndicators } from "@/lib/services/roleplay-performance-indicators";
 import type { Json } from "@/lib/types";
 import {
-  buildInputMetadata,
-  createExtractionJob,
   generateAndValidateExtraction,
   getExtractionSupabase,
   getErrorMessage,
   getFailureCode,
   getJobStatus,
   getRawOutputFromError,
-  getResourceExtractionText,
-  loadResourceForExtraction,
   markExtractionJobFailed,
-  resolveEventIdByCode,
+  prepareResourceExtraction,
+  resolveCanonicalEventId,
   ResourceExtractionError,
   type ExtractionSummary,
   type ResourceExtractionOptions,
@@ -26,6 +25,34 @@ import {
   toPromptMetadata,
   updateExtractionJobSuccess,
 } from "./shared";
+
+function buildPerformanceIndicatorRows({
+  eventId,
+  indicators,
+  instructionalArea,
+  resourceId,
+  roleplayScenarioId,
+}: {
+  eventId: string | null;
+  indicators: RoleplayExtractionResult["performanceIndicators"];
+  instructionalArea: string | null;
+  resourceId: string;
+  roleplayScenarioId: string;
+}) {
+  return indicators.map((indicator, index) => ({
+    admin_reviewed: false,
+    ai_extracted: true,
+    confidence: indicator.confidence,
+    event_id: eventId,
+    instructional_area: instructionalArea,
+    possible_concepts: toJson(indicator.possibleConcepts),
+    resource_id: resourceId,
+    roleplay_scenario_id: roleplayScenarioId,
+    sort_order: index,
+    status: "needs_review" as const,
+    text: indicator.text,
+  }));
+}
 
 async function getExistingExtractedRoleplayCount(
   resourceId: string,
@@ -63,13 +90,9 @@ export async function extractRoleplayFromResource(
     };
   }
 
-  const resource = await loadResourceForExtraction(resourceId, supabase);
-  const { text, textSource } = await getResourceExtractionText(resource, supabase);
-  const inputMetadata = toJson(buildInputMetadata({ extractionType: "roleplay", resource, textSource }));
-  const jobId = await createExtractionJob({
+  const { jobId, resource, text } = await prepareResourceExtraction({
     extractionType: "roleplay",
-    inputMetadata,
-    resource,
+    resourceId,
     supabase,
     userId,
   });
@@ -82,10 +105,14 @@ export async function extractRoleplayFromResource(
       schema: RoleplayExtractionResultSchema,
       supabase,
     });
-    const eventId = await resolveEventIdByCode(
-      result.detectedEventCode ?? resource.event_code,
+    const eventId = await resolveCanonicalEventId({
+      detectedEventCode: result.detectedEventCode,
+      detectedEventName: result.detectedEventName,
+      resource,
       supabase,
-    );
+    });
+    const warnings = [...result.warnings];
+    let piRecordsCreated = 0;
     let recordsCreated = 0;
 
     if (existingCount === 0) {
@@ -118,14 +145,35 @@ export async function extractRoleplayFromResource(
       }
 
       recordsCreated = 1;
+
+      try {
+        const insertedIndicators = await insertRoleplayPerformanceIndicators(
+          supabase,
+          buildPerformanceIndicatorRows({
+            eventId,
+            indicators: result.performanceIndicators,
+            instructionalArea: result.instructionalArea ?? resource.instructional_area,
+            resourceId: resource.id,
+            roleplayScenarioId: data.id,
+          }),
+        );
+        piRecordsCreated = insertedIndicators.length;
+      } catch (error) {
+        warnings.push(
+          `Performance indicator rows were not created: ${getErrorMessage(error)}`,
+        );
+      }
     }
 
-    const status = getJobStatus(result.overallConfidence);
+    const status = warnings.length > result.warnings.length ? "needs_review" : getJobStatus(result.overallConfidence);
     await updateExtractionJobSuccess({
       confidenceScore: result.overallConfidence,
       jobId,
       model: generated.model,
-      rawOutputJson: toJson(generated.rawJson),
+      rawOutputJson: toJson({
+        generated: generated.rawJson,
+        warnings,
+      }),
       status,
       supabase,
       validatedOutputJson: toJson(result),
@@ -134,13 +182,16 @@ export async function extractRoleplayFromResource(
     return {
       extractionType: "roleplay",
       jobId,
-      recordsCreated: { roleplay_scenarios: recordsCreated },
+      recordsCreated: {
+        roleplay_performance_indicators: piRecordsCreated,
+        roleplay_scenarios: recordsCreated,
+      },
       resourceId,
       status,
       warnings:
         force && existingCount > 0
-          ? [...result.warnings, "Force run created a new job but did not duplicate the existing draft roleplay scenario."]
-          : result.warnings,
+          ? [...warnings, "Force run created a new job but did not duplicate the existing draft roleplay scenario."]
+          : warnings,
     };
   } catch (error) {
     await markExtractionJobFailed({

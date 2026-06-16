@@ -17,6 +17,7 @@ import {
   type ResourceExtractionOptions,
   type ResourceExtractionType,
 } from "./shared";
+import { getClassificationTextExcerpt } from "./text-prep";
 
 export type ExtractResourceOptions = ResourceExtractionOptions & {
   extractionType?: ResourceExtractionType | null;
@@ -72,7 +73,9 @@ async function resolveExtractionType({
   try {
     const classification = await classifyResourceById(resourceId, {
       supabase,
-      textExcerpt: resource.detected_text?.slice(0, 4000) ?? null,
+      textExcerpt: resource.detected_text
+        ? getClassificationTextExcerpt(resource.detected_text)
+        : null,
       userId,
     });
 
@@ -102,6 +105,8 @@ async function resolveExtractionType({
 }
 
 export async function extractResource({
+  chunkSize,
+  chunkThreshold,
   extractionType = null,
   force = false,
   resourceId,
@@ -121,7 +126,7 @@ export async function extractResource({
     supabase,
     userId,
   });
-  const options = { force, supabase, userId };
+  const options = { chunkSize, chunkThreshold, force, supabase, userId };
 
   if (resolvedType === "exam") {
     return extractExamFromResource(resourceId, options);

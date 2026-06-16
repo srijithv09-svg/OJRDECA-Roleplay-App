@@ -10,6 +10,7 @@ import type {
   Json,
   ResourceListItem,
   ReviewableContentStatus,
+  RoleplayPerformanceIndicator,
   RoleplayScenario,
   Rubric,
   RubricCriterion,
@@ -31,6 +32,7 @@ export type AiReviewData = {
   jobs: AiExtractionJob[];
   questions: StructuredQuestion[];
   resources: ResourceLookup[];
+  roleplayPerformanceIndicators: RoleplayPerformanceIndicator[];
   roleplays: RoleplayScenario[];
   rubricCriteria: RubricCriterion[];
   rubrics: Rubric[];
@@ -72,6 +74,31 @@ export type RoleplayReviewUpdate = Partial<
   >
 >;
 
+export type RoleplayPerformanceIndicatorReviewUpdate = Partial<
+  Pick<
+    RoleplayPerformanceIndicator,
+    | "confidence"
+    | "event_id"
+    | "instructional_area"
+    | "possible_concepts"
+    | "resource_id"
+    | "sort_order"
+    | "status"
+    | "text"
+  >
+>;
+
+export type RoleplayPerformanceIndicatorInput = Pick<
+  RoleplayPerformanceIndicator,
+  "text"
+> &
+  Partial<
+    Pick<
+      RoleplayPerformanceIndicator,
+      "confidence" | "instructional_area" | "possible_concepts" | "status"
+    >
+  >;
+
 export type AnswerKeyReviewUpdate = Partial<
   Pick<
     AiExtractedAnswerKey,
@@ -101,6 +128,8 @@ const questionColumns =
   "id,source_resource_id,event_id,concept_id,question_type,ladder_stage,prompt,choices,correct_answer,explanation,difficulty,status,ai_generated,ai_extracted,admin_reviewed,created_at,updated_at";
 const roleplayColumns =
   "id,resource_id,event_id,title,scenario_text,participant_role,judge_role,business_context,task,instructional_area,performance_indicators,status,ai_extracted,admin_reviewed,created_at,updated_at";
+const roleplayPerformanceIndicatorColumns =
+  "id,roleplay_scenario_id,resource_id,event_id,text,instructional_area,possible_concepts,confidence,sort_order,status,ai_extracted,admin_reviewed,created_at,updated_at";
 const answerKeyColumns =
   "id,resource_id,ai_extraction_job_id,possible_exam_resource_id,title,detected_event_code,detected_year,answers,status,admin_reviewed,created_at,updated_at";
 const rubricColumns =
@@ -143,12 +172,32 @@ async function fetchReviewMutation<T>(payload: unknown): Promise<T> {
   return responsePayload;
 }
 
+async function fetchReviewCreate<T>(payload: unknown): Promise<T> {
+  const token = await getAccessToken();
+  const response = await fetch("/api/admin/ai/review", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  const responsePayload = (await response.json()) as T & { error?: string };
+
+  if (!response.ok) {
+    throw new Error(responsePayload.error ?? "Unable to create AI review item.");
+  }
+
+  return responsePayload;
+}
+
 async function loadAiReviewData(): Promise<AiReviewData> {
   const supabase = getSupabaseClient();
   const [
     jobs,
     questions,
     roleplays,
+    roleplayPerformanceIndicators,
     answerKeys,
     rubrics,
     rubricCriteria,
@@ -159,6 +208,10 @@ async function loadAiReviewData(): Promise<AiReviewData> {
     supabase.from("ai_extraction_jobs").select(extractionJobColumns).order("created_at", { ascending: false }),
     supabase.from("questions").select(questionColumns).eq("ai_extracted", true).order("created_at", { ascending: false }),
     supabase.from("roleplay_scenarios").select(roleplayColumns).eq("ai_extracted", true).order("created_at", { ascending: false }),
+    supabase
+      .from("roleplay_performance_indicators")
+      .select(roleplayPerformanceIndicatorColumns)
+      .order("sort_order", { ascending: true }),
     supabase.from("ai_extracted_answer_keys").select(answerKeyColumns).order("created_at", { ascending: false }),
     supabase.from("rubrics").select(rubricColumns).eq("ai_extracted", true).order("created_at", { ascending: false }),
     supabase.from("rubric_criteria").select(rubricCriteriaColumns).order("sort_order", { ascending: true }),
@@ -171,6 +224,7 @@ async function loadAiReviewData(): Promise<AiReviewData> {
     jobs.error,
     questions.error,
     roleplays.error,
+    roleplayPerformanceIndicators.error,
     answerKeys.error,
     rubrics.error,
     rubricCriteria.error,
@@ -192,6 +246,7 @@ async function loadAiReviewData(): Promise<AiReviewData> {
     questions: questions.data ?? [],
     resources: resources.data ?? [],
     roleplays: roleplays.data ?? [],
+    roleplayPerformanceIndicators: roleplayPerformanceIndicators.data ?? [],
     rubricCriteria: rubricCriteria.data ?? [],
     rubrics: rubrics.data ?? [],
   };
@@ -233,6 +288,32 @@ export const AiReviewService = {
 
   async setRoleplayScenarioReviewStatus(id: string, status: ReviewableContentStatus) {
     return this.updateExtractedRoleplayScenario(id, { status });
+  },
+
+  async updateRoleplayPerformanceIndicator(
+    id: string,
+    updates: RoleplayPerformanceIndicatorReviewUpdate,
+  ) {
+    return fetchReviewMutation<{ performanceIndicator: RoleplayPerformanceIndicator }>({
+      entity: "roleplay_performance_indicator",
+      id,
+      updates,
+    });
+  },
+
+  async setRoleplayPerformanceIndicatorStatus(id: string, status: ReviewableContentStatus) {
+    return this.updateRoleplayPerformanceIndicator(id, { status });
+  },
+
+  async addRoleplayPerformanceIndicator(
+    roleplayScenarioId: string,
+    input: RoleplayPerformanceIndicatorInput,
+  ) {
+    return fetchReviewCreate<{ performanceIndicator: RoleplayPerformanceIndicator }>({
+      entity: "roleplay_performance_indicator",
+      input,
+      roleplay_scenario_id: roleplayScenarioId,
+    });
   },
 
   async updateExtractedAnswerKey(id: string, updates: AnswerKeyReviewUpdate) {

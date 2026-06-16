@@ -3,18 +3,31 @@ import "server-only";
 import { GoogleGenAI } from "@google/genai";
 
 export const DEFAULT_GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
+export const DEFAULT_GEMINI_TIMEOUT_MS = 90000;
 
-export type GeminiErrorCode = "missing_key" | "api_error" | "timeout" | "invalid_response";
+export type GeminiErrorCode =
+  | "missing_key"
+  | "api_error"
+  | "timeout"
+  | "invalid_response"
+  | "quota_exceeded";
 
 export class GeminiInfrastructureError extends Error {
   code: GeminiErrorCode;
   rawText?: string;
+  retryAfterSeconds?: number;
 
-  constructor(code: GeminiErrorCode, message: string, rawText?: string) {
+  constructor(
+    code: GeminiErrorCode,
+    message: string,
+    rawText?: string,
+    retryAfterSeconds?: number,
+  ) {
     super(message);
     this.name = "GeminiInfrastructureError";
     this.code = code;
     this.rawText = rawText;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
 }
 
@@ -42,6 +55,14 @@ function getApiKey() {
   }
 
   return apiKey;
+}
+
+export function getGeminiTimeoutMs(defaultValue = DEFAULT_GEMINI_TIMEOUT_MS) {
+  const configuredTimeout = Number(process.env.GEMINI_TIMEOUT_MS);
+
+  return Number.isFinite(configuredTimeout) && configuredTimeout > 0
+    ? configuredTimeout
+    : defaultValue;
 }
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
@@ -88,11 +109,35 @@ function parseJsonObject(rawText: string) {
   }
 }
 
+function extractRetryAfterSeconds(message: string) {
+  const retryDelayMatch = message.match(/retryDelay["']?\s*:\s*["']?(\d+)s/i);
+  const retryInMatch = message.match(/retry\s+in\s+(?:about\s+)?(\d+)\s*seconds?/i);
+  const retryAfterMatch = message.match(/retry(?:\s+after)?\s+(\d+)\s*s/i);
+  const value = retryDelayMatch?.[1] ?? retryInMatch?.[1] ?? retryAfterMatch?.[1];
+
+  return value ? Number(value) : undefined;
+}
+
+function normalizeGeminiError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+
+  if (/429|RESOURCE_EXHAUSTED|quota|rate.?limit|retryDelay/i.test(message)) {
+    return new GeminiInfrastructureError(
+      "quota_exceeded",
+      "Gemini quota limit reached.",
+      undefined,
+      extractRetryAfterSeconds(message),
+    );
+  }
+
+  return new GeminiInfrastructureError("api_error", message || "Gemini request failed.");
+}
+
 export async function generateStructuredGeminiJson({
   model = DEFAULT_GEMINI_MODEL,
   prompt,
   responseJsonSchema,
-  timeoutMs = 30000,
+  timeoutMs = getGeminiTimeoutMs(),
 }: GenerateStructuredGeminiJsonOptions): Promise<StructuredGeminiJsonResult> {
   const ai = new GoogleGenAI({ apiKey: getApiKey() });
 
@@ -127,9 +172,6 @@ export async function generateStructuredGeminiJson({
       throw error;
     }
 
-    throw new GeminiInfrastructureError(
-      "api_error",
-      error instanceof Error ? error.message : "Gemini request failed.",
-    );
+    throw normalizeGeminiError(error);
   }
 }

@@ -11,6 +11,7 @@ type RequiredTable =
   | "exam_attempt_answers"
   | "roleplay_attempts"
   | "events"
+  | "event_aliases"
   | "key_sets"
   | "concepts"
   | "key_set_concepts"
@@ -18,6 +19,7 @@ type RequiredTable =
   | "question_attempts"
   | "concept_mastery"
   | "roleplay_scenarios"
+  | "roleplay_performance_indicators"
   | "ai_extraction_jobs"
   | "resource_classifications"
   | "ai_extracted_answer_keys"
@@ -32,6 +34,7 @@ const requiredTables: RequiredTable[] = [
   "exam_attempt_answers",
   "roleplay_attempts",
   "events",
+  "event_aliases",
   "key_sets",
   "concepts",
   "key_set_concepts",
@@ -39,6 +42,7 @@ const requiredTables: RequiredTable[] = [
   "question_attempts",
   "concept_mastery",
   "roleplay_scenarios",
+  "roleplay_performance_indicators",
   "ai_extraction_jobs",
   "resource_classifications",
   "ai_extracted_answer_keys",
@@ -54,6 +58,7 @@ const keyColumns: Record<RequiredTable, string[]> = {
   exam_attempt_answers: [],
   roleplay_attempts: ["transcript_status", "ai_feedback_status"],
   events: ["code", "is_pilot"],
+  event_aliases: ["event_id", "alias", "alias_type"],
   key_sets: ["event_id"],
   concepts: ["slug"],
   key_set_concepts: ["key_set_id", "concept_id"],
@@ -70,6 +75,13 @@ const keyColumns: Record<RequiredTable, string[]> = {
   question_attempts: ["user_id"],
   concept_mastery: ["status"],
   roleplay_scenarios: ["performance_indicators", "status", "ai_extracted", "admin_reviewed"],
+  roleplay_performance_indicators: [
+    "roleplay_scenario_id",
+    "text",
+    "status",
+    "ai_extracted",
+    "admin_reviewed",
+  ],
   ai_extraction_jobs: [
     "job_type",
     "status",
@@ -90,6 +102,7 @@ const probeColumns: Record<RequiredTable, string> = {
   exam_attempt_answers: "id",
   roleplay_attempts: "id",
   events: "id",
+  event_aliases: "id",
   key_sets: "id",
   concepts: "id",
   key_set_concepts: "key_set_id",
@@ -97,6 +110,7 @@ const probeColumns: Record<RequiredTable, string> = {
   question_attempts: "id",
   concept_mastery: "user_id",
   roleplay_scenarios: "id",
+  roleplay_performance_indicators: "id",
   ai_extraction_jobs: "id",
   resource_classifications: "id",
   ai_extracted_answer_keys: "id",
@@ -104,6 +118,8 @@ const probeColumns: Record<RequiredTable, string> = {
   rubric_criteria: "id",
 };
 const allowedProfileRoles = ["student", "admin", "advisor"] as const;
+const requiredEventCodes = ["MCS", "BLTDM", "AAM", "ENT", "ETDM", "HRM"] as const;
+const requiredPilotEventCodes = ["MCS", "BLTDM"] as const;
 
 function getEnv() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -139,6 +155,8 @@ async function main() {
   const missingColumns: Array<{ table: RequiredTable; column: string; error: string }> = [];
   const connectionErrors: Array<{ table: RequiredTable; error: string }> = [];
   const invalidProfileRoles: Array<{ id: string; role: string | null }> = [];
+  const missingEvents: string[] = [];
+  const invalidPilotFlags: Array<{ code: string; expected: boolean; actual: boolean | null }> = [];
   const okTables: RequiredTable[] = [];
 
   for (const table of requiredTables) {
@@ -190,6 +208,45 @@ async function main() {
     }
   }
 
+  if (!missingTables.some(({ table }) => table === "events") && connectionErrors.length === 0) {
+    const { data: events, error: eventsError } = await supabase
+      .from("events")
+      .select("code,is_pilot")
+      .in("code", [...requiredEventCodes, "ACT", "BFS"]);
+
+    if (eventsError) {
+      missingColumns.push({
+        table: "events",
+        column: "code",
+        error: describeError(eventsError),
+      });
+    } else {
+      const eventsByCode = new Map((events ?? []).map((event) => [event.code, event]));
+
+      for (const code of requiredEventCodes) {
+        if (!eventsByCode.has(code)) {
+          missingEvents.push(code);
+        }
+      }
+
+      for (const code of requiredPilotEventCodes) {
+        const event = eventsByCode.get(code);
+
+        if (event && event.is_pilot !== true) {
+          invalidPilotFlags.push({ actual: event.is_pilot, code, expected: true });
+        }
+      }
+
+      for (const code of ["AAM", "ENT", "ETDM", "HRM", "ACT", "BFS"]) {
+        const event = eventsByCode.get(code);
+
+        if (event && event.is_pilot !== false) {
+          invalidPilotFlags.push({ actual: event.is_pilot, code, expected: false });
+        }
+      }
+    }
+  }
+
   console.log("Database health check");
   console.log("");
   console.log("Tables OK:");
@@ -218,6 +275,22 @@ async function main() {
       : `- OK (${allowedProfileRoles.join(", ")})`,
   );
   console.log("");
+  console.log("Canonical DECA events:");
+  console.log(
+    missingEvents.length > 0
+      ? missingEvents.map((code) => `- Missing ${code}`).join("\n")
+      : `- OK (${requiredEventCodes.join(", ")})`,
+  );
+  console.log("");
+  console.log("Pilot event flags:");
+  console.log(
+    invalidPilotFlags.length > 0
+      ? invalidPilotFlags
+          .map(({ actual, code, expected }) => `- ${code}: expected ${expected}, found ${actual}`)
+          .join("\n")
+      : "- OK",
+  );
+  console.log("");
   console.log("Missing columns:");
   console.log(
     missingColumns.length > 0
@@ -234,7 +307,13 @@ async function main() {
       "The health check could not reach Supabase, so table and column status could not be verified. Confirm local env values, network access, and Supabase project availability, then rerun npm run check:db before deployment.",
     );
     process.exitCode = 1;
-  } else if (missingTables.length > 0 || missingColumns.length > 0 || invalidProfileRoles.length > 0) {
+  } else if (
+    missingTables.length > 0 ||
+    missingColumns.length > 0 ||
+    invalidProfileRoles.length > 0 ||
+    missingEvents.length > 0 ||
+    invalidPilotFlags.length > 0
+  ) {
     console.log("");
     console.log("Recommended SQL/migration note:");
     console.log(
