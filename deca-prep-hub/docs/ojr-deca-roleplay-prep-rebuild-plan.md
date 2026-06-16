@@ -966,22 +966,39 @@ Testing expectations:
 
 Goal:
 
-- Make the dashboard guide students toward weak concepts, upcoming locks, event readiness, and review tasks.
+- Turn existing student activity into readiness guidance without adding new AI grading.
+- Make the student dashboard point to the next useful action across MCS learning, roleplay practice, and exam practice.
+- Make admin/advisor analytics show chapter activity, weak MCS concepts, roleplay feedback trends, and content review queues.
 
 Major files likely affected:
 
+- `src/lib/server/readiness.ts`
+- `src/lib/services/readiness.ts`
+- `src/app/api/readiness/student/route.ts`
+- `src/app/api/readiness/admin/route.ts`
 - `src/components/dashboard/dashboard-view.tsx`
 - `src/app/analytics/page.tsx`
-- Learn analytics services.
+- `src/components/admin/admin-analytics-view.tsx`
 
 Database changes:
 
-- Aggregation views or indexes may be needed for mastery and attempt performance.
+- No database changes are required for the first Phase 8 implementation.
+- Additive views may be considered later if readiness queries become too slow.
+
+Implemented behavior:
+
+- Student `/dashboard` shows Continue Learning, Recommended Next Step, concept mastery distribution, weak MCS concepts, recent concept feedback, roleplay AI feedback summaries, exam trend, and recent activity counts.
+- Student `/analytics` remains the deeper attempt-history view and now adds concept mastery distribution, weak concepts, concept feedback summaries, and roleplay feedback summaries.
+- Admin `/admin/analytics` shows student activity, learning progress, roleplay feedback trends, exam progress, content review queues, and quick actions.
+- Readiness summaries are loaded through authenticated server API routes. User identity and admin/advisor access are derived server-side.
+- Dashboard sections degrade independently. A roleplay, exam, learning, or content queue query failure should show a section-level unavailable state instead of crashing the whole page.
+- Guided learning currently starts with MCS. Resource preparation and admin review queues remain broad across canonical DECA events.
 
 Risks:
 
 - Dashboard becoming noisy.
-- Optional data failures breaking core dashboard.
+- Optional data failures breaking core dashboard or analytics pages.
+- Admin queue counts becoming expensive if table sizes grow.
 
 Manual checks:
 
@@ -989,6 +1006,7 @@ Manual checks:
 - Active MCS student with attempts.
 - Admin/advisor account.
 - Optional analytics unavailable states.
+- Confirm `/dashboard`, `/analytics`, `/admin`, and `/admin/analytics` still load after prior phases.
 
 Testing expectations:
 

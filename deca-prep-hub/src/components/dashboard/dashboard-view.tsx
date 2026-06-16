@@ -11,17 +11,23 @@ import { getProfileDisplayName } from "@/lib/profile-display";
 import { AnalyticsService } from "@/lib/services/analytics";
 import { EXAM_ATTEMPTS_CHANGED_EVENT } from "@/lib/services/exam-attempts";
 import { getCurrentProfile } from "@/lib/services/profiles";
+import { ReadinessService } from "@/lib/services/readiness";
 import { ROLEPLAY_ATTEMPTS_CHANGED_EVENT } from "@/lib/services/roleplay-attempts";
 import type {
   AnalyticsAreaSummary,
   AnalyticsAttemptSummary,
+  Json,
   Profile,
   StudentAnalyticsSummary,
+  StudentReadinessSummary,
 } from "@/lib/types";
 
 type DashboardState = {
-  analytics: StudentAnalyticsSummary;
+  analytics: StudentAnalyticsSummary | null;
+  analyticsError: string | null;
   profile: Profile;
+  readiness: StudentReadinessSummary | null;
+  readinessError: string | null;
 };
 
 function formatDate(value: string | null | undefined) {
@@ -147,6 +153,22 @@ function AreaList({
   );
 }
 
+function jsonStringList(value: Json | null) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+}
+
+function ReadinessUnavailable({ message }: { message: string }) {
+  return (
+    <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-5 text-sm leading-6 text-slate-600">
+      {message}
+    </div>
+  );
+}
+
 export function DashboardView() {
   const [dashboard, setDashboard] = useState<DashboardState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -158,20 +180,40 @@ export function DashboardView() {
 
     async function loadDashboard() {
       try {
-        const [nextProfile, analytics] = await Promise.all([
-          getCurrentProfile(),
-          AnalyticsService.getStudentAnalytics(),
-        ]);
+        const nextProfile = await getCurrentProfile();
 
         if (!nextProfile) {
           throw new Error("No active profile was found for the current session.");
         }
 
+        const [analyticsResult, readinessResult] = await Promise.allSettled([
+          AnalyticsService.getStudentAnalytics(),
+          ReadinessService.getStudentReadinessSummary(),
+        ]);
+
         if (!isActive) {
           return;
         }
 
-        setDashboard({ analytics, profile: nextProfile });
+        setDashboard({
+          analytics:
+            analyticsResult.status === "fulfilled" ? analyticsResult.value : null,
+          analyticsError:
+            analyticsResult.status === "rejected"
+              ? analyticsResult.reason instanceof Error
+                ? analyticsResult.reason.message
+                : "Analytics unavailable."
+              : null,
+          profile: nextProfile,
+          readiness:
+            readinessResult.status === "fulfilled" ? readinessResult.value : null,
+          readinessError:
+            readinessResult.status === "rejected"
+              ? readinessResult.reason instanceof Error
+                ? readinessResult.reason.message
+                : "Readiness guidance unavailable."
+              : null,
+        });
         setError(null);
       } catch (caughtError) {
         if (!isActive) {
@@ -241,12 +283,13 @@ export function DashboardView() {
     );
   }
 
-  const { analytics, profile } = dashboard;
+  const { analytics, analyticsError, profile, readiness, readinessError } = dashboard;
   const isAdmin = isAdminRole(profile.role);
   const displayName = getProfileDisplayName(profile) ?? "member";
-  const hasAttempts = analytics.examsCompleted > 0;
-  const isExamAnalyticsUnavailable = Boolean(analytics.examAnalyticsUnavailable);
-  const isRoleplayPracticeUnavailable = Boolean(analytics.roleplayPracticeUnavailable);
+  const hasAttempts = (analytics?.examsCompleted ?? 0) > 0;
+  const isExamAnalyticsUnavailable = !analytics || Boolean(analytics.examAnalyticsUnavailable);
+  const isRoleplayPracticeUnavailable =
+    !analytics || Boolean(analytics.roleplayPracticeUnavailable);
 
   return (
     <>
@@ -267,40 +310,23 @@ export function DashboardView() {
 
       <section className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
         <Card className="!border-[var(--primary-soft-strong)] !bg-[var(--primary)] !text-white shadow-lg shadow-red-950/10 dark:!border-[var(--border-strong)] dark:shadow-black/30">
-          <p className="text-sm font-semibold text-white/80">Exam performance</p>
+          <p className="text-sm font-semibold text-white/80">Recommended next step</p>
           <h2 className="mt-3 text-3xl font-bold">
-            {isExamAnalyticsUnavailable
-              ? "Exam analytics unavailable"
-              : hasAttempts
-                ? `${analytics.averageScore}% average score`
-                : "Start your first graded exam"}
+            {readiness ? readiness.recommendedNextStep.title : "Readiness guidance unavailable"}
           </h2>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-white/85">
-            These numbers come from your saved exam attempts and update when an
-            attempt is added or deleted.
+            {readiness
+              ? readiness.recommendedNextStep.description
+              : readinessError ?? "Reload the dashboard when readiness data is available."}
           </p>
-          <div className="mt-6 grid gap-3 sm:grid-cols-3">
-            {[
-              [isExamAnalyticsUnavailable ? "N/A" : analytics.examsCompleted, "Exams completed"],
-              [
-                isExamAnalyticsUnavailable || analytics.bestScore === null
-                  ? "N/A"
-                  : `${analytics.bestScore}%`,
-                "Best score",
-              ],
-              [
-                isExamAnalyticsUnavailable || analytics.mostRecentScore === null
-                  ? "N/A"
-                  : `${analytics.mostRecentScore}%`,
-                "Most recent",
-              ],
-            ].map(([value, label]) => (
-              <div className="rounded-lg bg-white/10 p-4 ring-1 ring-white/20" key={label}>
-                <p className="text-2xl font-bold">{value}</p>
-                <p className="mt-1 text-xs font-medium text-white/75">{label}</p>
-              </div>
-            ))}
-          </div>
+          {readiness ? (
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <ButtonLink href={readiness.recommendedNextStep.href}>Continue</ButtonLink>
+              <span className="text-sm font-medium text-white/80">
+                {readiness.recommendedNextStep.reason}
+              </span>
+            </div>
+          ) : null}
         </Card>
 
         <Card>
@@ -320,32 +346,101 @@ export function DashboardView() {
         </Card>
       </section>
 
+      <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+        <Card>
+          <CardHeader eyebrow="Continue learning" title="MCS guided pathway" />
+          <p className="text-sm leading-6 text-slate-600">
+            Guided learning currently starts with MCS. Resource prep supports all DECA
+            events.
+          </p>
+          {readiness ? (
+            <>
+              <div className="mt-5 grid gap-2 sm:grid-cols-2">
+                {Object.entries(readiness.learning.masteryCounts).map(([status, count]) => (
+                  <div className="rounded-lg bg-slate-50 p-3" key={status}>
+                    <p className="text-2xl font-bold text-slate-950">{count}</p>
+                    <p className="mt-1 text-xs font-semibold capitalize text-slate-500">
+                      {status.replaceAll("_", " ")}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              <ButtonLink className="mt-5" href="/learn/mcs">
+                Open MCS learning
+              </ButtonLink>
+            </>
+          ) : (
+            <ReadinessUnavailable
+              message={readinessError ?? "Learning progress unavailable."}
+            />
+          )}
+        </Card>
+
+        <Card>
+          <CardHeader eyebrow="Concept mastery" title="Weakest concepts" />
+          {readiness && readiness.learning.weakestConcepts.length > 0 ? (
+            <div className="space-y-3">
+              {readiness.learning.weakestConcepts.map((concept) => (
+                <div
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-100 p-3"
+                  key={concept.id}
+                >
+                  <div>
+                    <p className="font-semibold text-slate-950">{concept.name}</p>
+                    <p className="mt-1 text-sm capitalize text-slate-500">
+                      {concept.status.replaceAll("_", " ")}
+                    </p>
+                  </div>
+                  <ButtonLink href={concept.href}>Practice</ButtonLink>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <ReadinessUnavailable
+              message={
+                readiness
+                  ? "No MCS concept mastery rows yet."
+                  : readinessError ?? "Learning progress unavailable."
+              }
+            />
+          )}
+        </Card>
+      </section>
+
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
           eyebrow="Attempts"
           title="Exams completed"
-          value={isExamAnalyticsUnavailable ? "N/A" : analytics.examsCompleted}
+          value={isExamAnalyticsUnavailable ? "N/A" : analytics?.examsCompleted ?? 0}
         />
         <StatCard
           eyebrow="Average"
           title="Average exam score"
-          value={!isExamAnalyticsUnavailable && hasAttempts ? `${analytics.averageScore}%` : "N/A"}
+          value={!isExamAnalyticsUnavailable && hasAttempts ? `${analytics?.averageScore}%` : "N/A"}
         />
         <StatCard
           eyebrow="Best"
           title="Best score"
           value={
-            isExamAnalyticsUnavailable || analytics.bestScore === null
+            isExamAnalyticsUnavailable || analytics?.bestScore === null
               ? "N/A"
-              : `${analytics.bestScore}%`
+              : `${analytics?.bestScore}%`
           }
         />
         <StatCard
           eyebrow="Roleplays"
           title="Practice attempts"
-          value={isRoleplayPracticeUnavailable ? "N/A" : analytics.roleplayAttemptsCompleted}
+          value={isRoleplayPracticeUnavailable ? "N/A" : analytics?.roleplayAttemptsCompleted ?? 0}
         />
       </section>
+
+      {analyticsError ? (
+        <Card className="border-amber-200 bg-amber-50">
+          <p className="text-sm font-semibold text-amber-950">
+            Analytics unavailable: {analyticsError}
+          </p>
+        </Card>
+      ) : null}
 
       <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
         <Card>
@@ -369,18 +464,50 @@ export function DashboardView() {
         </Card>
 
         <Card>
-          <CardHeader eyebrow="Roleplay practice" title="Latest attempts" />
-          {isRoleplayPracticeUnavailable ? (
+          <CardHeader eyebrow="Roleplay practice" title="Latest AI feedback" />
+          {readiness && readiness.recentRoleplayFeedback.items.length > 0 ? (
+            <div className="space-y-3">
+              {readiness.recentRoleplayFeedback.items.map((attempt) => {
+                const growthAreas = jsonStringList(attempt.growth_areas);
+
+                return (
+                  <div className="rounded-lg border border-slate-100 p-3" key={attempt.id}>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-slate-950">{attempt.resource_title}</p>
+                        <p className="mt-1 text-sm text-slate-500">
+                          {attempt.event_code ?? "Event TBD"} - {formatDate(attempt.created_at)}
+                        </p>
+                      </div>
+                      <Badge tone={attempt.ai_overall_score === null ? "slate" : "blue"}>
+                        {attempt.ai_overall_score === null
+                          ? attempt.ai_feedback_status
+                          : `${attempt.ai_overall_score}%`}
+                      </Badge>
+                    </div>
+                    {growthAreas[0] ? (
+                      <p className="mt-3 text-sm leading-6 text-slate-600">
+                        Focus: {growthAreas[0]}
+                      </p>
+                    ) : null}
+                    <ButtonLink className="mt-3" href={attempt.href}>
+                      Open
+                    </ButtonLink>
+                  </div>
+                );
+              })}
+            </div>
+          ) : isRoleplayPracticeUnavailable ? (
             <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-5 text-sm leading-6 text-slate-600">
               Roleplay practice data unavailable
             </div>
-          ) : analytics.recentRoleplayAttempts.length === 0 ? (
+          ) : analytics?.recentRoleplayAttempts.length === 0 ? (
             <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-5 text-sm leading-6 text-slate-600">
               No roleplay attempts yet. Save a written practice response to see it here.
             </div>
           ) : (
             <div className="space-y-3">
-              {analytics.recentRoleplayAttempts.map((attempt) => (
+              {analytics?.recentRoleplayAttempts.map((attempt) => (
                 <div
                   className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-100 p-3"
                   key={attempt.id}
@@ -403,7 +530,7 @@ export function DashboardView() {
         <Card>
           <CardHeader eyebrow="Instructional areas" title="Strong areas" />
           <AreaList
-            areas={isExamAnalyticsUnavailable ? [] : analytics.strongAreas}
+            areas={isExamAnalyticsUnavailable ? [] : analytics?.strongAreas ?? []}
             emptyLabel={
               isExamAnalyticsUnavailable
                 ? "Exam analytics unavailable"
@@ -415,7 +542,7 @@ export function DashboardView() {
         <Card>
           <CardHeader eyebrow="Instructional areas" title="Needs work" />
           <AreaList
-            areas={isExamAnalyticsUnavailable ? [] : analytics.weakAreas}
+            areas={isExamAnalyticsUnavailable ? [] : analytics?.weakAreas ?? []}
             emptyLabel={
               isExamAnalyticsUnavailable
                 ? "Exam analytics unavailable"
@@ -423,6 +550,102 @@ export function DashboardView() {
             }
             mode="weak"
           />
+        </Card>
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-3">
+        <Card>
+          <CardHeader eyebrow="Concept feedback" title="Recent feedback" />
+          {readiness && readiness.recentConceptFeedback.items.length > 0 ? (
+            <div className="space-y-3">
+              {readiness.recentConceptFeedback.items.slice(0, 3).map((item) => (
+                <div className="rounded-lg border border-slate-100 p-3" key={item.id}>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="font-semibold text-slate-950">{item.concept_name}</p>
+                    <Badge tone={item.has_revision ? "green" : "amber"}>
+                      {item.has_revision ? "Revised" : "Needs revision"}
+                    </Badge>
+                  </div>
+                  <p className="mt-2 text-sm text-slate-600">
+                    Score: {item.score ?? "N/A"}
+                    {item.revision_score === null ? "" : ` -> ${item.revision_score}`}
+                  </p>
+                  <ButtonLink className="mt-3" href={item.href}>
+                    Open
+                  </ButtonLink>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <ReadinessUnavailable
+              message={readiness ? "No concept feedback yet." : "Concept feedback unavailable."}
+            />
+          )}
+        </Card>
+
+        <Card>
+          <CardHeader eyebrow="Exam practice" title="Score trend" />
+          {readiness && readiness.exam.trend.length > 0 ? (
+            <div className="space-y-3">
+              {readiness.exam.trend.slice(0, 4).map((attempt) => (
+                <div
+                  className="flex items-center justify-between gap-4 rounded-lg border border-slate-100 p-3"
+                  key={attempt.id}
+                >
+                  <div>
+                    <p className="font-semibold text-slate-950">{attempt.resource_title}</p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {formatDate(attempt.completed_at)}
+                    </p>
+                  </div>
+                  <Badge tone={attempt.percentage >= 70 ? "green" : "amber"}>
+                    {attempt.percentage}%
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <ReadinessUnavailable
+              message={readiness ? "No exam attempts yet." : "Exam analytics unavailable."}
+            />
+          )}
+        </Card>
+
+        <Card>
+          <CardHeader eyebrow="Activity" title="Last 7 days" />
+          {readiness ? (
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between gap-4">
+                <span className="text-slate-600">Question attempts</span>
+                <span className="font-semibold text-slate-950">
+                  {readiness.activity.summary.recentQuestionAttempts}
+                </span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-slate-600">Concept feedback</span>
+                <span className="font-semibold text-slate-950">
+                  {readiness.activity.summary.recentConceptFeedback}
+                </span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-slate-600">Roleplay attempts</span>
+                <span className="font-semibold text-slate-950">
+                  {readiness.activity.summary.recentRoleplayAttempts}
+                </span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-slate-600">Exam attempts</span>
+                <span className="font-semibold text-slate-950">
+                  {readiness.activity.summary.recentExamAttempts}
+                </span>
+              </div>
+              <p className="pt-2 text-xs font-semibold text-slate-500">
+                Last practiced: {formatDate(readiness.activity.summary.lastPracticedAt)}
+              </p>
+            </div>
+          ) : (
+            <ReadinessUnavailable message="Activity summary unavailable." />
+          )}
         </Card>
       </section>
 

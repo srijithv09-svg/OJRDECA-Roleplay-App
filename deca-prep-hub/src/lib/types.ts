@@ -501,6 +501,163 @@ export type AdminAnalyticsSummary = {
   approvalCounts: Record<"approved" | "pending" | "rejected", number>;
 };
 
+export type ReadinessSectionStatus = "ok" | "unavailable";
+
+export type StudentConceptMasteryReadiness = {
+  status: ReadinessSectionStatus;
+  error?: string;
+  eventCode: string;
+  eventName: string | null;
+  conceptCount: number;
+  keySetCount: number;
+  masteryCounts: Record<ConceptMasteryStatus, number>;
+  weakestConcepts: Array<{
+    id: string;
+    name: string;
+    status: ConceptMasteryStatus;
+    explain_score: number | null;
+    improve_score: number | null;
+    href: string;
+  }>;
+};
+
+export type StudentRecommendedNextStep = {
+  title: string;
+  description: string;
+  href: string;
+  reason: string;
+};
+
+export type StudentConceptFeedbackSummary = {
+  id: string;
+  concept_id: string;
+  concept_name: string;
+  score: number | null;
+  revision_score: number | null;
+  status: ConceptFeedbackAttemptStatus;
+  has_revision: boolean;
+  created_at: string | null;
+  href: string;
+};
+
+export type StudentRoleplayFeedbackSummary = {
+  id: string;
+  resource_id: string;
+  resource_title: string;
+  event_code: string | null;
+  ai_overall_score: number | null;
+  ai_feedback_status: AttemptProcessingStatus;
+  strengths: Json | null;
+  growth_areas: Json | null;
+  created_at: string | null;
+  href: string;
+};
+
+export type StudentExamReadinessSummary = {
+  status: ReadinessSectionStatus;
+  error?: string;
+  attemptsCount: number;
+  averageScore: number;
+  bestScore: number | null;
+  mostRecentScore: number | null;
+  trend: Array<{
+    id: string;
+    resource_title: string;
+    percentage: number;
+    completed_at: string | null;
+  }>;
+};
+
+export type StudentActivityReadinessSummary = {
+  recentQuestionAttempts: number;
+  recentConceptFeedback: number;
+  recentRoleplayAttempts: number;
+  recentExamAttempts: number;
+  lastPracticedAt: string | null;
+};
+
+export type StudentReadinessSummary = {
+  generatedAt: string;
+  learning: StudentConceptMasteryReadiness;
+  recommendedNextStep: StudentRecommendedNextStep;
+  recentConceptFeedback: {
+    status: ReadinessSectionStatus;
+    error?: string;
+    items: StudentConceptFeedbackSummary[];
+  };
+  recentRoleplayFeedback: {
+    status: ReadinessSectionStatus;
+    error?: string;
+    items: StudentRoleplayFeedbackSummary[];
+  };
+  exam: StudentExamReadinessSummary;
+  activity: {
+    status: ReadinessSectionStatus;
+    error?: string;
+    summary: StudentActivityReadinessSummary;
+  };
+};
+
+export type AdminReadinessSummary = {
+  generatedAt: string;
+  studentActivity: {
+    status: ReadinessSectionStatus;
+    error?: string;
+    totalProfiles: number;
+    totalStudents: number;
+    activeLast7Days: number;
+    studentsWithRecentAttempts: number;
+    inactiveStudents: Array<{ id: string; email: string | null }>;
+  };
+  learningProgress: {
+    status: ReadinessSectionStatus;
+    error?: string;
+    masteryCounts: Record<ConceptMasteryStatus, number>;
+    conceptFeedbackAttempts: number;
+    completedRevisions: number;
+    weakestConcepts: Array<{
+      id: string;
+      name: string;
+      studentsPracticing: number;
+      averageExplainScore: number | null;
+      averageImproveScore: number | null;
+    }>;
+  };
+  roleplayProgress: {
+    status: ReadinessSectionStatus;
+    error?: string;
+    attemptsCount: number;
+    feedbackCompletedCount: number;
+    averageAiScore: number | null;
+    commonGrowthAreas: string[];
+    recentFeedback: StudentRoleplayFeedbackSummary[];
+  };
+  examProgress: {
+    status: ReadinessSectionStatus;
+    error?: string;
+    attemptsCount: number;
+    averageScore: number | null;
+    recentExams: Array<{
+      id: string;
+      user_email: string | null;
+      resource_title: string;
+      percentage: number;
+      completed_at: string | null;
+    }>;
+  };
+  contentReviewQueue: {
+    status: ReadinessSectionStatus;
+    error?: string;
+    pendingResources: number;
+    jobsNeedingReview: number;
+    questionsNeedingReview: number;
+    roleplaysNeedingReview: number;
+    performanceIndicatorsNeedingReview: number;
+    answerKeysNeedingReview: number;
+    rubricsNeedingReview: number;
+  };
+};
+
 export type ExamAttemptResult = {
   attempt: ExamAttempt;
   resource: PublicExamResource;

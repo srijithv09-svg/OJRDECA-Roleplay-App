@@ -9,8 +9,10 @@ import { ResourceErrorState } from "@/components/resources/resource-states";
 import { isAdminRole } from "@/lib/auth";
 import { AnalyticsService } from "@/lib/services/analytics";
 import { getCurrentOwnProfile } from "@/lib/services/profiles";
+import { ReadinessService } from "@/lib/services/readiness";
 import type {
   AdminAnalyticsSummary,
+  AdminReadinessSummary,
   AnalyticsAreaSummary,
   AnalyticsAttemptSummary,
   Profile,
@@ -158,9 +160,11 @@ function RecentAttemptRows({ attempts }: { attempts: AnalyticsAttemptSummary[] }
 export function AdminAnalyticsView() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [analytics, setAnalytics] = useState<AdminAnalyticsSummary | null>(null);
+  const [readiness, setReadiness] = useState<AdminReadinessSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [analyticsError, setAnalyticsError] = useState<string | null>(null);
+  const [readinessError, setReadinessError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
@@ -192,25 +196,45 @@ export function AdminAnalyticsView() {
 
       if (!isAdminRole(nextProfile?.role)) {
         setAnalytics(null);
+        setReadiness(null);
         setAnalyticsError(null);
+        setReadinessError(null);
         return;
       }
 
       try {
-        const nextAnalytics = await AnalyticsService.getAdminAnalytics();
+        const [analyticsResult, readinessResult] = await Promise.allSettled([
+          AnalyticsService.getAdminAnalytics(),
+          ReadinessService.getAdminReadinessSummary(),
+        ]);
 
         if (!isActive) {
           return;
         }
 
-        setAnalytics(nextAnalytics);
-        setAnalyticsError(null);
+        setAnalytics(analyticsResult.status === "fulfilled" ? analyticsResult.value : null);
+        setReadiness(readinessResult.status === "fulfilled" ? readinessResult.value : null);
+        setAnalyticsError(
+          analyticsResult.status === "rejected"
+            ? analyticsResult.reason instanceof Error
+              ? analyticsResult.reason.message
+              : "Unable to load admin analytics."
+            : null,
+        );
+        setReadinessError(
+          readinessResult.status === "rejected"
+            ? readinessResult.reason instanceof Error
+              ? readinessResult.reason.message
+              : "Unable to load admin readiness."
+            : null,
+        );
       } catch (caughtError) {
         if (!isActive) {
           return;
         }
 
         setAnalytics(null);
+        setReadiness(null);
         setAnalyticsError(
           caughtError instanceof Error ? caughtError.message : "Unable to load admin analytics.",
         );
@@ -241,6 +265,7 @@ export function AdminAnalyticsView() {
     setIsLoading(true);
     setProfileError(null);
     setAnalyticsError(null);
+    setReadinessError(null);
     setReloadKey((currentKey) => currentKey + 1);
   }
 
@@ -309,6 +334,14 @@ export function AdminAnalyticsView() {
         />
       ) : null}
 
+      {readinessError ? (
+        <Card className="border-amber-200 bg-amber-50">
+          <p className="text-sm font-semibold text-amber-950">
+            Admin readiness unavailable: {readinessError}
+          </p>
+        </Card>
+      ) : null}
+
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard eyebrow="Attempts" label="Total attempts" value={analytics.totalAttempts} />
         <StatCard eyebrow="Scores" label="Average score" value={`${analytics.averageScore}%`} />
@@ -323,6 +356,143 @@ export function AdminAnalyticsView() {
           value={analytics.approvalCounts.approved}
         />
       </section>
+
+      {readiness ? (
+        <>
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <StatCard
+              eyebrow="Students"
+              label="Active in last 7 days"
+              value={readiness.studentActivity.activeLast7Days}
+            />
+            <StatCard
+              eyebrow="Learning"
+              label="Concept feedback attempts"
+              value={readiness.learningProgress.conceptFeedbackAttempts}
+            />
+            <StatCard
+              eyebrow="Roleplays"
+              label="Average AI score"
+              value={
+                readiness.roleplayProgress.averageAiScore === null
+                  ? "N/A"
+                  : `${readiness.roleplayProgress.averageAiScore}%`
+              }
+            />
+            <StatCard
+              eyebrow="Review"
+              label="Items needing review"
+              value={
+                readiness.contentReviewQueue.pendingResources +
+                readiness.contentReviewQueue.jobsNeedingReview +
+                readiness.contentReviewQueue.questionsNeedingReview +
+                readiness.contentReviewQueue.roleplaysNeedingReview +
+                readiness.contentReviewQueue.performanceIndicatorsNeedingReview +
+                readiness.contentReviewQueue.answerKeysNeedingReview +
+                readiness.contentReviewQueue.rubricsNeedingReview
+              }
+            />
+          </section>
+
+          <section className="grid gap-4 xl:grid-cols-3">
+            <Card>
+              <CardHeader eyebrow="Student activity" title="Chapter activity" />
+              <div className="space-y-3 text-sm">
+                <div className="flex justify-between gap-4">
+                  <span className="text-slate-600">Total students</span>
+                  <span className="font-semibold text-slate-950">
+                    {readiness.studentActivity.totalStudents}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-slate-600">Students with recent attempts</span>
+                  <span className="font-semibold text-slate-950">
+                    {readiness.studentActivity.studentsWithRecentAttempts}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-slate-600">Inactive students listed</span>
+                  <span className="font-semibold text-slate-950">
+                    {readiness.studentActivity.inactiveStudents.length}
+                  </span>
+                </div>
+              </div>
+            </Card>
+
+            <Card>
+              <CardHeader eyebrow="Learning" title="Weakest MCS concepts" />
+              {readiness.learningProgress.weakestConcepts.length === 0 ? (
+                <p className="text-sm leading-6 text-slate-600">
+                  No concept mastery data yet.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {readiness.learningProgress.weakestConcepts.slice(0, 5).map((concept) => (
+                    <div className="rounded-lg border border-slate-100 p-3" key={concept.id}>
+                      <div className="flex items-center justify-between gap-3 text-sm">
+                        <span className="font-semibold text-slate-950">{concept.name}</span>
+                        <Badge tone="amber">{concept.studentsPracticing} practicing</Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+
+            <Card>
+              <CardHeader eyebrow="Review queue" title="Content needing review" />
+              <div className="space-y-2 text-sm">
+                {[
+                  ["Resources", readiness.contentReviewQueue.pendingResources],
+                  ["Extraction jobs", readiness.contentReviewQueue.jobsNeedingReview],
+                  ["Questions", readiness.contentReviewQueue.questionsNeedingReview],
+                  ["Roleplays", readiness.contentReviewQueue.roleplaysNeedingReview],
+                  ["PIs", readiness.contentReviewQueue.performanceIndicatorsNeedingReview],
+                  ["Answer keys", readiness.contentReviewQueue.answerKeysNeedingReview],
+                  ["Rubrics", readiness.contentReviewQueue.rubricsNeedingReview],
+                ].map(([label, count]) => (
+                  <div
+                    className="flex items-center justify-between gap-4 rounded-lg bg-slate-50 px-3 py-2"
+                    key={label}
+                  >
+                    <span className="font-medium text-slate-700">{label}</span>
+                    <span className="font-semibold text-slate-950">{count}</span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </section>
+
+          <section className="grid gap-4 xl:grid-cols-2">
+            <Card>
+              <CardHeader eyebrow="Roleplay feedback" title="Common growth areas" />
+              {readiness.roleplayProgress.commonGrowthAreas.length === 0 ? (
+                <p className="text-sm leading-6 text-slate-600">
+                  Roleplay feedback trends appear after students generate AI practice feedback.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {readiness.roleplayProgress.commonGrowthAreas.map((area) => (
+                    <div className="rounded-lg border border-slate-100 p-3" key={area}>
+                      <p className="text-sm font-semibold text-slate-950">{area}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+
+            <Card>
+              <CardHeader eyebrow="Quick actions" title="Admin workspace" />
+              <div className="grid gap-2 sm:grid-cols-2">
+                <ButtonLink href="/admin/upload">Upload Resources</ButtonLink>
+                <ButtonLink href="/admin/ai-review">AI Review</ButtonLink>
+                <ButtonLink href="/admin/exam-keys">Exam Keys</ButtonLink>
+                <ButtonLink href="/admin/users">Users & Roles</ButtonLink>
+              </div>
+            </Card>
+          </section>
+        </>
+      ) : null}
 
       {analytics.profileCountUnavailable ? (
         <Card className="border-amber-200 bg-amber-50">

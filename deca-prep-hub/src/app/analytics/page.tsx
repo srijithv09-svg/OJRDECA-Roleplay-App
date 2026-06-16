@@ -12,11 +12,14 @@ import {
   EXAM_ATTEMPTS_CHANGED_EVENT,
   ExamAttemptsService,
 } from "@/lib/services/exam-attempts";
+import { ReadinessService } from "@/lib/services/readiness";
 import type {
   AnalyticsAreaSummary,
   AnalyticsAttemptSummary,
+  Json,
   RoleplayAttemptSummary,
   StudentAnalyticsSummary,
+  StudentReadinessSummary,
 } from "@/lib/types";
 
 function formatDate(value: string | null | undefined) {
@@ -149,10 +152,20 @@ function RoleplayAttemptRow({ attempt }: { attempt: RoleplayAttemptSummary }) {
   );
 }
 
+function jsonStringList(value: Json | null) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+}
+
 export default function AnalyticsPage() {
   const [analytics, setAnalytics] = useState<StudentAnalyticsSummary | null>(null);
+  const [readiness, setReadiness] = useState<StudentReadinessSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [readinessError, setReadinessError] = useState<string | null>(null);
   const [deletingAttemptId, setDeletingAttemptId] = useState<string | null>(null);
   const [deleteDialogAttemptId, setDeleteDialogAttemptId] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -162,20 +175,38 @@ export default function AnalyticsPage() {
 
     async function loadAnalytics() {
       try {
-        const nextAnalytics = await AnalyticsService.getStudentAnalytics();
+        const [analyticsResult, readinessResult] = await Promise.allSettled([
+          AnalyticsService.getStudentAnalytics(),
+          ReadinessService.getStudentReadinessSummary(),
+        ]);
 
         if (!isActive) {
           return;
         }
 
-        setAnalytics(nextAnalytics);
-        setError(null);
+        setAnalytics(analyticsResult.status === "fulfilled" ? analyticsResult.value : null);
+        setReadiness(readinessResult.status === "fulfilled" ? readinessResult.value : null);
+        setError(
+          analyticsResult.status === "rejected"
+            ? analyticsResult.reason instanceof Error
+              ? analyticsResult.reason.message
+              : "Unable to load analytics."
+            : null,
+        );
+        setReadinessError(
+          readinessResult.status === "rejected"
+            ? readinessResult.reason instanceof Error
+              ? readinessResult.reason.message
+              : "Unable to load readiness intelligence."
+            : null,
+        );
       } catch (caughtError) {
         if (!isActive) {
           return;
         }
 
         setAnalytics(null);
+        setReadiness(null);
         setError(
           caughtError instanceof Error ? caughtError.message : "Unable to load analytics.",
         );
@@ -210,6 +241,7 @@ export default function AnalyticsPage() {
   function retryLoad() {
     setIsLoading(true);
     setError(null);
+    setReadinessError(null);
     setReloadKey((currentKey) => currentKey + 1);
   }
 
@@ -234,17 +266,18 @@ export default function AnalyticsPage() {
     return <ResourceLoadingState />;
   }
 
-  if (error && !analytics) {
+  if (error && !analytics && !readiness) {
     return <ResourceErrorState message={error} onRetry={retryLoad} />;
   }
 
-  if (!analytics) {
+  if (!analytics && !readiness) {
     return null;
   }
 
-  const hasAttempts = analytics.examsCompleted > 0;
-  const isExamAnalyticsUnavailable = Boolean(analytics.examAnalyticsUnavailable);
-  const isRoleplayPracticeUnavailable = Boolean(analytics.roleplayPracticeUnavailable);
+  const hasAttempts = (analytics?.examsCompleted ?? 0) > 0;
+  const isExamAnalyticsUnavailable = !analytics || Boolean(analytics.examAnalyticsUnavailable);
+  const isRoleplayPracticeUnavailable =
+    !analytics || Boolean(analytics.roleplayPracticeUnavailable);
 
   return (
     <>
@@ -256,6 +289,13 @@ export default function AnalyticsPage() {
       />
 
       {error ? <ResourceErrorState message={error} onRetry={retryLoad} /> : null}
+      {readinessError ? (
+        <Card className="border-amber-200 bg-amber-50">
+          <p className="text-sm font-semibold text-amber-950">
+            Readiness intelligence unavailable: {readinessError}
+          </p>
+        </Card>
+      ) : null}
 
       {deleteDialogAttemptId ? (
         <DeleteAttemptDialog
@@ -270,28 +310,96 @@ export default function AnalyticsPage() {
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Exams completed"
-          value={isExamAnalyticsUnavailable ? "N/A" : analytics.examsCompleted}
+          value={isExamAnalyticsUnavailable ? "N/A" : analytics?.examsCompleted ?? 0}
         />
         <StatCard
           label="Average score"
-          value={!isExamAnalyticsUnavailable && hasAttempts ? `${analytics.averageScore}%` : "N/A"}
+          value={!isExamAnalyticsUnavailable && hasAttempts ? `${analytics?.averageScore}%` : "N/A"}
         />
         <StatCard
           label="Best score"
           value={
-            isExamAnalyticsUnavailable || analytics.bestScore === null
+            isExamAnalyticsUnavailable || analytics?.bestScore === null
               ? "N/A"
-              : `${analytics.bestScore}%`
+              : `${analytics?.bestScore}%`
           }
         />
         <StatCard
           label="Most recent"
           value={
-            isExamAnalyticsUnavailable || analytics.mostRecentScore === null
+            isExamAnalyticsUnavailable || analytics?.mostRecentScore === null
               ? "N/A"
-              : `${analytics.mostRecentScore}%`
+              : `${analytics?.mostRecentScore}%`
           }
         />
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-3">
+        <Card>
+          <CardHeader eyebrow="Mastery" title="MCS concept distribution" />
+          {readiness ? (
+            <div className="space-y-3">
+              {Object.entries(readiness.learning.masteryCounts).map(([status, count]) => (
+                <div
+                  className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 p-3 text-sm"
+                  key={status}
+                >
+                  <span className="font-semibold capitalize text-slate-950">
+                    {status.replaceAll("_", " ")}
+                  </span>
+                  <Badge tone={status === "mastered" ? "green" : "blue"}>{count}</Badge>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm leading-6 text-slate-600">Learning progress unavailable.</p>
+          )}
+        </Card>
+
+        <Card>
+          <CardHeader eyebrow="Weak concepts" title="Next concept focus" />
+          {readiness && readiness.learning.weakestConcepts.length > 0 ? (
+            <div className="space-y-3">
+              {readiness.learning.weakestConcepts.slice(0, 4).map((concept) => (
+                <Link
+                  className="block rounded-lg border border-slate-100 p-3 transition hover:border-blue-200 hover:bg-blue-50"
+                  href={concept.href}
+                  key={concept.id}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="font-semibold text-slate-950">{concept.name}</p>
+                    <Badge tone="amber">{concept.status.replaceAll("_", " ")}</Badge>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm leading-6 text-slate-600">No weak concepts to show yet.</p>
+          )}
+        </Card>
+
+        <Card>
+          <CardHeader eyebrow="Feedback" title="Recent AI summaries" />
+          {readiness && readiness.recentConceptFeedback.items.length > 0 ? (
+            <div className="space-y-3">
+              {readiness.recentConceptFeedback.items.slice(0, 4).map((item) => (
+                <Link
+                  className="block rounded-lg border border-slate-100 p-3 transition hover:border-blue-200 hover:bg-blue-50"
+                  href={item.href}
+                  key={item.id}
+                >
+                  <p className="font-semibold text-slate-950">{item.concept_name}</p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Score {item.score ?? "N/A"}
+                    {item.revision_score === null ? "" : ` -> ${item.revision_score}`}
+                  </p>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm leading-6 text-slate-600">No concept feedback yet.</p>
+          )}
+        </Card>
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
@@ -301,14 +409,14 @@ export default function AnalyticsPage() {
             <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-5 text-sm leading-6 text-slate-600">
               Roleplay practice data unavailable
             </div>
-          ) : analytics.recentRoleplayAttempts.length === 0 ? (
+          ) : analytics?.recentRoleplayAttempts.length === 0 ? (
             <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-5 text-sm leading-6 text-slate-600">
               No roleplay attempts yet. Open an approved roleplay and save a practice response to
               start building this history.
             </div>
           ) : (
             <div className="space-y-3">
-              {analytics.recentRoleplayAttempts.map((attempt) => (
+              {analytics?.recentRoleplayAttempts.map((attempt) => (
                 <RoleplayAttemptRow attempt={attempt} key={attempt.id} />
               ))}
             </div>
@@ -318,19 +426,19 @@ export default function AnalyticsPage() {
         <Card>
           <CardHeader eyebrow="Roleplays" title="Most practiced events" />
           <p className="mb-4 text-4xl font-bold text-slate-950">
-            {isRoleplayPracticeUnavailable ? "N/A" : analytics.roleplayAttemptsCompleted}
+            {isRoleplayPracticeUnavailable ? "N/A" : analytics?.roleplayAttemptsCompleted}
           </p>
           {isRoleplayPracticeUnavailable ? (
             <p className="text-sm leading-6 text-slate-600">
               Roleplay practice data unavailable
             </p>
-          ) : analytics.mostPracticedEventCodes.length === 0 ? (
+          ) : analytics?.mostPracticedEventCodes.length === 0 ? (
             <p className="text-sm leading-6 text-slate-600">
               Event-code practice counts appear after you save roleplay attempts.
             </p>
           ) : (
             <div className="space-y-2">
-              {analytics.mostPracticedEventCodes.map((event) => (
+              {analytics?.mostPracticedEventCodes.map((event) => (
                 <div
                   className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 p-3 text-sm"
                   key={event.event_code}
@@ -344,6 +452,52 @@ export default function AnalyticsPage() {
         </Card>
       </section>
 
+      <Card>
+        <CardHeader eyebrow="Roleplay AI feedback" title="Recent feedback summaries" />
+        {readiness && readiness.recentRoleplayFeedback.items.length > 0 ? (
+          <div className="grid gap-3 lg:grid-cols-2">
+            {readiness.recentRoleplayFeedback.items.map((attempt) => {
+              const strengths = jsonStringList(attempt.strengths);
+              const growthAreas = jsonStringList(attempt.growth_areas);
+
+              return (
+                <Link
+                  className="rounded-lg border border-slate-100 p-3 transition hover:border-blue-200 hover:bg-blue-50"
+                  href={attempt.href}
+                  key={attempt.id}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="font-semibold text-slate-950">{attempt.resource_title}</p>
+                    <Badge tone={attempt.ai_overall_score === null ? "slate" : "blue"}>
+                      {attempt.ai_overall_score === null
+                        ? attempt.ai_feedback_status
+                        : `${attempt.ai_overall_score}%`}
+                    </Badge>
+                  </div>
+                  <p className="mt-2 text-sm text-slate-500">
+                    {attempt.event_code ?? "Event TBD"} - {formatDate(attempt.created_at)}
+                  </p>
+                  {strengths[0] ? (
+                    <p className="mt-3 text-sm leading-6 text-slate-600">
+                      Strength: {strengths[0]}
+                    </p>
+                  ) : null}
+                  {growthAreas[0] ? (
+                    <p className="mt-1 text-sm leading-6 text-slate-600">
+                      Focus: {growthAreas[0]}
+                    </p>
+                  ) : null}
+                </Link>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-sm leading-6 text-slate-600">
+            Generate roleplay practice feedback to see strengths and growth areas here.
+          </p>
+        )}
+      </Card>
+
       <section className="grid gap-4 xl:grid-cols-[1.5fr_1fr]">
         <Card>
           <CardHeader eyebrow="Trend" title="Score trend" />
@@ -354,7 +508,7 @@ export default function AnalyticsPage() {
                 Roleplay practice data will still appear if it is available.
               </p>
             </div>
-          ) : analytics.attemptHistory.length === 0 ? (
+          ) : analytics?.attemptHistory.length === 0 ? (
             <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4">
               <p className="font-semibold text-slate-800">No trend yet</p>
               <p className="mt-1 text-sm leading-6 text-slate-600">
@@ -363,7 +517,7 @@ export default function AnalyticsPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {analytics.attemptHistory.slice(0, 10).map((attempt) => (
+              {analytics?.attemptHistory.slice(0, 10).map((attempt) => (
                 <div className="rounded-lg border border-slate-100 p-3" key={attempt.id}>
                   <div className="flex items-center justify-between gap-4 text-sm">
                     <span className="font-semibold text-slate-950">{attempt.resource_title}</span>
@@ -390,7 +544,7 @@ export default function AnalyticsPage() {
                 Missed questions cannot be loaded right now.
               </p>
             </div>
-          ) : analytics.missedQuestions.length === 0 ? (
+          ) : analytics?.missedQuestions.length === 0 ? (
             <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4">
               <p className="font-semibold text-slate-800">
                 {hasAttempts ? "No missed questions saved" : "No missed questions yet"}
@@ -403,7 +557,7 @@ export default function AnalyticsPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {analytics.missedQuestions.slice(0, 8).map((miss) => (
+              {analytics?.missedQuestions.slice(0, 8).map((miss) => (
                 <Link
                   className="block rounded-lg border border-slate-100 p-3 transition hover:border-blue-200 hover:bg-blue-50"
                   href={`/exams/attempts/${miss.attempt_id}`}
@@ -422,7 +576,7 @@ export default function AnalyticsPage() {
 
       <section className="grid gap-4 lg:grid-cols-2">
         <AreaCard
-          areas={isExamAnalyticsUnavailable ? [] : analytics.strongAreas}
+          areas={isExamAnalyticsUnavailable ? [] : analytics?.strongAreas ?? []}
           emptyLabel={
             isExamAnalyticsUnavailable
               ? "Exam analytics unavailable"
@@ -432,7 +586,7 @@ export default function AnalyticsPage() {
           tone="green"
         />
         <AreaCard
-          areas={isExamAnalyticsUnavailable ? [] : analytics.weakAreas}
+          areas={isExamAnalyticsUnavailable ? [] : analytics?.weakAreas ?? []}
           emptyLabel={
             isExamAnalyticsUnavailable
               ? "Exam analytics unavailable"
@@ -449,13 +603,13 @@ export default function AnalyticsPage() {
           <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-5 text-sm leading-6 text-slate-600">
             Exam analytics unavailable
           </div>
-        ) : analytics.attemptHistory.length === 0 ? (
+        ) : analytics?.attemptHistory.length === 0 ? (
           <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-5 text-sm leading-6 text-slate-600">
             No attempts yet. Open an exam with an answer key to start building your analytics.
           </div>
         ) : (
           <div className="space-y-3">
-            {analytics.attemptHistory.map((attempt) => (
+            {analytics?.attemptHistory.map((attempt) => (
               <AttemptHistoryRow
                 attempt={attempt}
                 deletingAttemptId={deletingAttemptId}
