@@ -28,6 +28,8 @@ export const BasicGeminiHealthResultSchema = z.object({
 const nullableString = z.string().nullable().optional();
 const nullableInteger = z.number().int().nullable().optional();
 const confidence = z.number().min(0).max(1);
+const score100 = z.number().min(0).max(100);
+const feedbackList = z.array(z.string().min(1)).default([]);
 
 export const ExamExtractionResultSchema = z.object({
   resourceType: z.literal("exam"),
@@ -128,12 +130,43 @@ export const RubricExtractionResultSchema = z.object({
   warnings: z.array(z.string()).default([]),
 });
 
+export const ConceptFeedbackResultSchema = z.object({
+  overallScore: score100,
+  definitionAccuracyScore: score100,
+  scenarioConnectionScore: score100,
+  businessReasoningScore: score100,
+  decaVocabularyScore: score100,
+  specificityScore: score100,
+  aboveAndBeyondScore: score100,
+  strengths: feedbackList,
+  improvements: feedbackList,
+  missingElements: feedbackList,
+  suggestedRevisionFocus: feedbackList,
+  feedbackSummary: z.string().min(1),
+  nextStepPrompt: z.string().min(1),
+});
+
+export const ConceptRevisionFeedbackResultSchema = z.object({
+  originalScore: score100,
+  revisedScore: score100,
+  improvementScore: score100,
+  improvedAreas: feedbackList,
+  stillNeedsWork: feedbackList,
+  improvementSummary: z.string().min(1),
+  masteryRecommendation: z.string().min(1),
+  finalFeedbackSummary: z.string().min(1),
+});
+
 export type ResourceClassificationResult = z.infer<typeof ResourceClassificationResultSchema>;
 export type BasicGeminiHealthResult = z.infer<typeof BasicGeminiHealthResultSchema>;
 export type ExamExtractionResult = z.infer<typeof ExamExtractionResultSchema>;
 export type AnswerKeyExtractionResult = z.infer<typeof AnswerKeyExtractionResultSchema>;
 export type RoleplayExtractionResult = z.infer<typeof RoleplayExtractionResultSchema>;
 export type RubricExtractionResult = z.infer<typeof RubricExtractionResultSchema>;
+export type ConceptFeedbackResult = z.infer<typeof ConceptFeedbackResultSchema>;
+export type ConceptRevisionFeedbackResult = z.infer<
+  typeof ConceptRevisionFeedbackResultSchema
+>;
 
 const nullableStringSchema = {
   type: ["string", "null"],
@@ -161,6 +194,12 @@ const stringArraySchema = {
   items: {
     type: "string",
   },
+};
+
+const score100Schema = {
+  type: "number",
+  minimum: 0,
+  maximum: 100,
 };
 
 export const resourceClassificationJsonSchema = {
@@ -424,6 +463,66 @@ export const rubricExtractionJsonSchema = {
     "criteria",
     "overallConfidence",
     "warnings",
+  ],
+  additionalProperties: false,
+};
+
+export const conceptFeedbackJsonSchema = {
+  type: "object",
+  properties: {
+    overallScore: score100Schema,
+    definitionAccuracyScore: score100Schema,
+    scenarioConnectionScore: score100Schema,
+    businessReasoningScore: score100Schema,
+    decaVocabularyScore: score100Schema,
+    specificityScore: score100Schema,
+    aboveAndBeyondScore: score100Schema,
+    strengths: stringArraySchema,
+    improvements: stringArraySchema,
+    missingElements: stringArraySchema,
+    suggestedRevisionFocus: stringArraySchema,
+    feedbackSummary: { type: "string" },
+    nextStepPrompt: { type: "string" },
+  },
+  required: [
+    "overallScore",
+    "definitionAccuracyScore",
+    "scenarioConnectionScore",
+    "businessReasoningScore",
+    "decaVocabularyScore",
+    "specificityScore",
+    "aboveAndBeyondScore",
+    "strengths",
+    "improvements",
+    "missingElements",
+    "suggestedRevisionFocus",
+    "feedbackSummary",
+    "nextStepPrompt",
+  ],
+  additionalProperties: false,
+};
+
+export const conceptRevisionFeedbackJsonSchema = {
+  type: "object",
+  properties: {
+    originalScore: score100Schema,
+    revisedScore: score100Schema,
+    improvementScore: score100Schema,
+    improvedAreas: stringArraySchema,
+    stillNeedsWork: stringArraySchema,
+    improvementSummary: { type: "string" },
+    masteryRecommendation: { type: "string" },
+    finalFeedbackSummary: { type: "string" },
+  },
+  required: [
+    "originalScore",
+    "revisedScore",
+    "improvementScore",
+    "improvedAreas",
+    "stillNeedsWork",
+    "improvementSummary",
+    "masteryRecommendation",
+    "finalFeedbackSummary",
   ],
   additionalProperties: false,
 };

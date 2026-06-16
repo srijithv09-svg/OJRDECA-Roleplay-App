@@ -860,33 +860,50 @@ Testing expectations:
 Goal:
 
 - Add AI feedback for concept free responses and a required revision loop.
+- Phase 6 is limited to free-text concept practice feedback. It is practice coaching, not official DECA judging.
 
 Major files likely affected:
 
 - `src/lib/ai/grading/concept-feedback.ts`
 - Concept lesson pages/components.
 - Question attempt and feedback services.
+- `POST /api/learn/concept-feedback`
+- `POST /api/learn/concept-feedback/revise`
 
 Database changes:
 
-- Use or extend `concept_free_response_feedback`, `question_attempts`, and `concept_mastery`.
+- Add `concept_feedback_attempts` for original free-text responses, structured Gemini feedback, revised responses, revision feedback, scores, and status.
+- Keep `question_attempts` as the basic saved-answer log.
+- Update `concept_mastery` conservatively: first feedback can move toward practicing/almost mastered, while mastered requires a strong revision.
+
+Implemented behavior:
+
+- Free-text responses are saved before AI feedback runs, so missing Gemini configuration, quota exhaustion, timeout, or invalid AI output does not lose student work.
+- Duplicate feedback requests for the same student/concept/question/response return the stored feedback instead of calling Gemini again.
+- Revision feedback compares the original and revised responses and updates `improve_score`.
+- API routes derive `user_id` server-side and students can only revise their own `concept_feedback_attempts`.
+- `GEMINI_API_KEY` remains server-only. `GEMINI_MODEL` and `GEMINI_TIMEOUT_MS` continue to control the Gemini client.
 
 Risks:
 
 - Feedback feels authoritative when it should be coaching.
 - Feedback saved without validation.
 - Mastery updates too aggressively.
+- Gemini free-tier quota can block feedback generation during testing. This is expected operational behavior, not a broken learning route.
 
 Manual checks:
 
 - Submit weak and strong answers.
 - Confirm feedback, revision prompt, revision save, and mastery update.
+- Confirm missing-key/quota/timeout errors are graceful and keep the saved answer.
+- Confirm refreshing or resubmitting the same response does not generate duplicate feedback unnecessarily.
 
 Testing expectations:
 
 - Schema validation.
 - Student ownership checks.
 - Lint, TypeScript, build.
+- Full roleplay transcript grading, judge rubric scoring, readiness dashboards, BLTDM team workflow, and official answer-key conversion remain Phase 7+.
 
 ### Phase 7: Gemini roleplay transcript grading
 

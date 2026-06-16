@@ -18,6 +18,62 @@ type AttemptApiResponse = {
   mastery?: ConceptMastery | null;
 };
 
+type ConceptFeedbackResult = {
+  overallScore: number;
+  definitionAccuracyScore: number;
+  scenarioConnectionScore: number;
+  businessReasoningScore: number;
+  decaVocabularyScore: number;
+  specificityScore: number;
+  aboveAndBeyondScore: number;
+  strengths: string[];
+  improvements: string[];
+  missingElements: string[];
+  suggestedRevisionFocus: string[];
+  feedbackSummary: string;
+  nextStepPrompt: string;
+};
+
+type ConceptRevisionFeedbackResult = {
+  originalScore: number;
+  revisedScore: number;
+  improvementScore: number;
+  improvedAreas: string[];
+  stillNeedsWork: string[];
+  improvementSummary: string;
+  masteryRecommendation: string;
+  finalFeedbackSummary: string;
+};
+
+type FeedbackApiResponse = {
+  duplicate?: boolean;
+  error?: {
+    code?: string;
+    message?: string;
+    retryAfterSeconds?: number;
+  };
+  feedback?: ConceptFeedbackResult;
+  feedbackAttempt?: {
+    id: string;
+  };
+  mastery?: ConceptMastery | null;
+  ok?: boolean;
+};
+
+type RevisionApiResponse = {
+  error?: {
+    code?: string;
+    message?: string;
+    retryAfterSeconds?: number;
+  };
+  feedbackAttempt?: {
+    id: string;
+  };
+  mastery?: ConceptMastery | null;
+  ok?: boolean;
+  revisionFeedback?: ConceptRevisionFeedbackResult;
+};
+
 function arrayFromJson(value: Json | null): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === "string")
@@ -219,6 +275,7 @@ export function LearnConceptView({
       <QuestionSection
         attempts={attempts}
         empty="No approved quick checks are available for this concept yet."
+        mastery={mastery}
         onSaved={load}
         questions={groupedQuestions.quick}
         title="Quick Checks"
@@ -227,6 +284,7 @@ export function LearnConceptView({
       <QuestionSection
         attempts={attempts}
         empty="No approved scenario question is available for this concept yet."
+        mastery={mastery}
         onSaved={load}
         questions={groupedQuestions.scenario}
         title="Scenario/Application"
@@ -235,18 +293,11 @@ export function LearnConceptView({
       <QuestionSection
         attempts={attempts}
         empty="Explain how this concept could help a business make a better decision in a DECA roleplay scenario."
+        mastery={mastery}
         onSaved={load}
         questions={groupedQuestions.explain}
         title="Explain"
       />
-
-      <Card className="border-blue-100 bg-blue-50">
-        <CardHeader eyebrow="Improve" title="Revision guidance" />
-        <p className="text-sm leading-6 text-blue-900">
-          AI feedback and revision scoring will be added in the next phase. For now, revise your answer to include a definition,
-          explanation, scenario connection, and an above-and-beyond idea.
-        </p>
-      </Card>
     </>
   );
 }
@@ -254,12 +305,14 @@ export function LearnConceptView({
 function QuestionSection({
   attempts,
   empty,
+  mastery,
   onSaved,
   questions,
   title,
 }: {
   attempts: QuestionAttempt[];
   empty: string;
+  mastery: ConceptMastery | null;
   onSaved: () => void;
   questions: StructuredQuestion[];
   title: string;
@@ -275,6 +328,7 @@ function QuestionSection({
             <QuestionCard
               attempt={latestAttemptForQuestion(attempts, question.id)}
               key={question.id}
+              mastery={mastery}
               onSaved={onSaved}
               question={question}
             />
@@ -287,20 +341,158 @@ function QuestionSection({
 
 function QuestionCard({
   attempt,
+  mastery,
   onSaved,
   question,
 }: {
   attempt: QuestionAttempt | null;
+  mastery: ConceptMastery | null;
   onSaved: () => void;
   question: StructuredQuestion;
 }) {
   const [answer, setAnswer] = useState<Json>(
     question.question_type === "multiple_select" ? [] : question.question_type === "matching" ? {} : "",
   );
+  const [feedback, setFeedback] = useState<ConceptFeedbackResult | null>(null);
+  const [feedbackAttemptId, setFeedbackAttemptId] = useState<string | null>(null);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
+  const [feedbackSource, setFeedbackSource] = useState<"generated" | "reused" | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [feedbackMastery, setFeedbackMastery] = useState<ConceptMastery | null>(null);
+  const [revision, setRevision] = useState("");
+  const [revisionFeedback, setRevisionFeedback] = useState<ConceptRevisionFeedbackResult | null>(null);
+  const [revisionMessage, setRevisionMessage] = useState<string | null>(null);
+  const [isGeneratingFeedback, setIsGeneratingFeedback] = useState(false);
+  const [isRevising, setIsRevising] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const choices = choicesAsStrings(question);
   const pairs = matchingPairs(question);
+  const isFreeText = question.question_type === "free_text";
+  const displayMastery = feedbackMastery ?? mastery;
+
+  async function readJsonResponse<T>(response: Response): Promise<T> {
+    const contentType = response.headers.get("content-type") ?? "";
+
+    if (contentType.includes("application/json")) {
+      return (await response.json()) as T;
+    }
+
+    const text = await response.text();
+    throw new Error(text ? text.slice(0, 160) : "Server returned a non-JSON response.");
+  }
+
+  function feedbackErrorMessage(payload: FeedbackApiResponse | RevisionApiResponse) {
+    const retryAfterSeconds = payload.error?.retryAfterSeconds;
+
+    if (payload.error?.code === "gemini_quota_exceeded" && retryAfterSeconds) {
+      return `Gemini quota limit reached. Try again in about ${retryAfterSeconds} seconds. Your response was saved.`;
+    }
+
+    return payload.error?.message ?? "AI feedback could not be generated right now.";
+  }
+
+  async function requestFeedback(accessToken: string, responseText: string) {
+    setIsGeneratingFeedback(true);
+    setFeedbackError(null);
+    setFeedback(null);
+    setRevisionFeedback(null);
+    setFeedbackAttemptId(null);
+    setFeedbackSource(null);
+
+    try {
+      const response = await fetch("/api/learn/concept-feedback", {
+        body: JSON.stringify({
+          concept_id: question.concept_id,
+          question_id: question.id,
+          response_text: responseText,
+        }),
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+      });
+      const payload = await readJsonResponse<FeedbackApiResponse>(response);
+
+      if (!response.ok || !payload.feedback) {
+        throw new Error(feedbackErrorMessage(payload));
+      }
+
+      setFeedback(payload.feedback);
+      setFeedbackAttemptId(payload.feedbackAttempt?.id ?? null);
+      setFeedbackSource(payload.duplicate ? "reused" : "generated");
+      if (payload.mastery) {
+        setFeedbackMastery(payload.mastery);
+      }
+      setMessage(
+        payload.duplicate
+          ? "Response saved. Showing your saved AI practice feedback."
+          : "Response saved. AI practice feedback is ready.",
+      );
+    } catch (caughtError) {
+      setFeedbackError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "AI feedback could not be generated right now.",
+      );
+    } finally {
+      setIsGeneratingFeedback(false);
+    }
+  }
+
+  async function submitRevision() {
+    if (!feedbackAttemptId) {
+      setRevisionMessage("Save your first feedback attempt before revising.");
+      return;
+    }
+
+    setIsRevising(true);
+    setRevisionMessage(null);
+
+    try {
+      const supabase = getSupabaseClient();
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession();
+
+      if (error || !session?.access_token) {
+        throw new Error(error?.message ?? "You must be signed in to revise practice.");
+      }
+
+      const response = await fetch("/api/learn/concept-feedback/revise", {
+        body: JSON.stringify({
+          feedback_attempt_id: feedbackAttemptId,
+          revised_response: revision,
+        }),
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+      });
+      const payload = await readJsonResponse<RevisionApiResponse>(response);
+
+      if (!response.ok || !payload.revisionFeedback) {
+        throw new Error(feedbackErrorMessage(payload));
+      }
+
+      setRevisionFeedback(payload.revisionFeedback);
+      if (payload.mastery) {
+        setFeedbackMastery(payload.mastery);
+      }
+      setRevisionMessage("Revision feedback is ready.");
+      onSaved();
+    } catch (caughtError) {
+      setRevisionMessage(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Unable to generate revision feedback right now.",
+      );
+    } finally {
+      setIsRevising(false);
+    }
+  }
 
   async function save() {
     setIsSaving(true);
@@ -337,6 +529,11 @@ function QuestionCard({
         setMessage("Attempt saved. Review the explanation and try again.");
       } else {
         setMessage("Response saved for practice.");
+      }
+
+      if (isFreeText && typeof answer === "string") {
+        setMessage("Response saved. Generating practice feedback...");
+        await requestFeedback(session.access_token, answer);
       }
 
       onSaved();
@@ -434,15 +631,113 @@ function QuestionCard({
       ) : null}
 
       {message ? <p className="mt-4 text-sm font-semibold text-slate-700">{message}</p> : null}
+      {isGeneratingFeedback ? (
+        <p className="mt-4 rounded-lg bg-blue-50 p-3 text-sm font-semibold text-blue-900">
+          Generating practice feedback...
+        </p>
+      ) : null}
+      {feedbackError ? (
+        <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm font-semibold text-amber-900">
+          {feedbackError}
+        </p>
+      ) : null}
+      {feedback ? (
+        <div className="mt-4 grid gap-4 rounded-lg border border-blue-100 bg-blue-50 p-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+              AI practice feedback - not official DECA judging
+            </p>
+            <p className="mt-2 text-sm font-semibold text-blue-950">
+              Overall score: {Math.round(feedback.overallScore)} / 100
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {feedbackSource ? (
+                <Badge tone={feedbackSource === "reused" ? "amber" : "green"}>
+                  {feedbackSource === "reused" ? "saved feedback reused" : "new feedback generated"}
+                </Badge>
+              ) : null}
+              <Badge tone={masteryTone(displayMastery?.status)}>
+                {masteryLabel(displayMastery?.status)}
+              </Badge>
+            </div>
+            <p className="mt-2 text-sm leading-6 text-blue-900">{feedback.feedbackSummary}</p>
+          </div>
+          <FeedbackList title="Strengths" values={feedback.strengths} />
+          <FeedbackList title="Improve next" values={feedback.improvements} />
+          <FeedbackList title="Missing elements" values={feedback.missingElements} />
+          <FeedbackList title="Revision focus" values={feedback.suggestedRevisionFocus} />
+          <p className="rounded-md bg-white/70 p-3 text-sm font-semibold leading-6 text-blue-950">
+            {feedback.nextStepPrompt}
+          </p>
+          <label className="grid gap-2 text-sm font-semibold text-blue-950">
+            Revise your answer
+            <textarea
+              className="min-h-28 rounded-md border border-blue-200 bg-white px-3 py-2 text-sm font-normal text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+              onChange={(event) => setRevision(event.target.value)}
+              placeholder="Add a clearer definition, stronger scenario connection, and an above-and-beyond idea..."
+              value={revision}
+            />
+          </label>
+          <button
+            className="min-h-10 w-fit rounded-md bg-blue-700 px-3 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300"
+            disabled={isRevising || !feedbackAttemptId}
+            onClick={() => void submitRevision()}
+            type="button"
+          >
+            {isRevising ? "Reviewing revision..." : "Submit revision"}
+          </button>
+          {revisionMessage ? (
+            <p className="text-sm font-semibold text-blue-900">{revisionMessage}</p>
+          ) : null}
+          {revisionFeedback ? (
+            <div className="grid gap-3 rounded-lg bg-white p-4">
+              <p className="text-sm font-semibold text-slate-950">
+                Revised score: {Math.round(revisionFeedback.revisedScore)} / 100
+              </p>
+              <p className="text-sm leading-6 text-slate-700">
+                {revisionFeedback.improvementSummary}
+              </p>
+              <FeedbackList title="Improved areas" values={revisionFeedback.improvedAreas} />
+              <FeedbackList title="Still needs work" values={revisionFeedback.stillNeedsWork} />
+              <p className="text-sm font-semibold leading-6 text-slate-800">
+                {revisionFeedback.finalFeedbackSummary}
+              </p>
+            </div>
+          ) : null}
+          {feedbackAttemptId ? (
+            <details className="text-xs text-blue-800">
+              <summary className="cursor-pointer font-semibold">Developer details</summary>
+              <p className="mt-1 font-mono">feedback_attempt_id: {feedbackAttemptId}</p>
+            </details>
+          ) : null}
+        </div>
+      ) : null}
 
       <button
         className="mt-4 min-h-10 rounded-md bg-blue-700 px-3 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300"
-        disabled={isSaving}
+        disabled={isSaving || isGeneratingFeedback}
         onClick={() => void save()}
         type="button"
       >
         {isSaving ? "Saving..." : "Save answer"}
       </button>
+    </div>
+  );
+}
+
+function FeedbackList({ title, values }: { title: string; values: string[] }) {
+  if (values.length === 0) {
+    return null;
+  }
+
+  return (
+    <div>
+      <p className="text-sm font-semibold text-slate-950">{title}</p>
+      <ul className="mt-1 grid gap-1 text-sm leading-6 text-slate-700">
+        {values.map((value) => (
+          <li key={value}>- {value}</li>
+        ))}
+      </ul>
     </div>
   );
 }

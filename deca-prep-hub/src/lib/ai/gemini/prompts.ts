@@ -20,6 +20,24 @@ export type ResourceExtractionPromptMetadata = Omit<
   approvalStatus: string | null;
 };
 
+export type ConceptFeedbackPromptInput = {
+  conceptDefinition: string | null;
+  conceptExample: string | null;
+  conceptExplanation: string | null;
+  conceptName: string;
+  eventCode: string | null;
+  eventName: string | null;
+  questionPrompt: string | null;
+  scenarioContext: string | null;
+  studentResponse: string;
+};
+
+export type ConceptRevisionFeedbackPromptInput = ConceptFeedbackPromptInput & {
+  originalFeedbackSummary: string | null;
+  originalResponse: string;
+  revisedResponse: string;
+};
+
 function nullable(value: string | number | null | undefined) {
   return value === null || value === undefined || value === "" ? "unknown" : String(value);
 }
@@ -228,4 +246,66 @@ export function buildRubricExtractionPrompt(metadata: ResourceExtractionPromptMe
       "If the document mixes roleplay instructions and scoring, extract only the scoring/rubric structure.",
     ],
   });
+}
+
+export function buildConceptFeedbackPrompt(input: ConceptFeedbackPromptInput) {
+  return [
+    "You are giving DECA concept practice feedback to a high school student.",
+    "Return structured JSON only. Do not include markdown, comments, or extra keys.",
+    "This is learning guidance, not official DECA judging and not a competition score.",
+    "Be encouraging, specific, and honest. Do not be overly harsh.",
+    "Evaluate the response against this DECA answer framework: Define -> Explain -> Connect to Scenario -> Above and Beyond / Visual.",
+    "Focus on definition accuracy, scenario connection, business reasoning, DECA vocabulary, specificity, and whether the student adds an above-and-beyond idea.",
+    "Do not invent unsafe, unrelated, or private advice.",
+    "",
+    "Context:",
+    `eventCode: ${nullable(input.eventCode)}`,
+    `eventName: ${nullable(input.eventName)}`,
+    `conceptName: ${nullable(input.conceptName)}`,
+    `conceptDefinition: ${nullable(input.conceptDefinition)}`,
+    `conceptExplanation: ${nullable(input.conceptExplanation)}`,
+    `conceptExample: ${nullable(input.conceptExample)}`,
+    `questionPrompt: ${nullable(input.questionPrompt)}`,
+    `scenarioContext: ${nullable(input.scenarioContext)}`,
+    "",
+    "Student response:",
+    "<<<STUDENT_RESPONSE_START>>>",
+    input.studentResponse.slice(0, 12000),
+    "<<<STUDENT_RESPONSE_END>>>",
+    "",
+    "Score each numeric field from 0 to 100. Keep arrays concise and actionable.",
+  ].join("\n");
+}
+
+export function buildConceptRevisionFeedbackPrompt(input: ConceptRevisionFeedbackPromptInput) {
+  return [
+    "You are comparing a student's original DECA concept practice response to their revised response.",
+    "Return structured JSON only. Do not include markdown, comments, or extra keys.",
+    "This is learning guidance, not official DECA judging and not a competition score.",
+    "Be conservative with mastery language. Strong improvement can support mastery progress, but do not overstate readiness.",
+    "Compare the revision using this framework: Define -> Explain -> Connect to Scenario -> Above and Beyond / Visual.",
+    "",
+    "Context:",
+    `eventCode: ${nullable(input.eventCode)}`,
+    `eventName: ${nullable(input.eventName)}`,
+    `conceptName: ${nullable(input.conceptName)}`,
+    `conceptDefinition: ${nullable(input.conceptDefinition)}`,
+    `conceptExplanation: ${nullable(input.conceptExplanation)}`,
+    `conceptExample: ${nullable(input.conceptExample)}`,
+    `questionPrompt: ${nullable(input.questionPrompt)}`,
+    `scenarioContext: ${nullable(input.scenarioContext)}`,
+    `originalFeedbackSummary: ${nullable(input.originalFeedbackSummary)}`,
+    "",
+    "Original response:",
+    "<<<ORIGINAL_RESPONSE_START>>>",
+    input.originalResponse.slice(0, 12000),
+    "<<<ORIGINAL_RESPONSE_END>>>",
+    "",
+    "Revised response:",
+    "<<<REVISED_RESPONSE_START>>>",
+    input.revisedResponse.slice(0, 12000),
+    "<<<REVISED_RESPONSE_END>>>",
+    "",
+    "Score each numeric field from 0 to 100. improvementScore should reflect improvement quality, not just final quality.",
+  ].join("\n");
 }

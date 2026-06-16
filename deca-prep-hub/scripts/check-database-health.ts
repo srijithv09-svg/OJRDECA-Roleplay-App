@@ -18,6 +18,7 @@ type RequiredTable =
   | "questions"
   | "question_attempts"
   | "concept_mastery"
+  | "concept_feedback_attempts"
   | "roleplay_scenarios"
   | "roleplay_performance_indicators"
   | "ai_extraction_jobs"
@@ -41,6 +42,7 @@ const requiredTables: RequiredTable[] = [
   "questions",
   "question_attempts",
   "concept_mastery",
+  "concept_feedback_attempts",
   "roleplay_scenarios",
   "roleplay_performance_indicators",
   "ai_extraction_jobs",
@@ -74,6 +76,19 @@ const keyColumns: Record<RequiredTable, string[]> = {
   ],
   question_attempts: ["user_id"],
   concept_mastery: ["status"],
+  concept_feedback_attempts: [
+    "user_id",
+    "question_id",
+    "concept_id",
+    "event_id",
+    "original_response",
+    "ai_feedback_json",
+    "revised_response",
+    "revision_feedback_json",
+    "status",
+    "score",
+    "revision_score",
+  ],
   roleplay_scenarios: ["performance_indicators", "status", "ai_extracted", "admin_reviewed"],
   roleplay_performance_indicators: [
     "roleplay_scenario_id",
@@ -109,6 +124,7 @@ const probeColumns: Record<RequiredTable, string> = {
   questions: "id",
   question_attempts: "id",
   concept_mastery: "user_id",
+  concept_feedback_attempts: "id",
   roleplay_scenarios: "id",
   roleplay_performance_indicators: "id",
   ai_extraction_jobs: "id",

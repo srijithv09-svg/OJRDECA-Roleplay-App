@@ -37,6 +37,11 @@ export type ConceptMasteryStatus =
   | "practicing"
   | "almost_mastered"
   | "mastered";
+export type ConceptFeedbackAttemptStatus =
+  | "feedback_given"
+  | "revised"
+  | "completed"
+  | "failed";
 export type AiExtractionJobType =
   | "resource_classification"
   | "exam_extraction"
@@ -274,6 +279,25 @@ export type ConceptMastery = {
   explain_score: number | null;
   improve_score: number | null;
   last_practiced_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type ConceptFeedbackAttempt = {
+  id: string;
+  user_id: string;
+  question_id: string | null;
+  concept_id: string;
+  event_id: string | null;
+  original_response: string;
+  ai_feedback_json: Json | null;
+  ai_feedback_summary: string | null;
+  revised_response: string | null;
+  revision_feedback_json: Json | null;
+  improvement_summary: string | null;
+  score: number | null;
+  revision_score: number | null;
+  status: ConceptFeedbackAttemptStatus;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -740,6 +764,29 @@ export type Database = {
           updated_at?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["concept_mastery"]["Insert"]>;
+        Relationships: [];
+      };
+      concept_feedback_attempts: {
+        Row: ConceptFeedbackAttempt;
+        Insert: {
+          id?: string;
+          user_id: string;
+          question_id?: string | null;
+          concept_id: string;
+          event_id?: string | null;
+          original_response: string;
+          ai_feedback_json?: Json | null;
+          ai_feedback_summary?: string | null;
+          revised_response?: string | null;
+          revision_feedback_json?: Json | null;
+          improvement_summary?: string | null;
+          score?: number | null;
+          revision_score?: number | null;
+          status?: ConceptFeedbackAttemptStatus;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["concept_feedback_attempts"]["Insert"]>;
         Relationships: [];
       };
       roleplay_scenarios: {
