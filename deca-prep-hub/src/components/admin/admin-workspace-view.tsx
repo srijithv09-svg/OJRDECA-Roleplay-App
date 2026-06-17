@@ -54,6 +54,12 @@ const adminTools: AdminTool[] = [
     icon: "analytics",
     label: "Admin Analytics",
   },
+  {
+    description: "Create and review key sets, concepts, questions, and study resources.",
+    href: "/admin/content",
+    icon: "exams",
+    label: "Learning Content",
+  },
 ];
 
 export function AdminWorkspaceView() {

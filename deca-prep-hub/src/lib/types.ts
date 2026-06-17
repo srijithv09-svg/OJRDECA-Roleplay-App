@@ -237,6 +237,25 @@ export type KeySetConcept = {
   sort_order: number;
 };
 
+export type StudyResource = {
+  id: string;
+  event_id: string | null;
+  key_set_id: string | null;
+  concept_id: string | null;
+  title: string;
+  description: string | null;
+  resource_kind: string;
+  url: string | null;
+  storage_path: string | null;
+  content: string | null;
+  status: ReviewableContentStatus;
+  created_by: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
 export type StructuredQuestion = {
   id: string;
   source_resource_id: string | null;
@@ -863,6 +882,29 @@ export type Database = {
           sort_order?: number;
         };
         Update: Partial<Database["public"]["Tables"]["key_set_concepts"]["Insert"]>;
+        Relationships: [];
+      };
+      study_resources: {
+        Row: StudyResource;
+        Insert: {
+          id?: string;
+          event_id?: string | null;
+          key_set_id?: string | null;
+          concept_id?: string | null;
+          title: string;
+          description?: string | null;
+          resource_kind: string;
+          url?: string | null;
+          storage_path?: string | null;
+          content?: string | null;
+          status?: ReviewableContentStatus;
+          created_by?: string | null;
+          approved_by?: string | null;
+          approved_at?: string | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["study_resources"]["Insert"]>;
         Relationships: [];
       };
       questions: {

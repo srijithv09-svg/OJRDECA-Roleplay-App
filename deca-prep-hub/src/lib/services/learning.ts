@@ -8,6 +8,7 @@ import type {
   KeySetConcept,
   QuestionAttempt,
   StructuredQuestion,
+  StudyResource,
 } from "@/lib/types";
 
 const eventColumns =
@@ -21,6 +22,8 @@ const masteryColumns =
   "user_id,concept_id,status,recognize_score,define_score,connect_score,apply_score,explain_score,improve_score,last_practiced_at,created_at,updated_at";
 const attemptColumns =
   "id,user_id,question_id,answer,is_correct,feedback,attempt_number,created_at";
+const studyResourceColumns =
+  "id,event_id,key_set_id,concept_id,title,description,resource_kind,url,storage_path,content,status,created_by,approved_by,approved_at,created_at,updated_at";
 
 export type LearningEventSummary = {
   approvedQuestionCount: number;
@@ -40,6 +43,7 @@ export type ConceptLearningData = {
   event: DecaEvent;
   mastery: ConceptMastery | null;
   questions: StructuredQuestion[];
+  studyResources: StudyResource[];
 };
 
 function uniqueValues(values: Array<string | null | undefined>) {
@@ -153,6 +157,36 @@ export const LearningService = {
     return data ?? [];
   },
 
+  async getApprovedStudyResources(scope: {
+    conceptId?: string;
+    eventId?: string;
+    keySetId?: string;
+  }): Promise<StudyResource[]> {
+    const supabase = getSupabaseClient();
+    let query = supabase
+      .from("study_resources")
+      .select(studyResourceColumns)
+      .eq("status", "approved")
+      .order("created_at", { ascending: false });
+
+    if (scope.conceptId) {
+      query = query.eq("concept_id", scope.conceptId);
+    } else if (scope.keySetId) {
+      query = query.eq("key_set_id", scope.keySetId);
+    } else if (scope.eventId) {
+      query = query.eq("event_id", scope.eventId).is("key_set_id", null).is("concept_id", null);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      logDeveloperError("[learning] study resources failed", error);
+      throw new Error(getFriendlyErrorMessage(error, "Unable to load study resources."));
+    }
+
+    return data ?? [];
+  },
+
   async getKeySet(keySetId: string): Promise<KeySet | null> {
     const supabase = getSupabaseClient();
     const { data, error } = await supabase
@@ -227,7 +261,7 @@ export const LearningService = {
     userId?: string,
   ): Promise<ConceptLearningData | null> {
     const supabase = getSupabaseClient();
-    const [{ data: concept, error: conceptError }, { data: event, error: eventError }, { data: questions, error: questionError }] =
+    const [{ data: concept, error: conceptError }, { data: event, error: eventError }, { data: questions, error: questionError }, studyResources] =
       await Promise.all([
         supabase.from("concepts").select(conceptColumns).eq("id", conceptId).eq("status", "approved").maybeSingle(),
         supabase.from("events").select(eventColumns).eq("id", eventId).maybeSingle(),
@@ -238,6 +272,7 @@ export const LearningService = {
           .eq("event_id", eventId)
           .eq("status", "approved")
           .order("created_at", { ascending: true }),
+        LearningService.getApprovedStudyResources({ conceptId }),
       ]);
 
     if (conceptError || eventError || questionError) {
@@ -275,6 +310,7 @@ export const LearningService = {
       event,
       mastery: mastery ?? null,
       questions: questions ?? [],
+      studyResources,
     };
   },
 };

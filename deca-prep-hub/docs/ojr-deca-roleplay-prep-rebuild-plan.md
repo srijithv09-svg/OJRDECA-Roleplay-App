@@ -1014,6 +1014,55 @@ Testing expectations:
 - Build and TypeScript.
 - Manual visual checks.
 
+### Phase 9: Learning Content Studio and admin UX polish
+
+Goal:
+
+- Give admins/advisors a central `/admin/content` workspace for creating and reviewing guided learning content.
+- Keep MCS as the first active pilot while supporting future pathways for BLTDM, Entrepreneurship, Finance, Hospitality, Marketing, and other DECA events.
+- Preserve student visibility rules: students only see approved modules/key sets, concepts, questions, and study resources.
+
+Major files affected:
+
+- `src/app/admin/content/page.tsx`
+- `src/components/admin/admin-content-view.tsx`
+- `src/app/api/admin/content/route.ts`
+- `src/lib/services/admin-content.ts`
+- `src/lib/services/learning.ts`
+- `src/components/learn/learning-ui.tsx`
+- `supabase/migrations/20260616150000_add_study_resources.sql`
+
+Database changes:
+
+- Adds `study_resources` for supplemental learning links, notes, videos, vocabulary, PDFs, study guides, and teacher resources.
+- `study_resources` can attach to an event, key set/module, or concept.
+- RLS allows authenticated students to read approved study resources only.
+- Admins/advisors can manage study resources.
+- Explicit Data API grants are included for newer Supabase table exposure defaults.
+
+Implemented behavior:
+
+- `/admin/content` has tabs for Modules / Key Sets, Concepts, Questions, Self-Study Resources, and Review Queue.
+- Admins/advisors can create and edit modules, concepts, questions, and study resources.
+- Question editing supports multiple choice, multiple select, matching, free text, and scenario/application via `ladder_stage = apply` plus scenario context.
+- Question duplication creates a draft copy.
+- Approved study resources appear on relevant `/learn` event, module, and concept pages.
+- AI question drafting is intentionally left as a disabled Phase 9.5 placeholder. AI-drafted content must never be approved automatically.
+
+Risks:
+
+- The `study_resources` migration must be applied before `/admin/content`, `/learn` study resource queries, or `npm run check:db` can fully pass in a fresh Supabase project.
+- Existing `key_sets` and `concepts` tables only support `draft`, `approved`, and `archived`; their UI should not submit `needs_review` unless a future migration expands those constraints.
+- Malformed legacy question JSON should be handled by safe form fallbacks instead of raw JSON editing by default.
+
+Manual checks:
+
+- Admin/advisor can open `/admin/content` from `/admin`.
+- Student cannot access `/admin/content`.
+- Create/edit one module, concept, multiple choice question, multiple select question, matching question, free-text question, and study resource.
+- Approved questions remain the only questions visible in `/learn`.
+- Approved study resources appear in the relevant learning page; draft/needs-review/archived/rejected resources do not.
+
 ## J. Migration and Deployment Risks
 
 - Supabase migrations are not automatically applied unless run through Supabase CLI or the Supabase SQL Editor.

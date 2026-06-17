@@ -138,6 +138,12 @@ const routeGroups: Array<{ label: string; routes: SmokeRoute[] }> = [
       {
         expectedRedirect: true,
         group: "admin-protected",
+        path: "/admin/content",
+        validStatuses: protectedStatuses,
+      },
+      {
+        expectedRedirect: true,
+        group: "admin-protected",
         path: "/admin/ai-review",
         validStatuses: protectedStatuses,
       },

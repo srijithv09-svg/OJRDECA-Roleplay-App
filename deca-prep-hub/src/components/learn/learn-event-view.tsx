@@ -7,13 +7,14 @@ import { ButtonLink } from "@/components/ui/button-link";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { ResourceErrorState, ResourceLoadingState } from "@/components/resources/resource-states";
-import { EventMeta, LearningEmptyCard, eventPath } from "@/components/learn/learning-ui";
+import { EventMeta, LearningEmptyCard, StudyResourceList, eventPath } from "@/components/learn/learning-ui";
 import { LearningService } from "@/lib/services/learning";
-import type { DecaEvent, KeySet } from "@/lib/types";
+import type { DecaEvent, KeySet, StudyResource } from "@/lib/types";
 
 export function LearnEventView({ eventCode }: { eventCode: string }) {
   const [event, setEvent] = useState<DecaEvent | null>(null);
   const [keySets, setKeySets] = useState<KeySet[]>([]);
+  const [studyResources, setStudyResources] = useState<StudyResource[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -26,9 +27,15 @@ export function LearnEventView({ eventCode }: { eventCode: string }) {
       setEvent(nextEvent);
 
       if (nextEvent?.is_pilot) {
-        setKeySets(await LearningService.getApprovedKeySetsForEvent(nextEvent.id));
+        const [nextKeySets, nextResources] = await Promise.all([
+          LearningService.getApprovedKeySetsForEvent(nextEvent.id),
+          LearningService.getApprovedStudyResources({ eventId: nextEvent.id }),
+        ]);
+        setKeySets(nextKeySets);
+        setStudyResources(nextResources);
       } else {
         setKeySets([]);
+        setStudyResources([]);
       }
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "Unable to load this pathway.");
@@ -86,6 +93,8 @@ export function LearnEventView({ eventCode }: { eventCode: string }) {
       <Card>
         <EventMeta event={event} />
       </Card>
+
+      <StudyResourceList resources={studyResources} />
 
       {keySets.length === 0 ? (
         <LearningEmptyCard title="This pathway is being prepared.">

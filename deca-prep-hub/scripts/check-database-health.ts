@@ -16,6 +16,7 @@ type RequiredTable =
   | "concepts"
   | "key_set_concepts"
   | "questions"
+  | "study_resources"
   | "question_attempts"
   | "concept_mastery"
   | "concept_feedback_attempts"
@@ -40,6 +41,7 @@ const requiredTables: RequiredTable[] = [
   "concepts",
   "key_set_concepts",
   "questions",
+  "study_resources",
   "question_attempts",
   "concept_mastery",
   "concept_feedback_attempts",
@@ -81,6 +83,7 @@ const keyColumns: Record<RequiredTable, string[]> = {
     "ai_extracted",
     "admin_reviewed",
   ],
+  study_resources: ["event_id", "key_set_id", "concept_id", "status", "resource_kind"],
   question_attempts: ["user_id"],
   concept_mastery: ["status"],
   concept_feedback_attempts: [
@@ -129,6 +132,7 @@ const probeColumns: Record<RequiredTable, string> = {
   concepts: "id",
   key_set_concepts: "key_set_id",
   questions: "id",
+  study_resources: "id",
   question_attempts: "id",
   concept_mastery: "user_id",
   concept_feedback_attempts: "id",

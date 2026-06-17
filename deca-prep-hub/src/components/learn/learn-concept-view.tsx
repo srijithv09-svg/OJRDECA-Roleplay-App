@@ -6,7 +6,7 @@ import { ButtonLink } from "@/components/ui/button-link";
 import { Card, CardHeader } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { ResourceErrorState, ResourceLoadingState } from "@/components/resources/resource-states";
-import { LearningEmptyCard, eventPath, masteryLabel, masteryTone } from "@/components/learn/learning-ui";
+import { LearningEmptyCard, StudyResourceList, eventPath, masteryLabel, masteryTone } from "@/components/learn/learning-ui";
 import { LearningService, type ConceptLearningData } from "@/lib/services/learning";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import type { ConceptMastery, Json, QuestionAttempt, StructuredQuestion } from "@/lib/types";
@@ -271,6 +271,8 @@ export function LearnConceptView({
           ) : null}
         </div>
       </Card>
+
+      <StudyResourceList resources={data.studyResources} />
 
       <QuestionSection
         attempts={attempts}

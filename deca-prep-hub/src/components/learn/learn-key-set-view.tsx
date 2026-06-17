@@ -6,10 +6,10 @@ import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button-link";
 import { PageHeader } from "@/components/ui/page-header";
 import { ResourceErrorState, ResourceLoadingState } from "@/components/resources/resource-states";
-import { LearningEmptyCard, eventPath, masteryLabel, masteryTone } from "@/components/learn/learning-ui";
+import { LearningEmptyCard, StudyResourceList, eventPath, masteryLabel, masteryTone } from "@/components/learn/learning-ui";
 import { LearningService, type KeySetConceptSummary } from "@/lib/services/learning";
 import { getSupabaseClient } from "@/lib/supabase/client";
-import type { DecaEvent, KeySet } from "@/lib/types";
+import type { DecaEvent, KeySet, StudyResource } from "@/lib/types";
 
 export function LearnKeySetView({
   eventCode,
@@ -21,6 +21,7 @@ export function LearnKeySetView({
   const [concepts, setConcepts] = useState<KeySetConceptSummary[]>([]);
   const [event, setEvent] = useState<DecaEvent | null>(null);
   const [keySet, setKeySet] = useState<KeySet | null>(null);
+  const [studyResources, setStudyResources] = useState<StudyResource[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -41,9 +42,15 @@ export function LearnKeySetView({
       setKeySet(nextKeySet);
 
       if (nextEvent?.is_pilot && nextKeySet?.event_id === nextEvent.id) {
-        setConcepts(await LearningService.getConceptsForKeySet(keySetId, userId));
+        const [nextConcepts, nextResources] = await Promise.all([
+          LearningService.getConceptsForKeySet(keySetId, userId),
+          LearningService.getApprovedStudyResources({ keySetId }),
+        ]);
+        setConcepts(nextConcepts);
+        setStudyResources(nextResources);
       } else {
         setConcepts([]);
+        setStudyResources([]);
       }
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "Unable to load this key set.");
@@ -133,6 +140,8 @@ export function LearnKeySetView({
           ))}
         </section>
       )}
+
+      <StudyResourceList resources={studyResources} />
     </>
   );
 }
