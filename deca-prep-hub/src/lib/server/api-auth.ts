@@ -2,19 +2,26 @@ import { isAdminRole, isAllowedSchoolEmail } from "@/lib/auth";
 import { getSupabaseAdminClient, getSupabaseServerClient } from "@/lib/supabase/server";
 import type { Profile } from "@/lib/types";
 
-const profileColumns = "id,email,role,created_at,updated_at";
+const profileColumns = "id,email,role,selected_cluster,created_at,updated_at";
 const fallbackProfileColumns = "id,email,role,created_at";
 
 function isMissingUpdatedAtError(error: { code?: string; message?: string } | null) {
   return (
     error?.code === "42703" ||
-    Boolean(error?.message?.toLowerCase().includes("profiles.updated_at"))
+    Boolean(error?.message?.toLowerCase().includes("profiles.updated_at")) ||
+    Boolean(error?.message?.toLowerCase().includes("profiles.selected_cluster"))
   );
 }
 
-function withFallbackUpdatedAt(profile: Omit<Profile, "updated_at"> & { updated_at?: string | null }) {
+function withFallbackUpdatedAt(
+  profile: Omit<Profile, "selected_cluster" | "updated_at"> & {
+    selected_cluster?: Profile["selected_cluster"];
+    updated_at?: string | null;
+  },
+) {
   return {
     ...profile,
+    selected_cluster: profile.selected_cluster ?? null,
     updated_at: profile.updated_at ?? null,
   } satisfies Profile;
 }

@@ -1052,6 +1052,35 @@ Implemented behavior:
 Risks:
 
 - The `study_resources` migration must be applied before `/admin/content`, `/learn` study resource queries, or `npm run check:db` can fully pass in a fresh Supabase project.
+
+### Phase 9.25: Student cluster preference and personalized recommendations
+
+Goal:
+
+- Let students choose a primary DECA cluster so dashboards and recommendation surfaces can prioritize the most relevant practice first.
+- Preserve the product rule that cluster preference is personalization only, not access control.
+
+Database changes:
+
+- Add nullable `profiles.selected_cluster`.
+- Allowed values: `entrepreneurship`, `marketing`, `business_management_administration`, `hospitality_tourism`, `finance`.
+- Existing users are not required to choose a cluster immediately.
+
+Implemented behavior:
+
+- `/settings` includes a DECA Cluster section where a signed-in user can save or clear their own preference.
+- `PATCH /api/settings/cluster-preference` derives the authenticated user server-side, validates the selected cluster, and updates only `profiles.selected_cluster`.
+- `/dashboard` prompts users without a preference to choose a cluster and shows “Recommended for: …” after one is saved.
+- Readiness recommendations prefer matching-cluster learning, roleplay, and exam context where approved content exists, then fall back to MCS/general approved content.
+- `/learn` keeps all approved pathways visible while ordering matching-cluster pathways first.
+- Resource, roleplay, and exam libraries keep “All clusters” access and add a lightweight “Show my cluster” quick filter when matching content exists.
+- Admin analytics can show cluster distribution and how many students have not selected a cluster.
+
+Important constraints:
+
+- Students can still access all approved learning modules, resources, roleplays, exams, and study resources regardless of selected cluster.
+- Do not use `selected_cluster` for authorization or RLS access decisions.
+- The preference supports future pathways beyond MCS; it does not imply those pathways are fully built yet.
 - Existing `key_sets` and `concepts` tables only support `draft`, `approved`, and `archived`; their UI should not submit `needs_review` unless a future migration expands those constraints.
 - Malformed legacy question JSON should be handled by safe form fallbacks instead of raw JSON editing by default.
 

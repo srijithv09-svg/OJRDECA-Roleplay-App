@@ -1,4 +1,10 @@
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
+import {
+  decaClusters,
+  eventMatchesSelectedCluster,
+  getDecaClusterLabel,
+  getDecaClusterEventNames,
+} from "@/lib/deca/clusters";
 import type {
   AdminReadinessSummary,
   ConceptFeedbackAttempt,
@@ -16,6 +22,7 @@ import type {
   StudentRecommendedNextStep,
   StudentRoleplayFeedbackSummary,
 } from "@/lib/types";
+import type { DecaClusterPreference } from "@/lib/types";
 
 const masteryStatuses: ConceptMasteryStatus[] = [
   "not_started",
@@ -37,6 +44,7 @@ type EventRow = {
   id: string;
   code: string;
   name: string | null;
+  cluster: string | null;
 };
 
 type ConceptRow = {
@@ -111,6 +119,7 @@ function toStudentRoleplayFeedbackSummary(
     id: attempt.id,
     resource_id: attempt.resource_id,
     resource_title: resource?.title ?? "Unknown roleplay",
+    resource_cluster: resource?.cluster ?? null,
     event_code: resource?.event_code ?? null,
     ai_overall_score: attempt.ai_overall_score,
     ai_feedback_status: attempt.ai_feedback_status,
@@ -129,17 +138,55 @@ async function safeSection<T>(fallback: T, loader: () => Promise<T>): Promise<T>
   }
 }
 
-async function loadMcsLearningCatalog() {
+async function findLearningEventForCluster(selectedCluster: DecaClusterPreference | null) {
   const supabase = getSupabaseAdminClient();
+  const clusterNames = getDecaClusterEventNames(selectedCluster);
+
+  if (clusterNames.length > 0) {
+    const { data: matchingEvents, error: matchingEventsError } = await supabase
+      .from("events")
+      .select("id,code,name,cluster,sort_order")
+      .in("cluster", clusterNames)
+      .order("sort_order", { ascending: true })
+      .order("code", { ascending: true });
+
+    if (matchingEventsError) {
+      throw new Error(matchingEventsError.message);
+    }
+
+    for (const event of matchingEvents ?? []) {
+      const { count, error } = await supabase
+        .from("key_sets")
+        .select("id", { count: "exact", head: true })
+        .eq("event_id", event.id)
+        .eq("status", "approved");
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      if ((count ?? 0) > 0) {
+        return event as EventRow;
+      }
+    }
+  }
+
   const { data: event, error: eventError } = await supabase
     .from("events")
-    .select("id,code,name")
+    .select("id,code,name,cluster")
     .eq("code", "MCS")
     .maybeSingle();
 
   if (eventError || !event) {
     throw new Error(eventError?.message ?? "MCS event is unavailable.");
   }
+
+  return event as EventRow;
+}
+
+async function loadLearningCatalog(selectedCluster: DecaClusterPreference | null) {
+  const supabase = getSupabaseAdminClient();
+  const event = await findLearningEventForCluster(selectedCluster);
 
   const { data: keySets, error: keySetsError } = await supabase
     .from("key_sets")
@@ -154,7 +201,7 @@ async function loadMcsLearningCatalog() {
   const keySetRows = (keySets ?? []) as KeySetRow[];
 
   if (keySetRows.length === 0) {
-    return { event: event as EventRow, keySets: keySetRows, concepts: [] as ConceptRow[] };
+    return { event, keySets: keySetRows, concepts: [] as ConceptRow[] };
   }
 
   const { data: links, error: linksError } = await supabase
@@ -189,7 +236,7 @@ async function loadMcsLearningCatalog() {
   }
 
   return {
-    event: event as EventRow,
+    event,
     keySets: keySetRows,
     concepts: (concepts ?? []) as ConceptRow[],
   };
@@ -197,9 +244,10 @@ async function loadMcsLearningCatalog() {
 
 async function loadStudentConceptReadiness(
   userId: string,
+  selectedCluster: DecaClusterPreference | null,
 ): Promise<StudentConceptMasteryReadiness> {
   const supabase = getSupabaseAdminClient();
-  const { event, keySets, concepts } = await loadMcsLearningCatalog();
+  const { event, keySets, concepts } = await loadLearningCatalog(selectedCluster);
   const masteryCounts = emptyMasteryCounts();
 
   if (concepts.length === 0) {
@@ -242,7 +290,7 @@ async function loadStudentConceptReadiness(
       status,
       explain_score: mastery?.explain_score ?? null,
       improve_score: mastery?.improve_score ?? null,
-      href: `/learn/mcs/concepts/${concept.id}`,
+      href: `/learn/${event.code.toLowerCase()}/concepts/${concept.id}`,
     };
   });
 
@@ -387,6 +435,7 @@ async function loadStudentExamReadiness(userId: string): Promise<StudentExamRead
     trend: attemptRows.slice(0, 8).map((attempt) => ({
       id: attempt.id,
       resource_title: resourcesById.get(attempt.resource_id)?.title ?? "Unknown exam",
+      resource_cluster: resourcesById.get(attempt.resource_id)?.cluster ?? null,
       percentage: attempt.percentage ?? 0,
       completed_at: attempt.completed_at,
     })),
@@ -446,15 +495,52 @@ async function loadStudentActivity(userId: string): Promise<StudentActivityReadi
   };
 }
 
+function sortRoleplayFeedbackByCluster(
+  items: StudentRoleplayFeedbackSummary[],
+  selectedCluster: DecaClusterPreference | null,
+) {
+  if (!selectedCluster) {
+    return items;
+  }
+
+  return [...items].sort((first, second) => {
+    const firstMatches = eventMatchesSelectedCluster(first.resource_cluster, selectedCluster) ? 0 : 1;
+    const secondMatches = eventMatchesSelectedCluster(second.resource_cluster, selectedCluster) ? 0 : 1;
+
+    return firstMatches - secondMatches;
+  });
+}
+
+function sortExamTrendByCluster(
+  exam: StudentExamReadinessSummary,
+  selectedCluster: DecaClusterPreference | null,
+): StudentExamReadinessSummary {
+  if (!selectedCluster) {
+    return exam;
+  }
+
+  return {
+    ...exam,
+    trend: [...exam.trend].sort((first, second) => {
+      const firstMatches = eventMatchesSelectedCluster(first.resource_cluster, selectedCluster) ? 0 : 1;
+      const secondMatches = eventMatchesSelectedCluster(second.resource_cluster, selectedCluster) ? 0 : 1;
+
+      return firstMatches - secondMatches;
+    }),
+  };
+}
+
 function getStudentRecommendedNextStep({
   exam,
   learning,
   recentConceptFeedback,
   recentRoleplayFeedback,
+  selectedCluster,
 }: Pick<
   StudentReadinessSummary,
-  "exam" | "learning" | "recentConceptFeedback" | "recentRoleplayFeedback"
+  "exam" | "learning" | "recentConceptFeedback" | "recentRoleplayFeedback" | "selectedCluster"
 >): StudentRecommendedNextStep {
+  const selectedClusterLabel = getDecaClusterLabel(selectedCluster);
   const revisionCandidate = recentConceptFeedback.items.find(
     (item) => !item.has_revision && item.status === "feedback_given",
   );
@@ -473,7 +559,9 @@ function getStudentRecommendedNextStep({
   if (nextConcept) {
     return {
       title: `Practice ${nextConcept.name}`,
-      description: "Build the next MCS concept before adding more roleplay pressure.",
+      description: selectedClusterLabel
+        ? `Build the next ${selectedClusterLabel} concept when available, with MCS as the current fallback pathway.`
+        : "Build the next MCS concept before adding more roleplay pressure.",
       href: nextConcept.href,
       reason: `Current status: ${nextConcept.status.replaceAll("_", " ")}.`,
     };
@@ -482,7 +570,9 @@ function getStudentRecommendedNextStep({
   if (recentRoleplayFeedback.items.length === 0) {
     return {
       title: "Try a roleplay practice attempt",
-      description: "Use an approved roleplay to turn concept work into a judge-style response.",
+      description: selectedClusterLabel
+        ? `Start with ${selectedClusterLabel} roleplays when available; other approved roleplays remain open.`
+        : "Use an approved roleplay to turn concept work into a judge-style response.",
       href: "/roleplays",
       reason: "No roleplay practice attempts are saved yet.",
     };
@@ -504,7 +594,9 @@ function getStudentRecommendedNextStep({
   if (exam.attemptsCount === 0) {
     return {
       title: "Take an exam practice set",
-      description: "Add an exam score so your prep plan can spot question patterns.",
+      description: selectedClusterLabel
+        ? `Prioritize ${selectedClusterLabel} exams when available, but keep practicing across all approved content.`
+        : "Add an exam score so your prep plan can spot question patterns.",
       href: "/exams",
       reason: "No exam attempts are saved yet.",
     };
@@ -512,8 +604,10 @@ function getStudentRecommendedNextStep({
 
   return {
     title: "Continue guided learning",
-    description: "Keep reinforcing MCS concepts and rotate in roleplay and exam practice.",
-    href: "/learn/mcs",
+    description: selectedClusterLabel
+      ? `Keep reinforcing guided concepts and rotate in ${selectedClusterLabel} practice where content exists.`
+      : "Keep reinforcing MCS concepts and rotate in roleplay and exam practice.",
+    href: `/learn/${learning.eventCode.toLowerCase()}`,
     reason: "Your current activity has the main practice streams started.",
   };
 }
@@ -521,6 +615,13 @@ function getStudentRecommendedNextStep({
 export async function buildStudentReadinessSummary(
   userId: string,
 ): Promise<StudentReadinessSummary> {
+  const supabase = getSupabaseAdminClient();
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("selected_cluster")
+    .eq("id", userId)
+    .maybeSingle();
+  const selectedCluster = (profile?.selected_cluster ?? null) as DecaClusterPreference | null;
   const learningFallback: StudentConceptMasteryReadiness = {
     status: "unavailable",
     error: "Learning progress unavailable.",
@@ -550,25 +651,29 @@ export async function buildStudentReadinessSummary(
 
   const [learning, recentConceptFeedback, recentRoleplayFeedback, exam, activity] =
     await Promise.all([
-      safeSection(learningFallback, () => loadStudentConceptReadiness(userId)),
+      safeSection(learningFallback, () => loadStudentConceptReadiness(userId, selectedCluster)),
       safeSection([], () => loadStudentRecentConceptFeedback(userId)),
       safeSection([], () => loadStudentRecentRoleplayFeedback(userId)),
       safeSection(examFallback, () => loadStudentExamReadiness(userId)),
       safeSection(activityFallback, () => loadStudentActivity(userId)),
     ]);
 
+  const sortedRoleplayFeedback = sortRoleplayFeedbackByCluster(recentRoleplayFeedback, selectedCluster);
+  const sortedExam = sortExamTrendByCluster(exam, selectedCluster);
+
   const summaryWithoutStep = {
     generatedAt: new Date().toISOString(),
     learning,
+    selectedCluster,
     recentConceptFeedback: {
       status: "ok" as const,
       items: recentConceptFeedback,
     },
     recentRoleplayFeedback: {
       status: "ok" as const,
-      items: recentRoleplayFeedback,
+      items: sortedRoleplayFeedback,
     },
-    exam,
+    exam: sortedExam,
     activity: {
       status: "ok" as const,
       summary: activity,
@@ -586,7 +691,7 @@ async function loadAdminStudentActivity() {
   const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
   const { data: profiles, error } = await supabase
     .from("profiles")
-    .select("id,email,role,created_at,updated_at");
+    .select("id,email,role,selected_cluster,created_at,updated_at");
 
   if (error) {
     throw new Error(error.message);
@@ -594,6 +699,11 @@ async function loadAdminStudentActivity() {
 
   const profileRows = (profiles ?? []) as Profile[];
   const studentProfiles = profileRows.filter((profile) => profile.role === "student");
+  const clusterCounts = decaClusters.map((cluster) => ({
+    value: cluster.value,
+    label: cluster.label,
+    count: studentProfiles.filter((profile) => profile.selected_cluster === cluster.value).length,
+  }));
   const activityResults = await Promise.all([
     supabase.from("question_attempts").select("user_id").gte("created_at", since),
     supabase.from("concept_feedback_attempts").select("user_id").gte("created_at", since),
@@ -622,6 +732,8 @@ async function loadAdminStudentActivity() {
     totalStudents: studentProfiles.length,
     activeLast7Days: activeUserIds.size,
     studentsWithRecentAttempts: studentProfiles.filter((profile) => activeUserIds.has(profile.id)).length,
+    clusterDistribution: clusterCounts,
+    studentsWithoutCluster: studentProfiles.filter((profile) => !profile.selected_cluster).length,
     inactiveStudents: studentProfiles
       .filter((profile) => !activeUserIds.has(profile.id))
       .slice(0, 8)
@@ -631,7 +743,7 @@ async function loadAdminStudentActivity() {
 
 async function loadAdminLearningProgress() {
   const supabase = getSupabaseAdminClient();
-  const { concepts } = await loadMcsLearningCatalog();
+  const { concepts } = await loadLearningCatalog(null);
   const conceptIds = concepts.map((concept) => concept.id);
   const masteryCounts = emptyMasteryCounts();
   const [masteryResult, feedbackResult] = await Promise.all([
@@ -851,6 +963,12 @@ export async function buildAdminReadinessSummary(): Promise<AdminReadinessSummar
           totalStudents: 0,
           activeLast7Days: 0,
           studentsWithRecentAttempts: 0,
+          clusterDistribution: decaClusters.map((cluster) => ({
+            value: cluster.value,
+            label: cluster.label,
+            count: 0,
+          })),
+          studentsWithoutCluster: 0,
           inactiveStudents: [],
         },
         loadAdminStudentActivity,

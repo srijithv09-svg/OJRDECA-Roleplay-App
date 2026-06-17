@@ -11,6 +11,12 @@ export type Json =
 export type SupabaseResourceType = "roleplay" | "exam" | "reference" | "unknown";
 export type ResourceApprovalStatus = "approved" | "pending" | "rejected" | string;
 export type ProfileRole = "student" | "admin" | "advisor";
+export type DecaClusterPreference =
+  | "entrepreneurship"
+  | "marketing"
+  | "business_management_administration"
+  | "hospitality_tourism"
+  | "finance";
 export type ExamCorrectAnswer = "A" | "B" | "C" | "D" | "E";
 export type ExamSelectedAnswer = ExamCorrectAnswer | "UNANSWERED";
 export type ExamKeyStatus = "no-key" | "partial" | "complete";
@@ -70,6 +76,7 @@ export type Profile = {
   id: string;
   email: string | null;
   role: ProfileRole;
+  selected_cluster: DecaClusterPreference | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -563,6 +570,7 @@ export type StudentRoleplayFeedbackSummary = {
   id: string;
   resource_id: string;
   resource_title: string;
+  resource_cluster: string | null;
   event_code: string | null;
   ai_overall_score: number | null;
   ai_feedback_status: AttemptProcessingStatus;
@@ -582,6 +590,7 @@ export type StudentExamReadinessSummary = {
   trend: Array<{
     id: string;
     resource_title: string;
+    resource_cluster: string | null;
     percentage: number;
     completed_at: string | null;
   }>;
@@ -597,6 +606,7 @@ export type StudentActivityReadinessSummary = {
 
 export type StudentReadinessSummary = {
   generatedAt: string;
+  selectedCluster: DecaClusterPreference | null;
   learning: StudentConceptMasteryReadiness;
   recommendedNextStep: StudentRecommendedNextStep;
   recentConceptFeedback: {
@@ -626,6 +636,8 @@ export type AdminReadinessSummary = {
     totalStudents: number;
     activeLast7Days: number;
     studentsWithRecentAttempts: number;
+    clusterDistribution: Array<{ value: DecaClusterPreference; label: string; count: number }>;
+    studentsWithoutCluster: number;
     inactiveStudents: Array<{ id: string; email: string | null }>;
   };
   learningProgress: {
@@ -740,6 +752,7 @@ export type Database = {
           id: string;
           email?: string | null;
           role?: ProfileRole;
+          selected_cluster?: DecaClusterPreference | null;
           created_at?: string | null;
           updated_at?: string | null;
         };
@@ -747,6 +760,7 @@ export type Database = {
           id?: string;
           email?: string | null;
           role?: ProfileRole;
+          selected_cluster?: DecaClusterPreference | null;
           created_at?: string | null;
           updated_at?: string | null;
         };

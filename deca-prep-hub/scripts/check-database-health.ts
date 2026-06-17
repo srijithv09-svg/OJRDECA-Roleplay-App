@@ -55,7 +55,7 @@ const requiredTables: RequiredTable[] = [
 ];
 
 const keyColumns: Record<RequiredTable, string[]> = {
-  profiles: ["role", "updated_at"],
+  profiles: ["role", "selected_cluster", "updated_at"],
   resources: ["event_code", "event_category", "performance_indicators_reviewed"],
   exam_answer_keys: [],
   exam_attempts: [],

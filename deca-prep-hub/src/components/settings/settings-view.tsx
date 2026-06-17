@@ -6,14 +6,19 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { getRoleLabel } from "@/lib/auth";
+import { decaClusters, getDecaClusterLabel, type DecaClusterPreference } from "@/lib/deca/clusters";
 import { getProfileDisplayName } from "@/lib/profile-display";
-import { getCurrentProfile } from "@/lib/services/profiles";
+import { getCurrentProfile, updateSelectedCluster } from "@/lib/services/profiles";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import type { Profile } from "@/lib/types";
 
 export function SettingsView() {
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [selectedCluster, setSelectedCluster] = useState<DecaClusterPreference | "">("");
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [isSavingCluster, setIsSavingCluster] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const displayName = getProfileDisplayName(profile) ?? "Loading account";
 
@@ -24,6 +29,7 @@ export function SettingsView() {
       .then((nextProfile) => {
         if (isActive) {
           setProfile(nextProfile);
+          setSelectedCluster(nextProfile?.selected_cluster ?? "");
         }
       })
       .catch(() => {
@@ -43,6 +49,27 @@ export function SettingsView() {
     const supabase = getSupabaseClient();
     await supabase.auth.signOut();
     router.replace("/login");
+  }
+
+  async function handleSaveCluster() {
+    setIsSavingCluster(true);
+    setSaveError(null);
+    setSaveMessage(null);
+
+    try {
+      const updatedProfile = await updateSelectedCluster(selectedCluster || null);
+      setProfile(updatedProfile);
+      setSelectedCluster(updatedProfile.selected_cluster ?? "");
+      setSaveMessage(
+        updatedProfile.selected_cluster
+          ? `Saved. Your dashboard will prioritize ${getDecaClusterLabel(updatedProfile.selected_cluster)}.`
+          : "Saved. Your dashboard will keep using the default recommendation order.",
+      );
+    } catch (caughtError) {
+      setSaveError(caughtError instanceof Error ? caughtError.message : "Unable to save your DECA cluster.");
+    } finally {
+      setIsSavingCluster(false);
+    }
   }
 
   return (
@@ -72,7 +99,7 @@ export function SettingsView() {
               ["Email", profile?.email ?? "Loading account"],
               ["Role", getRoleLabel(profile?.role)],
               ["Chapter", "Owen J. Roberts DECA"],
-              ["Primary cluster", "Marketing"],
+              ["Primary cluster", getDecaClusterLabel(profile?.selected_cluster) ?? "Not selected"],
             ].map(([label, value]) => (
               <label className="grid gap-2 text-sm font-semibold text-slate-800" key={label}>
                 {label}
@@ -84,6 +111,46 @@ export function SettingsView() {
                 />
               </label>
             ))}
+          </div>
+        </Card>
+
+        <Card>
+          <CardHeader eyebrow="Personalization" title="DECA Cluster" />
+          <p className="text-sm leading-6 text-slate-600">
+            Choose your main DECA cluster so your dashboard can recommend the most relevant practice first.
+            You can still access all approved content.
+          </p>
+          <div className="mt-5 grid gap-3">
+            <label className="grid gap-2 text-sm font-semibold text-slate-800">
+              Main cluster
+              <select
+                className="min-h-11 rounded-md border border-slate-200 bg-white px-3 text-sm font-normal text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                onChange={(event) => setSelectedCluster(event.target.value as DecaClusterPreference | "")}
+                value={selectedCluster}
+              >
+                <option value="">No cluster selected</option>
+                {decaClusters.map((cluster) => (
+                  <option key={cluster.value} value={cluster.value}>
+                    {cluster.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {selectedCluster ? (
+              <p className="rounded-lg bg-slate-50 p-3 text-sm leading-6 text-slate-600">
+                {decaClusters.find((cluster) => cluster.value === selectedCluster)?.description}
+              </p>
+            ) : null}
+            {saveError ? <p className="text-sm font-semibold text-red-700">{saveError}</p> : null}
+            {saveMessage ? <p className="text-sm font-semibold text-green-700">{saveMessage}</p> : null}
+            <button
+              className="min-h-10 w-fit rounded-md bg-blue-700 px-4 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300"
+              disabled={isSavingCluster || !profile}
+              onClick={handleSaveCluster}
+              type="button"
+            >
+              {isSavingCluster ? "Saving..." : "Save cluster"}
+            </button>
           </div>
         </Card>
 

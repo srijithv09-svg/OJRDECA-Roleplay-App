@@ -6,7 +6,10 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import { ResourceEmptyState, ResourceErrorState, ResourceLoadingState } from "./resource-states";
+import { eventMatchesSelectedCluster, getDecaClusterLabel } from "@/lib/deca/clusters";
+import { getCurrentOwnProfile } from "@/lib/services/profiles";
 import { ResourcesService, type PublicResourceListItem } from "@/lib/services/resources";
+import type { DecaClusterPreference } from "@/lib/deca/clusters";
 import type { SupabaseResourceType } from "@/lib/types";
 
 type LibraryMode = "exam" | "roleplay";
@@ -52,6 +55,7 @@ export function ApprovedResourceLibraryView({
   mode: LibraryMode;
 }) {
   const [resources, setResources] = useState<PublicResourceListItem[]>([]);
+  const [selectedCluster, setSelectedCluster] = useState<DecaClusterPreference | null>(null);
   const [search, setSearch] = useState("");
   const [clusterFilter, setClusterFilter] = useState("all");
   const [yearFilter, setYearFilter] = useState("all");
@@ -65,15 +69,19 @@ export function ApprovedResourceLibraryView({
 
     async function loadResources() {
       try {
-        const nextResources = await ResourcesService.listApprovedPublicResources({
-          resourceType: mode as SupabaseResourceType,
-        });
+        const [nextResources, nextProfile] = await Promise.all([
+          ResourcesService.listApprovedPublicResources({
+            resourceType: mode as SupabaseResourceType,
+          }),
+          getCurrentOwnProfile().catch(() => null),
+        ]);
 
         if (!isActive) {
           return;
         }
 
         setResources(nextResources);
+        setSelectedCluster(nextProfile?.selected_cluster ?? null);
         setError(null);
       } catch (caughtError) {
         if (!isActive) {
@@ -121,6 +129,14 @@ export function ApprovedResourceLibraryView({
       return matchesSearch && matchesCluster && matchesYear;
     });
   }, [clusterFilter, resources, search, yearFilter]);
+  const selectedClusterLabel = getDecaClusterLabel(selectedCluster);
+  const selectedClusterFilter = useMemo(() => {
+    if (!selectedCluster) {
+      return null;
+    }
+
+    return clusterOptions.find((option) => eventMatchesSelectedCluster(option.value, selectedCluster))?.value ?? null;
+  }, [clusterOptions, selectedCluster]);
 
   function retryLoad() {
     setIsLoading(true);
@@ -187,6 +203,29 @@ export function ApprovedResourceLibraryView({
         <p className="mt-4 text-sm text-slate-500">
           Showing {filteredResources.length} of {resources.length} approved {emptyLabel}.
         </p>
+        {selectedClusterLabel && selectedClusterFilter ? (
+          <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
+            <span>
+              Your cluster preference is {selectedClusterLabel}. This filter changes what is shown now, not what you can access.
+            </span>
+            <button
+              className="min-h-9 rounded-md border border-slate-200 bg-white px-3 font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
+              onClick={() => setClusterFilter(selectedClusterFilter)}
+              type="button"
+            >
+              Show my cluster
+            </button>
+            {clusterFilter !== "all" ? (
+              <button
+                className="min-h-9 rounded-md border border-slate-200 bg-white px-3 font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
+                onClick={() => setClusterFilter("all")}
+                type="button"
+              >
+                All clusters
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </Card>
 
       {filteredResources.length === 0 ? (

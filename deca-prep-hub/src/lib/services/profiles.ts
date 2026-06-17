@@ -1,21 +1,29 @@
 import { isAllowedSchoolEmail } from "@/lib/auth";
+import type { DecaClusterPreference } from "@/lib/deca/clusters";
 import { getFriendlyErrorMessage, logDeveloperError } from "@/lib/errors";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import type { Profile } from "@/lib/types";
 
-const profileColumns = "id,email,role,created_at,updated_at";
+const profileColumns = "id,email,role,selected_cluster,created_at,updated_at";
 const fallbackProfileColumns = "id,email,role,created_at";
 
 function isMissingUpdatedAtError(error: { code?: string; message?: string } | null) {
   return (
     error?.code === "42703" ||
-    Boolean(error?.message?.toLowerCase().includes("profiles.updated_at"))
+    Boolean(error?.message?.toLowerCase().includes("profiles.updated_at")) ||
+    Boolean(error?.message?.toLowerCase().includes("profiles.selected_cluster"))
   );
 }
 
-function withFallbackUpdatedAt(profile: Omit<Profile, "updated_at"> & { updated_at?: string | null }) {
+function withFallbackUpdatedAt(
+  profile: Omit<Profile, "selected_cluster" | "updated_at"> & {
+    selected_cluster?: Profile["selected_cluster"];
+    updated_at?: string | null;
+  },
+) {
   return {
     ...profile,
+    selected_cluster: profile.selected_cluster ?? null,
     updated_at: profile.updated_at ?? null,
   } satisfies Profile;
 }
@@ -149,4 +157,32 @@ export async function countProfiles(): Promise<number> {
   }
 
   return count ?? 0;
+}
+
+export async function updateSelectedCluster(
+  selectedCluster: DecaClusterPreference | null,
+): Promise<Profile> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.auth.getSession();
+
+  if (error || !data.session?.access_token) {
+    logDeveloperError("[profiles] cluster preference session lookup failed", error);
+    throw new Error(getFriendlyErrorMessage(error, "You must be signed in to update settings."));
+  }
+
+  const response = await fetch("/api/settings/cluster-preference", {
+    body: JSON.stringify({ selected_cluster: selectedCluster }),
+    headers: {
+      Authorization: `Bearer ${data.session.access_token}`,
+      "Content-Type": "application/json",
+    },
+    method: "PATCH",
+  });
+  const payload = (await response.json()) as { error?: string; profile?: Profile };
+
+  if (!response.ok || !payload.profile) {
+    throw new Error(getFriendlyErrorMessage(payload.error, "Unable to save your DECA cluster."));
+  }
+
+  return withFallbackUpdatedAt(payload.profile);
 }

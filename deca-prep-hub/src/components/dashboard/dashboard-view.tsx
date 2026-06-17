@@ -6,6 +6,7 @@ import { ButtonLink } from "@/components/ui/button-link";
 import { Card, CardHeader } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { getRoleLabel, isAdminRole } from "@/lib/auth";
+import { getDecaClusterLabel } from "@/lib/deca/clusters";
 import { getFriendlyErrorMessage } from "@/lib/errors";
 import { getProfileDisplayName } from "@/lib/profile-display";
 import { AnalyticsService } from "@/lib/services/analytics";
@@ -290,6 +291,7 @@ export function DashboardView() {
   const isExamAnalyticsUnavailable = !analytics || Boolean(analytics.examAnalyticsUnavailable);
   const isRoleplayPracticeUnavailable =
     !analytics || Boolean(analytics.roleplayPracticeUnavailable);
+  const selectedClusterLabel = getDecaClusterLabel(profile.selected_cluster);
 
   return (
     <>
@@ -342,16 +344,47 @@ export function DashboardView() {
               <p className="font-semibold text-slate-800">Role</p>
               <p className="mt-1 text-slate-600">{getRoleLabel(profile.role)}</p>
             </div>
+            <div className="rounded-lg bg-slate-50 p-3">
+              <p className="font-semibold text-slate-800">
+                {selectedClusterLabel ? `Recommended for: ${selectedClusterLabel}` : "No cluster selected"}
+              </p>
+              <p className="mt-1 text-slate-600">
+                {selectedClusterLabel
+                  ? "Your recommendations prioritize this cluster first."
+                  : "Choose a DECA cluster to personalize recommendations."}
+              </p>
+              <ButtonLink className="mt-3" href="/settings">
+                {selectedClusterLabel ? "Change" : "Set cluster"}
+              </ButtonLink>
+            </div>
           </div>
         </Card>
       </section>
 
+      {!selectedClusterLabel ? (
+        <Card className="border-blue-100 bg-blue-50">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-blue-950">Choose your DECA cluster</h2>
+              <p className="mt-2 text-sm leading-6 text-blue-900">
+                Your dashboard will prioritize resources and practice for your cluster, but you can still access everything.
+              </p>
+            </div>
+            <ButtonLink href="/settings">Set cluster</ButtonLink>
+          </div>
+        </Card>
+      ) : null}
+
       <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
         <Card>
-          <CardHeader eyebrow="Continue learning" title="MCS guided pathway" />
+          <CardHeader
+            eyebrow="Continue learning"
+            title={selectedClusterLabel ? `${selectedClusterLabel} guidance` : "MCS guided pathway"}
+          />
           <p className="text-sm leading-6 text-slate-600">
-            Guided learning currently starts with MCS. Resource prep supports all DECA
-            events.
+            {selectedClusterLabel
+              ? `Your cluster preference changes recommendation order, not access. Guided learning falls back to MCS where ${selectedClusterLabel} content is not ready yet.`
+              : "Guided learning currently starts with MCS. Resource prep supports all DECA events."}
           </p>
           {readiness ? (
             <>

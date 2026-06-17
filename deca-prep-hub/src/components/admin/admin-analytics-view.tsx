@@ -416,6 +416,23 @@ export function AdminAnalyticsView() {
                     {readiness.studentActivity.inactiveStudents.length}
                   </span>
                 </div>
+                <div className="border-t border-slate-100 pt-3">
+                  <p className="font-semibold text-slate-800">Cluster preferences</p>
+                  <div className="mt-2 space-y-2">
+                    {readiness.studentActivity.clusterDistribution.map((cluster) => (
+                      <div className="flex justify-between gap-4" key={cluster.value}>
+                        <span className="text-slate-600">{cluster.label}</span>
+                        <span className="font-semibold text-slate-950">{cluster.count}</span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between gap-4">
+                      <span className="text-slate-600">No cluster selected</span>
+                      <span className="font-semibold text-slate-950">
+                        {readiness.studentActivity.studentsWithoutCluster}
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </Card>
 

@@ -8,11 +8,15 @@ import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { ResourceErrorState, ResourceLoadingState } from "@/components/resources/resource-states";
 import { eventPath, EventMeta } from "@/components/learn/learning-ui";
+import { eventMatchesSelectedCluster, getDecaClusterLabel } from "@/lib/deca/clusters";
 import { LearningService, type LearningEventSummary } from "@/lib/services/learning";
+import { getCurrentOwnProfile } from "@/lib/services/profiles";
+import type { Profile } from "@/lib/types";
 
 export function LearnHomeView() {
   const [events, setEvents] = useState<LearningEventSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   async function load() {
@@ -20,13 +24,33 @@ export function LearnHomeView() {
     setError(null);
 
     try {
-      setEvents(await LearningService.getLearningEvents());
+      const [nextProfile, learningEvents] = await Promise.all([
+        getCurrentOwnProfile().catch(() => null),
+        LearningService.getLearningEvents(),
+      ]);
+      setProfile(nextProfile);
+      setEvents(
+        nextProfile?.selected_cluster
+          ? [...learningEvents].sort((first, second) => {
+              const firstMatches = eventMatchesSelectedCluster(first.event.cluster, nextProfile.selected_cluster) ? 0 : 1;
+              const secondMatches = eventMatchesSelectedCluster(second.event.cluster, nextProfile.selected_cluster) ? 0 : 1;
+
+              return (
+                firstMatches - secondMatches ||
+                first.event.sort_order - second.event.sort_order ||
+                first.event.code.localeCompare(second.event.code)
+              );
+            })
+          : learningEvents,
+      );
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "Unable to load learning pathways.");
     } finally {
       setIsLoading(false);
     }
   }
+
+  const selectedClusterLabel = getDecaClusterLabel(profile?.selected_cluster);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -52,14 +76,17 @@ export function LearnHomeView() {
 
       <Card className="border-blue-100 bg-blue-50">
         <p className="text-sm leading-6 text-blue-900">
-          Guided learning is currently piloting with MCS. The resource library still supports all DECA events.
-          Future pathways can be added by enabling an event and adding approved key sets, concepts, and questions.
+          {selectedClusterLabel
+            ? `Your ${selectedClusterLabel} preference changes recommendation order, not access. Guided learning is currently piloting with MCS, and future pathways can be added by enabling an event and adding approved key sets, concepts, and questions.`
+            : "Guided learning is currently piloting with MCS. The resource library still supports all DECA events. Future pathways can be added by enabling an event and adding approved key sets, concepts, and questions."}
         </p>
       </Card>
 
       <section className="grid gap-4 lg:grid-cols-2">
         {events.map(({ approvedQuestionCount, event, keySetCount }) => {
-          const isRecommended = event.code === "MCS";
+          const isRecommended = selectedClusterLabel
+            ? eventMatchesSelectedCluster(event.cluster, profile?.selected_cluster) || event.code === "MCS"
+            : event.code === "MCS";
           const isComingSoon = approvedQuestionCount === 0;
 
           return (
@@ -71,7 +98,13 @@ export function LearnHomeView() {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <div className="flex flex-wrap gap-2">
-                    {isRecommended ? <Badge tone="green">Recommended first pathway</Badge> : null}
+                    {isRecommended ? (
+                      <Badge tone="green">
+                        {selectedClusterLabel && eventMatchesSelectedCluster(event.cluster, profile?.selected_cluster)
+                          ? `Recommended for ${selectedClusterLabel}`
+                          : "Recommended first pathway"}
+                      </Badge>
+                    ) : null}
                     {isComingSoon ? <Badge tone="amber">Coming soon</Badge> : <Badge tone="blue">Active pilot</Badge>}
                   </div>
                   <h2 className="mt-3 text-xl font-bold text-slate-950">{event.name}</h2>
