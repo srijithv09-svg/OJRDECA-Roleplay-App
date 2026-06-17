@@ -8,9 +8,11 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { ResourceErrorState, ResourceLoadingState } from "@/components/resources/resource-states";
 import { isAdminRole } from "@/lib/auth";
+import { decaClusters } from "@/lib/deca/clusters";
 import {
   AdminContentService,
   type AdminContentStudioData,
+  type CurriculumDraftRequest,
 } from "@/lib/services/admin-content";
 import { getCurrentOwnProfile } from "@/lib/services/profiles";
 import type {
@@ -24,7 +26,7 @@ import type {
   StudyResource,
 } from "@/lib/types";
 
-type StudioTab = "concepts" | "modules" | "questions" | "resources" | "review";
+type StudioTab = "concepts" | "drafts" | "modules" | "questions" | "resources" | "review";
 type KeySetForm = {
   description: string;
   event_id: string;
@@ -73,8 +75,22 @@ type StudyResourceForm = {
   title: string;
   url: string;
 };
+type CurriculumDraftForm = {
+  admin_notes: string;
+  cluster: string;
+  coverage_mode: CurriculumDraftRequest["coverage_mode"];
+  desired_module_count: string;
+  difficulty: NonNullable<CurriculumDraftRequest["difficulty"]>;
+  event_id: string;
+  pasted_performance_indicators: string;
+  questions_per_concept: string;
+  selected_performance_indicator_ids: string[];
+  source_type: CurriculumDraftRequest["source_type"];
+  target_key_set_id: string;
+};
 
 const tabs: Array<{ id: StudioTab; label: string }> = [
+  { id: "drafts", label: "AI Drafts" },
   { id: "modules", label: "Modules / Key Sets" },
   { id: "concepts", label: "Concepts" },
   { id: "questions", label: "Questions" },
@@ -120,6 +136,33 @@ function arrayFromJson(value: Json | null) {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === "string")
     : [];
+}
+
+function sourcePiList(value: Json | null | undefined) {
+  return arrayFromJson(value ?? null);
+}
+
+function SourcePiBadges({ value }: { value: Json | null | undefined }) {
+  const indicators = sourcePiList(value);
+
+  if (indicators.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-3 flex flex-wrap gap-2">
+      <Badge tone="blue">PI-grounded</Badge>
+      <Badge tone="amber">AI Draft</Badge>
+      <details className="w-full rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
+        <summary className="cursor-pointer font-semibold text-slate-800">Source performance indicators</summary>
+        <ul className="mt-2 list-disc space-y-1 pl-5">
+          {indicators.slice(0, 6).map((indicator) => (
+            <li key={indicator}>{indicator}</li>
+          ))}
+        </ul>
+      </details>
+    </div>
+  );
 }
 
 function choicesFromQuestion(question: StructuredQuestion) {
@@ -361,6 +404,7 @@ export function AdminContentView() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [keySetForm, setKeySetForm] = useState({
@@ -396,6 +440,19 @@ export function AdminContentView() {
     status: "draft" as ReviewableContentStatus,
     title: "",
     url: "",
+  });
+  const [curriculumDraftForm, setCurriculumDraftForm] = useState<CurriculumDraftForm>({
+    admin_notes: "",
+    cluster: "Marketing",
+    coverage_mode: "create_new_module",
+    desired_module_count: "1",
+    difficulty: "intermediate",
+    event_id: "",
+    pasted_performance_indicators: "",
+    questions_per_concept: "3",
+    selected_performance_indicator_ids: [],
+    source_type: "manual_paste",
+    target_key_set_id: "",
   });
 
   async function load() {
@@ -468,6 +525,30 @@ export function AdminContentView() {
       setError(caughtError instanceof Error ? caughtError.message : "Unable to save content.");
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function generateDraft() {
+    setIsGeneratingDraft(true);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const result = await AdminContentService.generateCurriculumDraft({
+        ...curriculumDraftForm,
+        desired_module_count: Number(curriculumDraftForm.desired_module_count),
+        questions_per_concept: Number(curriculumDraftForm.questions_per_concept),
+      });
+      const nextData = await AdminContentService.getContentStudioData();
+      setData(nextData);
+      setMessage(
+        `Draft job ${result.jobId.slice(0, 8)} created ${result.created.keySets.length} module(s), ${result.created.concepts.length} concept(s), and ${result.created.questions.length} question(s). Nothing is student-visible until approved.`,
+      );
+      setActiveTab("review");
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : "Unable to generate curriculum draft.");
+    } finally {
+      setIsGeneratingDraft(false);
     }
   }
 
@@ -578,7 +659,7 @@ export function AdminContentView() {
         </Card>
       ) : null}
 
-      <section className="grid gap-3 md:grid-cols-5">
+      <section className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
         {tabs.map((tab) => (
           <button
             className={`min-h-11 rounded-md border px-3 text-sm font-semibold transition ${
@@ -626,6 +707,16 @@ export function AdminContentView() {
         </Card>
 
         <div className="grid gap-4">
+          {activeTab === "drafts" ? (
+            <CurriculumDraftSection
+              data={data}
+              form={curriculumDraftForm}
+              isGenerating={isGeneratingDraft}
+              onFormChange={setCurriculumDraftForm}
+              onGenerate={generateDraft}
+            />
+          ) : null}
+
           {activeTab === "modules" ? (
             <ModulesSection
               data={data}
@@ -722,6 +813,212 @@ export function AdminContentView() {
   );
 }
 
+function CurriculumDraftSection({
+  data,
+  form,
+  isGenerating,
+  onFormChange,
+  onGenerate,
+}: {
+  data: AdminContentStudioData;
+  form: CurriculumDraftForm;
+  isGenerating: boolean;
+  onFormChange: (form: CurriculumDraftForm) => void;
+  onGenerate: () => void;
+}) {
+  const selectedEvent = data.events.find((event) => event.id === form.event_id);
+  const selectedPiIds = new Set(form.selected_performance_indicator_ids);
+  const filteredPis = data.roleplayPerformanceIndicators.filter((indicator) => {
+    return (
+      (!form.event_id || indicator.event_id === form.event_id) &&
+      (!form.cluster || selectedEvent?.cluster === form.cluster || !selectedEvent)
+    );
+  });
+
+  function togglePi(id: string, checked: boolean) {
+    onFormChange({
+      ...form,
+      selected_performance_indicator_ids: checked
+        ? [...form.selected_performance_indicator_ids, id]
+        : form.selected_performance_indicator_ids.filter((nextId) => nextId !== id),
+    });
+  }
+
+  return (
+    <>
+      <Card>
+        <CardHeader eyebrow="PI-grounded AI drafts" title="Draft from Performance Indicators" />
+        <p className="text-sm leading-6 text-slate-600">
+          Use approved performance indicators or a pasted PI list to draft modules, concepts, and questions.
+          Generated content stays draft or needs review until an admin approves it.
+        </p>
+        <div className="mt-5 grid gap-4 lg:grid-cols-2">
+          <SelectField
+            label="PI source"
+            onChange={(value) =>
+              onFormChange({
+                ...form,
+                source_type: value as CurriculumDraftForm["source_type"],
+              })
+            }
+            value={form.source_type}
+          >
+            <option value="manual_paste">Paste PI list</option>
+            <option value="extracted_pi">Existing approved PIs</option>
+          </SelectField>
+          <SelectField
+            label="Target event/pathway"
+            onChange={(value) => {
+              const event = data.events.find((nextEvent) => nextEvent.id === value);
+              onFormChange({
+                ...form,
+                cluster: event?.cluster ?? form.cluster,
+                event_id: value,
+                target_key_set_id: "",
+              });
+            }}
+            value={form.event_id}
+          >
+            <option value="">Choose event</option>
+            {data.events.map((event) => (
+              <option key={event.id} value={event.id}>
+                {eventLabel(event)}
+              </option>
+            ))}
+          </SelectField>
+          <SelectField label="Cluster" onChange={(value) => onFormChange({ ...form, cluster: value })} value={form.cluster}>
+            {decaClusters.map((cluster) => (
+              <option key={cluster.label} value={cluster.label}>
+                {cluster.label}
+              </option>
+            ))}
+          </SelectField>
+          <SelectField
+            label="Coverage mode"
+            onChange={(value) => onFormChange({ ...form, coverage_mode: value as CurriculumDraftForm["coverage_mode"] })}
+            value={form.coverage_mode}
+          >
+            <option value="create_new_module">Create new module</option>
+            <option value="expand_existing_module">Expand existing module</option>
+            <option value="fill_gaps">Fill gaps</option>
+          </SelectField>
+          <SelectField label="Target existing module" onChange={(value) => onFormChange({ ...form, target_key_set_id: value })} value={form.target_key_set_id}>
+            <option value="">Create or choose automatically</option>
+            {data.keySets
+              .filter((keySet) => !form.event_id || keySet.event_id === form.event_id)
+              .map((keySet) => (
+                <option key={keySet.id} value={keySet.id}>
+                  {keySet.title}
+                </option>
+              ))}
+          </SelectField>
+          <SelectField
+            label="Difficulty"
+            onChange={(value) => onFormChange({ ...form, difficulty: value as CurriculumDraftForm["difficulty"] })}
+            value={form.difficulty}
+          >
+            <option value="beginner">Beginner</option>
+            <option value="intermediate">Intermediate</option>
+            <option value="advanced">Advanced</option>
+          </SelectField>
+          <TextField label="Module count" onChange={(value) => onFormChange({ ...form, desired_module_count: value })} type="number" value={form.desired_module_count} />
+          <TextField label="Questions per concept" onChange={(value) => onFormChange({ ...form, questions_per_concept: value })} type="number" value={form.questions_per_concept} />
+          {form.source_type === "manual_paste" ? (
+            <div className="lg:col-span-2">
+              <TextAreaField
+                label="Performance indicators"
+                onChange={(value) => onFormChange({ ...form, pasted_performance_indicators: value })}
+                placeholder="Paste one performance indicator per line."
+                rows={7}
+                value={form.pasted_performance_indicators}
+              />
+            </div>
+          ) : (
+            <div className="lg:col-span-2 rounded-lg border border-slate-100 p-4">
+              <p className="text-sm font-semibold text-slate-800">Approved performance indicators</p>
+              <p className="mt-1 text-sm text-slate-500">
+                Showing approved PIs matching the selected event when possible.
+              </p>
+              <div className="mt-3 grid max-h-72 gap-2 overflow-auto pr-2">
+                {filteredPis.length === 0 ? (
+                  <p className="text-sm text-slate-600">No approved PIs match this event yet. Paste PIs instead.</p>
+                ) : null}
+                {filteredPis.map((indicator) => (
+                  <label className="flex items-start gap-2 rounded-lg bg-slate-50 p-3 text-sm text-slate-700" key={indicator.id}>
+                    <input
+                      checked={selectedPiIds.has(indicator.id)}
+                      className="mt-1"
+                      onChange={(event) => togglePi(indicator.id, event.target.checked)}
+                      type="checkbox"
+                    />
+                    <span>
+                      <span className="font-semibold">{indicator.instructional_area ?? "Instructional area TBD"}: </span>
+                      {indicator.text}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="lg:col-span-2">
+            <TextAreaField
+              label="Admin notes"
+              onChange={(value) => onFormChange({ ...form, admin_notes: value })}
+              placeholder="Optional guidance, e.g. focus on beginner MCS prep or create scenario-style application questions."
+              rows={3}
+              value={form.admin_notes}
+            />
+          </div>
+        </div>
+        <div className="mt-5 flex flex-wrap items-center gap-3">
+          <button
+            className="min-h-10 rounded-md bg-blue-700 px-4 text-sm font-semibold text-white disabled:bg-blue-300"
+            disabled={isGenerating || !form.event_id}
+            onClick={onGenerate}
+            type="button"
+          >
+            {isGenerating ? "Generating drafts..." : "Generate PI-grounded drafts"}
+          </button>
+          <p className="text-sm text-slate-600">
+            Max 25 PIs, 3 modules, and 5 questions per concept per run.
+          </p>
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader eyebrow="Draft history" title="Recent curriculum draft jobs" />
+        <div className="grid gap-3">
+          {data.curriculumDraftJobs.length === 0 ? <p className="text-sm text-slate-600">No curriculum draft jobs yet.</p> : null}
+          {data.curriculumDraftJobs.slice(0, 6).map((job) => {
+            const summary =
+              job.generated_summary && typeof job.generated_summary === "object" && !Array.isArray(job.generated_summary)
+                ? (job.generated_summary as Record<string, Json>)
+                : {};
+            return (
+              <div className="rounded-lg border border-slate-100 p-4" key={job.id}>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="flex flex-wrap gap-2">
+                      <Badge tone={statusTone(job.status)}>{formatStatus(job.status)}</Badge>
+                      <Badge tone="blue">{job.source_type}</Badge>
+                    </div>
+                    <p className="mt-3 font-semibold text-slate-950">{job.cluster ?? "Cluster TBD"}</p>
+                    <p className="mt-1 text-sm text-slate-600">
+                      {String(summary.modulesDrafted ?? 0)} module(s) - {String(summary.questionsDrafted ?? 0)} question(s)
+                    </p>
+                    {job.error_message ? <p className="mt-2 text-sm font-semibold text-red-700">{job.error_message}</p> : null}
+                  </div>
+                  <span className="text-xs font-semibold text-slate-500">{job.id.slice(0, 8)}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+    </>
+  );
+}
+
 function ModulesSection({
   data,
   eventById,
@@ -784,7 +1081,8 @@ function ModulesSection({
                     <Badge tone={moduleVisible(keySet) ? "green" : "amber"}>{moduleVisible(keySet) ? "Student-visible" : "Hidden from students"}</Badge>
                   </div>
                   <h3 className="mt-3 font-semibold text-slate-950">{keySet.title}</h3>
-                  <p className="mt-1 text-sm text-slate-500">{eventById.get(keySet.event_id)?.code ?? "No event"} · {data.keySetConcepts.filter((link) => link.key_set_id === keySet.id).length} concepts</p>
+                  <p className="mt-1 text-sm text-slate-500">{eventById.get(keySet.event_id)?.code ?? "No event"} - {data.keySetConcepts.filter((link) => link.key_set_id === keySet.id).length} concepts</p>
+                  <SourcePiBadges value={keySet.source_performance_indicators} />
                 </div>
                 <button className="min-h-10 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700" onClick={() => onEdit(keySet)} type="button">Edit</button>
               </div>
@@ -881,6 +1179,7 @@ function ConceptsSection({
                     </div>
                     <h3 className="mt-3 font-semibold text-slate-950">{concept.name}</h3>
                     <p className="mt-1 text-sm text-slate-500">{linkedModules.join(", ") || "No module assigned"}</p>
+                    <SourcePiBadges value={concept.source_performance_indicators} />
                   </div>
                   <button className="min-h-10 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700" onClick={() => onEdit(concept)} type="button">Edit</button>
                 </div>
@@ -977,9 +1276,6 @@ function QuestionsSection({
           <button className="min-h-10 rounded-md border border-slate-200 px-4 text-sm font-semibold text-slate-700" onClick={() => onFormChange(questionToForm())} type="button">
             New question
           </button>
-          <button className="min-h-10 rounded-md border border-amber-200 bg-amber-50 px-4 text-sm font-semibold text-amber-900" disabled type="button">
-            Draft with AI (Phase 9.5)
-          </button>
         </div>
       </Card>
 
@@ -997,8 +1293,9 @@ function QuestionsSection({
                   </div>
                   <h3 className="mt-3 font-semibold text-slate-950">{question.prompt}</h3>
                   <p className="mt-1 text-sm text-slate-500">
-                    {eventById.get(question.event_id ?? "")?.code ?? "No event"} · {conceptById.get(question.concept_id ?? "")?.name ?? "No concept"}
+                    {eventById.get(question.event_id ?? "")?.code ?? "No event"} - {conceptById.get(question.concept_id ?? "")?.name ?? "No concept"}
                   </p>
+                  <SourcePiBadges value={question.source_performance_indicators} />
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button className="min-h-10 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700" onClick={() => onEdit(question)} type="button">Edit</button>
@@ -1091,7 +1388,7 @@ function StudyResourcesSection({
                   </div>
                   <h3 className="mt-3 font-semibold text-slate-950">{resource.title}</h3>
                   <p className="mt-1 text-sm text-slate-500">
-                    {eventById.get(resource.event_id ?? "")?.code ?? "No event"} · {keySetById.get(resource.key_set_id ?? "")?.title ?? "No module"} · {conceptById.get(resource.concept_id ?? "")?.name ?? "No concept"}
+                    {eventById.get(resource.event_id ?? "")?.code ?? "No event"} - {keySetById.get(resource.key_set_id ?? "")?.title ?? "No module"} - {conceptById.get(resource.concept_id ?? "")?.name ?? "No concept"}
                   </p>
                 </div>
                 <button className="min-h-10 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700" onClick={() => onEdit(resource)} type="button">Edit</button>
@@ -1145,7 +1442,8 @@ function ReviewQueueSection({
               <div>
                 <Badge tone={statusTone(question.status)}>{formatStatus(question.status)}</Badge>
                 <p className="mt-2 font-semibold text-slate-950">{question.prompt}</p>
-                <p className="mt-1 text-sm text-slate-500">{eventById.get(question.event_id ?? "")?.code ?? "No event"} · {conceptById.get(question.concept_id ?? "")?.name ?? "No concept"}</p>
+                <p className="mt-1 text-sm text-slate-500">{eventById.get(question.event_id ?? "")?.code ?? "No event"} - {conceptById.get(question.concept_id ?? "")?.name ?? "No concept"}</p>
+                <SourcePiBadges value={question.source_performance_indicators} />
               </div>
               <button className="min-h-10 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700" onClick={() => onEditQuestion(question)} type="button">Review</button>
             </div>

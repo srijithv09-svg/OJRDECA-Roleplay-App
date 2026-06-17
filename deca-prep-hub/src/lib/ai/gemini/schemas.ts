@@ -197,6 +197,47 @@ export const RoleplayTranscriptFeedbackResultSchema = z.object({
   warnings: feedbackList,
 });
 
+export const CurriculumDraftResultSchema = z.object({
+  modules: z.array(
+    z.object({
+      title: z.string().min(1),
+      description: z.string().min(1),
+      instructionalArea: nullableString,
+      performanceIndicators: z.array(z.string().min(1)).default([]),
+      concepts: z.array(
+        z.object({
+          name: z.string().min(1),
+          studentFriendlyDefinition: z.string().min(1),
+          detailedExplanation: z.string().min(1),
+          example: z.string().min(1),
+          commonMisconceptions: z.array(z.string().min(1)).default([]),
+          sourcePerformanceIndicators: z.array(z.string().min(1)).default([]),
+          questions: z.array(
+            z.object({
+              questionType: z.enum(["multiple_choice", "multiple_select", "matching", "free_text"]),
+              ladderStage: z.enum(["recognize", "define", "connect", "apply", "explain"]),
+              prompt: z.string().min(1),
+              scenarioContext: nullableString,
+              choices: z.unknown().nullable().optional(),
+              correctAnswer: z.unknown().nullable().optional(),
+              explanation: z.string().min(1),
+              sampleStrongAnswer: nullableString,
+              gradingFocus: z.array(z.string().min(1)).default([]),
+              difficulty: z.enum(["beginner", "intermediate", "advanced"]),
+              sourcePerformanceIndicators: z.array(z.string().min(1)).default([]),
+            }),
+          ),
+        }),
+      ),
+    }),
+  ),
+  coverageSummary: z.object({
+    coveredPerformanceIndicators: z.array(z.string().min(1)).default([]),
+    missingOrSkippedPerformanceIndicators: z.array(z.string().min(1)).default([]),
+    notes: z.array(z.string().min(1)).default([]),
+  }),
+});
+
 export type ResourceClassificationResult = z.infer<typeof ResourceClassificationResultSchema>;
 export type BasicGeminiHealthResult = z.infer<typeof BasicGeminiHealthResultSchema>;
 export type ExamExtractionResult = z.infer<typeof ExamExtractionResultSchema>;
@@ -210,6 +251,7 @@ export type ConceptRevisionFeedbackResult = z.infer<
 export type RoleplayTranscriptFeedbackResult = z.infer<
   typeof RoleplayTranscriptFeedbackResultSchema
 >;
+export type CurriculumDraftResult = z.infer<typeof CurriculumDraftResultSchema>;
 
 const nullableStringSchema = {
   type: ["string", "null"],
@@ -644,5 +686,119 @@ export const roleplayTranscriptFeedbackJsonSchema = {
     "nextPracticeFocus",
     "warnings",
   ],
+  additionalProperties: false,
+};
+
+const curriculumQuestionSchema = {
+  type: "object",
+  properties: {
+    questionType: {
+      type: "string",
+      enum: ["multiple_choice", "multiple_select", "matching", "free_text"],
+    },
+    ladderStage: {
+      type: "string",
+      enum: ["recognize", "define", "connect", "apply", "explain"],
+    },
+    prompt: { type: "string" },
+    scenarioContext: nullableStringSchema,
+    choices: {
+      type: ["array", "object", "null"],
+    },
+    correctAnswer: {
+      type: ["array", "object", "string", "null"],
+    },
+    explanation: { type: "string" },
+    sampleStrongAnswer: nullableStringSchema,
+    gradingFocus: stringArraySchema,
+    difficulty: {
+      type: "string",
+      enum: ["beginner", "intermediate", "advanced"],
+    },
+    sourcePerformanceIndicators: stringArraySchema,
+  },
+  required: [
+    "questionType",
+    "ladderStage",
+    "prompt",
+    "scenarioContext",
+    "choices",
+    "correctAnswer",
+    "explanation",
+    "sampleStrongAnswer",
+    "gradingFocus",
+    "difficulty",
+    "sourcePerformanceIndicators",
+  ],
+  additionalProperties: false,
+};
+
+export const curriculumDraftJsonSchema = {
+  type: "object",
+  properties: {
+    modules: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          description: { type: "string" },
+          instructionalArea: nullableStringSchema,
+          performanceIndicators: stringArraySchema,
+          concepts: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string" },
+                studentFriendlyDefinition: { type: "string" },
+                detailedExplanation: { type: "string" },
+                example: { type: "string" },
+                commonMisconceptions: stringArraySchema,
+                sourcePerformanceIndicators: stringArraySchema,
+                questions: {
+                  type: "array",
+                  items: curriculumQuestionSchema,
+                },
+              },
+              required: [
+                "name",
+                "studentFriendlyDefinition",
+                "detailedExplanation",
+                "example",
+                "commonMisconceptions",
+                "sourcePerformanceIndicators",
+                "questions",
+              ],
+              additionalProperties: false,
+            },
+          },
+        },
+        required: [
+          "title",
+          "description",
+          "instructionalArea",
+          "performanceIndicators",
+          "concepts",
+        ],
+        additionalProperties: false,
+      },
+    },
+    coverageSummary: {
+      type: "object",
+      properties: {
+        coveredPerformanceIndicators: stringArraySchema,
+        missingOrSkippedPerformanceIndicators: stringArraySchema,
+        notes: stringArraySchema,
+      },
+      required: [
+        "coveredPerformanceIndicators",
+        "missingOrSkippedPerformanceIndicators",
+        "notes",
+      ],
+      additionalProperties: false,
+    },
+  },
+  required: ["modules", "coverageSummary"],
   additionalProperties: false,
 };

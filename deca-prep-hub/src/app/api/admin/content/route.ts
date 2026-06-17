@@ -3,6 +3,8 @@ import { requireAdminRequester } from "@/lib/server/api-auth";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import type {
   Concept,
+  CurriculumDraftItem,
+  CurriculumDraftJob,
   DecaEvent,
   Json,
   KeySet,
@@ -10,19 +12,27 @@ import type {
   LadderStage,
   LearningContentStatus,
   ReviewableContentStatus,
+  RoleplayPerformanceIndicator,
   StructuredQuestion,
   StudyResource,
 } from "@/lib/types";
 
 const eventColumns =
   "id,code,name,cluster,event_type,participants,exam_cluster,description,is_pilot,sort_order,created_at,updated_at";
-const keySetColumns = "id,event_id,title,description,sort_order,status,created_at,updated_at";
+const keySetColumns =
+  "id,event_id,title,description,sort_order,status,source_performance_indicators,curriculum_draft_job_id,ai_generated,admin_reviewed,created_at,updated_at";
 const conceptColumns =
-  "id,name,slug,cluster,instructional_area,student_friendly_definition,detailed_explanation,example,common_misconceptions,status,created_at,updated_at";
+  "id,name,slug,cluster,instructional_area,student_friendly_definition,detailed_explanation,example,common_misconceptions,status,source_performance_indicators,curriculum_draft_job_id,ai_generated,admin_reviewed,created_at,updated_at";
 const questionColumns =
-  "id,source_resource_id,event_id,concept_id,question_type,ladder_stage,prompt,choices,correct_answer,explanation,difficulty,status,ai_generated,ai_extracted,admin_reviewed,created_at,updated_at";
+  "id,source_resource_id,event_id,concept_id,question_type,ladder_stage,prompt,choices,correct_answer,explanation,difficulty,status,ai_generated,ai_extracted,admin_reviewed,source_performance_indicators,curriculum_draft_job_id,created_at,updated_at";
 const studyResourceColumns =
   "id,event_id,key_set_id,concept_id,title,description,resource_kind,url,storage_path,content,status,created_by,approved_by,approved_at,created_at,updated_at";
+const roleplayPerformanceIndicatorColumns =
+  "id,roleplay_scenario_id,resource_id,event_id,text,instructional_area,possible_concepts,confidence,sort_order,status,ai_extracted,admin_reviewed,created_at,updated_at";
+const curriculumDraftJobColumns =
+  "id,created_by,event_id,cluster,source_type,source_resource_id,source_metadata,selected_performance_indicators,status,generated_summary,error_message,created_at,updated_at";
+const curriculumDraftItemColumns =
+  "id,job_id,item_type,proposed_key_set_id,proposed_concept_id,created_record_id,title,body,source_performance_indicators,status,created_at";
 
 function text(value: unknown) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
@@ -176,6 +186,9 @@ async function loadContentStudioData() {
     links,
     questions,
     studyResources,
+    roleplayPerformanceIndicators,
+    curriculumDraftJobs,
+    curriculumDraftItems,
   ] = await Promise.all([
     supabase.from("events").select(eventColumns).order("sort_order", { ascending: true }).order("code", { ascending: true }),
     supabase.from("key_sets").select(keySetColumns).order("sort_order", { ascending: true }).order("title", { ascending: true }),
@@ -183,6 +196,21 @@ async function loadContentStudioData() {
     supabase.from("key_set_concepts").select("key_set_id,concept_id,sort_order").order("sort_order", { ascending: true }),
     supabase.from("questions").select(questionColumns).order("updated_at", { ascending: false }),
     supabase.from("study_resources").select(studyResourceColumns).order("updated_at", { ascending: false }),
+    supabase
+      .from("roleplay_performance_indicators")
+      .select(roleplayPerformanceIndicatorColumns)
+      .eq("status", "approved")
+      .order("sort_order", { ascending: true }),
+    supabase
+      .from("curriculum_draft_jobs")
+      .select(curriculumDraftJobColumns)
+      .order("created_at", { ascending: false })
+      .limit(20),
+    supabase
+      .from("curriculum_draft_items")
+      .select(curriculumDraftItemColumns)
+      .order("created_at", { ascending: false })
+      .limit(100),
   ]);
 
   const firstError =
@@ -191,7 +219,10 @@ async function loadContentStudioData() {
     concepts.error ??
     links.error ??
     questions.error ??
-    studyResources.error;
+    studyResources.error ??
+    roleplayPerformanceIndicators.error ??
+    curriculumDraftJobs.error ??
+    curriculumDraftItems.error;
 
   if (firstError) {
     throw new Error(firstError.message);
@@ -203,6 +234,9 @@ async function loadContentStudioData() {
     keySetConcepts: (links.data ?? []) as KeySetConcept[],
     keySets: (keySets.data ?? []) as KeySet[],
     questions: (questions.data ?? []) as StructuredQuestion[],
+    roleplayPerformanceIndicators: (roleplayPerformanceIndicators.data ?? []) as RoleplayPerformanceIndicator[],
+    curriculumDraftJobs: (curriculumDraftJobs.data ?? []) as CurriculumDraftJob[],
+    curriculumDraftItems: (curriculumDraftItems.data ?? []) as CurriculumDraftItem[],
     reviewQueue: {
       conceptsDraft: (concepts.data ?? []).filter((concept) => concept.status === "draft").length,
       keySetsDraft: (keySets.data ?? []).filter((keySet) => keySet.status === "draft").length,
@@ -341,7 +375,6 @@ async function saveQuestion(payload: Record<string, unknown>) {
     explanation: text(payload.explanation),
     difficulty: text(payload.difficulty),
     status,
-    ai_generated: Boolean(payload.ai_generated),
     admin_reviewed: status === "approved" || status === "archived" || status === "rejected",
   };
   const supabase = getSupabaseAdminClient();
@@ -355,7 +388,10 @@ async function saveQuestion(payload: Record<string, unknown>) {
     return;
   }
 
-  const { error } = await supabase.from("questions").insert(row);
+  const { error } = await supabase.from("questions").insert({
+    ...row,
+    ai_generated: Boolean(payload.ai_generated),
+  });
   if (error) {
     throw new Error(error.message);
   }
@@ -386,6 +422,7 @@ async function duplicateQuestion(questionId: unknown) {
     ladder_stage: data.ladder_stage,
     prompt: `${data.prompt} (copy)`,
     question_type: data.question_type,
+    source_performance_indicators: data.source_performance_indicators,
     source_resource_id: data.source_resource_id,
     status: "draft",
     admin_reviewed: false,

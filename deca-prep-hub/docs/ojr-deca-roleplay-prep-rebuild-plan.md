@@ -1047,11 +1047,42 @@ Implemented behavior:
 - Question editing supports multiple choice, multiple select, matching, free text, and scenario/application via `ladder_stage = apply` plus scenario context.
 - Question duplication creates a draft copy.
 - Approved study resources appear on relevant `/learn` event, module, and concept pages.
-- AI question drafting is intentionally left as a disabled Phase 9.5 placeholder. AI-drafted content must never be approved automatically.
 
 Risks:
 
 - The `study_resources` migration must be applied before `/admin/content`, `/learn` study resource queries, or `npm run check:db` can fully pass in a fresh Supabase project.
+
+### Phase 9.5: Performance-indicator-grounded curriculum drafting
+
+Goal:
+
+- Let admins/advisors draft learning modules, concepts, and questions from real DECA performance indicators instead of generic AI topic guesses.
+- Support future learning pathways across Marketing, Business Management and Administration, Entrepreneurship, Finance, and Hospitality/Tourism while keeping MCS as the first active pilot.
+- Preserve the review rule: AI may draft curriculum, but humans must approve it before students see it.
+
+Database changes:
+
+- Adds `curriculum_draft_jobs` and `curriculum_draft_items` for admin-only draft generation audit/history.
+- Adds optional source metadata to `key_sets`, `concepts`, and `questions`, including `source_performance_indicators`, `curriculum_draft_job_id`, and AI/review flags where needed.
+- RLS keeps draft jobs/items admin/advisor-only. Students continue to read only approved learning records through existing `/learn` flows.
+
+Implemented behavior:
+
+- `/admin/content` includes an AI Drafts workflow named "Draft from Performance Indicators."
+- Supported PI sources are approved extracted roleplay performance indicators and manually pasted PI lists. PDF-source drafting remains a later extension unless explicitly added.
+- Admins choose event, cluster, coverage mode, optional target module, difficulty, module count, questions per concept, and admin notes.
+- Gemini receives selected PIs as the source of truth and returns structured modules, concepts, questions, and a coverage summary.
+- Generated modules/key sets and concepts are saved as `draft`; generated questions are saved as `needs_review`.
+- Generated records keep source PI metadata and appear in the normal Content Studio review/edit/approve workflow.
+- The UI shows PI coverage, covered/skipped PIs, recent draft jobs, and badges such as AI Draft and PI-grounded.
+
+Constraints:
+
+- Do not generate student-facing content from the client.
+- Do not auto-approve generated modules, concepts, questions, or study resources.
+- Do not copy copyrighted exam or roleplay wording beyond short PI labels needed for alignment.
+- Generation requests are capped by max PI count, module count, and questions per concept.
+- Missing Gemini key, quota exhaustion, timeout, and invalid structured output should show clean admin-facing errors and leave student visibility unchanged.
 
 ### Phase 9.25: Student cluster preference and personalized recommendations
 

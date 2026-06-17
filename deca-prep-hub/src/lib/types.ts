@@ -71,6 +71,9 @@ export type ResourceClassificationType =
   | "judge_rubric"
   | "instructional_resource"
   | "unknown";
+export type CurriculumDraftSourceType = "extracted_pi" | "resource_pdf" | "manual_paste";
+export type CurriculumDraftJobStatus = "draft" | "generating" | "completed" | "failed" | "archived";
+export type CurriculumDraftItemType = "key_set" | "concept" | "question" | "study_resource";
 
 export type Profile = {
   id: string;
@@ -219,6 +222,10 @@ export type KeySet = {
   description: string | null;
   sort_order: number;
   status: LearningContentStatus;
+  source_performance_indicators?: Json;
+  curriculum_draft_job_id?: string | null;
+  ai_generated?: boolean;
+  admin_reviewed?: boolean;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -234,6 +241,10 @@ export type Concept = {
   example: string | null;
   common_misconceptions: string | null;
   status: LearningContentStatus;
+  source_performance_indicators?: Json;
+  curriculum_draft_job_id?: string | null;
+  ai_generated?: boolean;
+  admin_reviewed?: boolean;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -263,6 +274,36 @@ export type StudyResource = {
   updated_at: string | null;
 };
 
+export type CurriculumDraftJob = {
+  id: string;
+  created_by: string | null;
+  event_id: string | null;
+  cluster: string | null;
+  source_type: CurriculumDraftSourceType;
+  source_resource_id: string | null;
+  source_metadata: Json | null;
+  selected_performance_indicators: Json;
+  status: CurriculumDraftJobStatus;
+  generated_summary: Json | null;
+  error_message: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type CurriculumDraftItem = {
+  id: string;
+  job_id: string;
+  item_type: CurriculumDraftItemType;
+  proposed_key_set_id: string | null;
+  proposed_concept_id: string | null;
+  created_record_id: string | null;
+  title: string | null;
+  body: Json | null;
+  source_performance_indicators: Json;
+  status: ReviewableContentStatus;
+  created_at: string | null;
+};
+
 export type StructuredQuestion = {
   id: string;
   source_resource_id: string | null;
@@ -279,6 +320,8 @@ export type StructuredQuestion = {
   ai_generated: boolean;
   ai_extracted: boolean;
   admin_reviewed: boolean;
+  source_performance_indicators?: Json;
+  curriculum_draft_job_id?: string | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -863,6 +906,10 @@ export type Database = {
           description?: string | null;
           sort_order?: number;
           status?: LearningContentStatus;
+          source_performance_indicators?: Json;
+          curriculum_draft_job_id?: string | null;
+          ai_generated?: boolean;
+          admin_reviewed?: boolean;
           created_at?: string | null;
           updated_at?: string | null;
         };
@@ -882,6 +929,10 @@ export type Database = {
           example?: string | null;
           common_misconceptions?: string | null;
           status?: LearningContentStatus;
+          source_performance_indicators?: Json;
+          curriculum_draft_job_id?: string | null;
+          ai_generated?: boolean;
+          admin_reviewed?: boolean;
           created_at?: string | null;
           updated_at?: string | null;
         };
@@ -921,6 +972,44 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["study_resources"]["Insert"]>;
         Relationships: [];
       };
+      curriculum_draft_jobs: {
+        Row: CurriculumDraftJob;
+        Insert: {
+          id?: string;
+          created_by?: string | null;
+          event_id?: string | null;
+          cluster?: string | null;
+          source_type: CurriculumDraftSourceType;
+          source_resource_id?: string | null;
+          source_metadata?: Json | null;
+          selected_performance_indicators?: Json;
+          status?: CurriculumDraftJobStatus;
+          generated_summary?: Json | null;
+          error_message?: string | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["curriculum_draft_jobs"]["Insert"]>;
+        Relationships: [];
+      };
+      curriculum_draft_items: {
+        Row: CurriculumDraftItem;
+        Insert: {
+          id?: string;
+          job_id: string;
+          item_type: CurriculumDraftItemType;
+          proposed_key_set_id?: string | null;
+          proposed_concept_id?: string | null;
+          created_record_id?: string | null;
+          title?: string | null;
+          body?: Json | null;
+          source_performance_indicators?: Json;
+          status?: ReviewableContentStatus;
+          created_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["curriculum_draft_items"]["Insert"]>;
+        Relationships: [];
+      };
       questions: {
         Row: StructuredQuestion;
         Insert: {
@@ -939,6 +1028,8 @@ export type Database = {
           ai_generated?: boolean;
           ai_extracted?: boolean;
           admin_reviewed?: boolean;
+          source_performance_indicators?: Json;
+          curriculum_draft_job_id?: string | null;
           created_at?: string | null;
           updated_at?: string | null;
         };

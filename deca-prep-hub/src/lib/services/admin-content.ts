@@ -2,9 +2,12 @@ import { getFriendlyErrorMessage, logDeveloperError } from "@/lib/errors";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import type {
   Concept,
+  CurriculumDraftItem,
+  CurriculumDraftJob,
   DecaEvent,
   KeySet,
   KeySetConcept,
+  RoleplayPerformanceIndicator,
   StructuredQuestion,
   StudyResource,
 } from "@/lib/types";
@@ -15,6 +18,9 @@ export type AdminContentStudioData = {
   keySetConcepts: KeySetConcept[];
   keySets: KeySet[];
   questions: StructuredQuestion[];
+  roleplayPerformanceIndicators: RoleplayPerformanceIndicator[];
+  curriculumDraftJobs: CurriculumDraftJob[];
+  curriculumDraftItems: CurriculumDraftItem[];
   reviewQueue: {
     conceptsDraft: number;
     keySetsDraft: number;
@@ -30,6 +36,36 @@ type AdminContentAction =
   | "saveKeySet"
   | "saveQuestion"
   | "saveStudyResource";
+
+export type CurriculumDraftRequest = {
+  admin_notes?: string;
+  cluster: string;
+  coverage_mode: "fill_gaps" | "create_new_module" | "expand_existing_module";
+  desired_module_count?: number;
+  difficulty?: "beginner" | "intermediate" | "advanced";
+  event_id?: string;
+  pasted_performance_indicators?: string;
+  questions_per_concept?: number;
+  selected_performance_indicator_ids?: string[];
+  source_type: "extracted_pi" | "manual_paste";
+  target_key_set_id?: string;
+};
+
+export type CurriculumDraftResponse = {
+  created: {
+    concepts: string[];
+    keySets: string[];
+    questions: string[];
+  };
+  jobId: string;
+  summary: {
+    coveredPerformanceIndicators: string[];
+    missingOrSkippedPerformanceIndicators: string[];
+    modulesDrafted: number;
+    notes: string[];
+    questionsDrafted: number;
+  };
+};
 
 async function getAccessToken() {
   const supabase = getSupabaseClient();
@@ -82,5 +118,30 @@ export const AdminContentService = {
     });
 
     return response.data;
+  },
+
+  async generateCurriculumDraft(payload: CurriculumDraftRequest) {
+    const token = await getAccessToken();
+    const response = await fetch("/api/admin/content/curriculum-drafts", {
+      body: JSON.stringify(payload),
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+    });
+    const result = (await response.json()) as CurriculumDraftResponse & {
+      error?: { message?: string } | string;
+    };
+
+    if (!response.ok) {
+      const message =
+        typeof result.error === "string"
+          ? result.error
+          : result.error?.message ?? "Unable to generate curriculum drafts.";
+      throw new Error(getFriendlyErrorMessage(message, "Unable to generate curriculum drafts."));
+    }
+
+    return result;
   },
 };

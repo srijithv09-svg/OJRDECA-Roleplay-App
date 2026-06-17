@@ -17,6 +17,8 @@ type RequiredTable =
   | "key_set_concepts"
   | "questions"
   | "study_resources"
+  | "curriculum_draft_jobs"
+  | "curriculum_draft_items"
   | "question_attempts"
   | "concept_mastery"
   | "concept_feedback_attempts"
@@ -42,6 +44,8 @@ const requiredTables: RequiredTable[] = [
   "key_set_concepts",
   "questions",
   "study_resources",
+  "curriculum_draft_jobs",
+  "curriculum_draft_items",
   "question_attempts",
   "concept_mastery",
   "concept_feedback_attempts",
@@ -70,9 +74,17 @@ const keyColumns: Record<RequiredTable, string[]> = {
   ],
   events: ["code", "is_pilot"],
   event_aliases: ["event_id", "alias", "alias_type"],
-  key_sets: ["event_id"],
-  concepts: ["slug"],
+  key_sets: ["event_id", "source_performance_indicators", "curriculum_draft_job_id", "ai_generated", "admin_reviewed"],
+  concepts: ["slug", "source_performance_indicators", "curriculum_draft_job_id", "ai_generated", "admin_reviewed"],
   key_set_concepts: ["key_set_id", "concept_id"],
+  curriculum_draft_jobs: [
+    "created_by",
+    "source_type",
+    "selected_performance_indicators",
+    "status",
+    "generated_summary",
+  ],
+  curriculum_draft_items: ["job_id", "item_type", "created_record_id", "source_performance_indicators", "status"],
   questions: [
     "source_resource_id",
     "choices",
@@ -82,6 +94,8 @@ const keyColumns: Record<RequiredTable, string[]> = {
     "status",
     "ai_extracted",
     "admin_reviewed",
+    "source_performance_indicators",
+    "curriculum_draft_job_id",
   ],
   study_resources: ["event_id", "key_set_id", "concept_id", "status", "resource_kind"],
   question_attempts: ["user_id"],
@@ -133,6 +147,8 @@ const probeColumns: Record<RequiredTable, string> = {
   key_set_concepts: "key_set_id",
   questions: "id",
   study_resources: "id",
+  curriculum_draft_jobs: "id",
+  curriculum_draft_items: "id",
   question_attempts: "id",
   concept_mastery: "user_id",
   concept_feedback_attempts: "id",

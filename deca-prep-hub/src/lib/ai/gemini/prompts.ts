@@ -65,6 +65,21 @@ export type RoleplayTranscriptFeedbackPromptInput = {
   warnings: string[];
 };
 
+export type CurriculumDraftPromptInput = {
+  adminNotes: string | null;
+  cluster: string;
+  coverageMode: "fill_gaps" | "create_new_module" | "expand_existing_module";
+  desiredDifficulty: "beginner" | "intermediate" | "advanced";
+  desiredModuleCount: number;
+  eventCode: string | null;
+  eventName: string | null;
+  existingConcepts: string[];
+  existingKeySets: string[];
+  performanceIndicators: string[];
+  questionsPerConcept: number;
+  targetKeySetTitle: string | null;
+};
+
 function nullable(value: string | number | null | undefined) {
   return value === null || value === undefined || value === "" ? "unknown" : String(value);
 }
@@ -119,6 +134,10 @@ function rubricCriteriaLines(
         )
         .join("\n")
     : "none";
+}
+
+function numberedList(values: string[]) {
+  return values.length > 0 ? values.map((value, index) => `${index + 1}. ${value}`).join("\n") : "none";
 }
 
 function buildExtractionPrompt({
@@ -427,5 +446,51 @@ export function buildRoleplayTranscriptFeedbackPrompt(
     "For each rubricScores item, use criterionId when available. If no approved rubric exists, use general DECA practice categories and null criterionId values.",
     "Score numeric fields from 0 to 100 unless maxPoints is provided for a rubric criterion.",
     "Keep arrays concise and actionable.",
+  ].join("\n");
+}
+
+export function buildCurriculumDraftPrompt(input: CurriculumDraftPromptInput) {
+  return [
+    "You are drafting DECA learning curriculum for an admin review workflow.",
+    "Return structured JSON only. Do not include markdown, comments, or prose outside JSON.",
+    "Performance indicators are the source of truth. Do not create generic business trivia when a performance indicator is provided.",
+    "AI drafts are not official DECA content, not official DECA scoring, and must remain draft/needs_review until a human admin approves them.",
+    "Create original instructional explanations and questions. Do not copy exam, roleplay, or resource wording beyond short performance-indicator labels necessary for alignment.",
+    "",
+    "Drafting context:",
+    `cluster: ${input.cluster}`,
+    `eventCode: ${nullable(input.eventCode)}`,
+    `eventName: ${nullable(input.eventName)}`,
+    `coverageMode: ${input.coverageMode}`,
+    `desiredModuleCount: ${input.desiredModuleCount}`,
+    `questionsPerConcept: ${input.questionsPerConcept}`,
+    `desiredDifficulty: ${input.desiredDifficulty}`,
+    `targetKeySetTitle: ${nullable(input.targetKeySetTitle)}`,
+    `adminNotes: ${nullable(input.adminNotes)}`,
+    "",
+    "Selected performance indicators:",
+    numberedList(input.performanceIndicators),
+    "",
+    "Existing modules/key sets for context:",
+    bulletList(input.existingKeySets),
+    "",
+    "Existing concepts for context:",
+    bulletList(input.existingConcepts),
+    "",
+    "Requirements:",
+    "- Organize related performance indicators into coherent modules/key sets.",
+    "- Create concepts that teach the underlying skill behind each performance indicator.",
+    "- Every concept must include sourcePerformanceIndicators.",
+    "- Every question must include sourcePerformanceIndicators and align to the selected concept and PI.",
+    "- Each performance indicator should map to at least one concept or question unless explicitly listed in missingOrSkippedPerformanceIndicators with a short note.",
+    "- Use DECA roleplay/exam-relevant situations without copying copyrighted scenario text.",
+    "- Prefer a learning ladder mix when appropriate: recognize, define, connect, apply, explain.",
+    "- Include multiple_choice recognition/definition questions when appropriate.",
+    "- Include matching questions for vocabulary/definition pairs when appropriate.",
+    "- Include multiple_select questions for judgment or tradeoff decisions when appropriate.",
+    "- Include free_text scenario/application questions when appropriate.",
+    "- Keep prompts student-friendly and admin-editable.",
+    "- Keep explanations concise but useful for learning.",
+    "- If a PI is too broad or ambiguous, include it in missingOrSkippedPerformanceIndicators and explain in coverage notes.",
   ].join("\n");
 }
