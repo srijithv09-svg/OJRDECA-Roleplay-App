@@ -2,31 +2,34 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
-import { ResourceEmptyState, ResourceErrorState, ResourceLoadingState } from "./resource-states";
-import { eventMatchesSelectedCluster, getDecaClusterLabel } from "@/lib/deca/clusters";
+import {
+  ResourceEmptyState,
+  ResourceErrorState,
+  ResourceLoadingState,
+} from "./resource-states";
+import {
+  eventMatchesSelectedCluster,
+  getDecaClusterLabel,
+} from "@/lib/deca/clusters";
 import { getCurrentOwnProfile } from "@/lib/services/profiles";
-import { ResourcesService, type PublicResourceListItem } from "@/lib/services/resources";
+import {
+  ResourcesService,
+  type PublicResourceListItem,
+} from "@/lib/services/resources";
 import type { DecaClusterPreference } from "@/lib/deca/clusters";
 import type { SupabaseResourceType } from "@/lib/types";
 
-type LibraryMode = "exam" | "roleplay";
+type LibraryMode = "exam" | "roleplay" | "reference";
 type SelectOption = {
   label: string;
   value: string;
 };
 
-function formatValue(value: number | string | null | undefined) {
-  if (value === null || value === undefined || value === "") {
-    return "Not available";
-  }
-
-  return String(value);
-}
-
-function optionize(values: Array<number | string | null | undefined>): SelectOption[] {
+function optionize(
+  values: Array<number | string | null | undefined>,
+): SelectOption[] {
   return Array.from(new Set(values.filter(Boolean).map(String)))
     .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
     .map((value) => ({ label: value, value }));
@@ -55,10 +58,12 @@ export function ApprovedResourceLibraryView({
   mode: LibraryMode;
 }) {
   const [resources, setResources] = useState<PublicResourceListItem[]>([]);
-  const [selectedCluster, setSelectedCluster] = useState<DecaClusterPreference | null>(null);
+  const [selectedCluster, setSelectedCluster] =
+    useState<DecaClusterPreference | null>(null);
   const [search, setSearch] = useState("");
   const [clusterFilter, setClusterFilter] = useState("all");
   const [yearFilter, setYearFilter] = useState("all");
+  const [eventFilter, setEventFilter] = useState("all");
   const [openingPdfId, setOpeningPdfId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -122,20 +127,29 @@ export function ApprovedResourceLibraryView({
 
     return resources.filter((resource) => {
       const matchesSearch =
-        !normalizedSearch || searchableText(resource).includes(normalizedSearch);
-      const matchesCluster = clusterFilter === "all" || resource.cluster === clusterFilter;
-      const matchesYear = yearFilter === "all" || String(resource.year) === yearFilter;
+        !normalizedSearch ||
+        searchableText(resource).includes(normalizedSearch);
+      const matchesCluster =
+        clusterFilter === "all" || resource.cluster === clusterFilter;
+      const matchesEvent =
+        eventFilter === "all" || resource.event_code === eventFilter;
+      const matchesYear =
+        yearFilter === "all" || String(resource.year) === yearFilter;
 
-      return matchesSearch && matchesCluster && matchesYear;
+      return matchesSearch && matchesCluster && matchesYear && matchesEvent;
     });
-  }, [clusterFilter, resources, search, yearFilter]);
+  }, [clusterFilter, eventFilter, resources, search, yearFilter]);
   const selectedClusterLabel = getDecaClusterLabel(selectedCluster);
   const selectedClusterFilter = useMemo(() => {
     if (!selectedCluster) {
       return null;
     }
 
-    return clusterOptions.find((option) => eventMatchesSelectedCluster(option.value, selectedCluster))?.value ?? null;
+    return (
+      clusterOptions.find((option) =>
+        eventMatchesSelectedCluster(option.value, selectedCluster),
+      )?.value ?? null
+    );
   }, [clusterOptions, selectedCluster]);
 
   function retryLoad() {
@@ -152,7 +166,11 @@ export function ApprovedResourceLibraryView({
       const pdfLink = await ResourcesService.getResourcePdfLink(resource.id);
       window.open(pdfLink.signedUrl, "_blank", "noopener,noreferrer");
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "Unable to open PDF.");
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Unable to open PDF.",
+      );
     } finally {
       setOpeningPdfId(null);
     }
@@ -169,7 +187,9 @@ export function ApprovedResourceLibraryView({
   return (
     <section className="space-y-5">
       <Card>
-        <div className="grid gap-3 lg:grid-cols-[1.4fr_1fr_180px]">
+        <div
+          className={`grid gap-3 sm:grid-cols-2 ${mode === "roleplay" ? "xl:grid-cols-4" : "xl:grid-cols-[2fr_1fr_1fr]"}`}
+        >
           <label className="relative grid gap-2 text-sm font-semibold text-slate-800">
             Search
             <span className="relative">
@@ -190,24 +210,37 @@ export function ApprovedResourceLibraryView({
           <FilterSelect
             label="Cluster"
             onChange={setClusterFilter}
-            options={[{ label: "all", value: "all" }, ...clusterOptions]}
+            options={[
+              { label: "All clusters", value: "all" },
+              ...clusterOptions,
+            ]}
             value={clusterFilter}
           />
+          {mode === "roleplay" ? (
+            <FilterSelect
+              label="Event"
+              onChange={setEventFilter}
+              options={[
+                { label: "All events", value: "all" },
+                ...optionize(resources.map((r) => r.event_code)),
+              ]}
+              value={eventFilter}
+            />
+          ) : null}
           <FilterSelect
             label="Year"
             onChange={setYearFilter}
-            options={[{ label: "all", value: "all" }, ...yearOptions]}
+            options={[{ label: "All years", value: "all" }, ...yearOptions]}
             value={yearFilter}
           />
         </div>
         <p className="mt-4 text-sm text-slate-500">
-          Showing {filteredResources.length} of {resources.length} approved {emptyLabel}.
+          Showing {filteredResources.length} of {resources.length} approved{" "}
+          {emptyLabel}.
         </p>
         {selectedClusterLabel && selectedClusterFilter ? (
           <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
-            <span>
-              Your cluster preference is {selectedClusterLabel}. This filter changes what is shown now, not what you can access.
-            </span>
+            <span>Your cluster: {selectedClusterLabel}</span>
             <button
               className="min-h-9 rounded-md border border-slate-200 bg-white px-3 font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
               onClick={() => setClusterFilter(selectedClusterFilter)}
@@ -229,9 +262,24 @@ export function ApprovedResourceLibraryView({
       </Card>
 
       {filteredResources.length === 0 ? (
-        <ResourceEmptyState label={emptyLabel} />
+        <div className="space-y-3">
+          <ResourceEmptyState label={emptyLabel} />
+          {resources.length > 0 ? (
+            <button
+              className="text-sm font-semibold text-primary"
+              onClick={() => {
+                setSearch("");
+                setClusterFilter("all");
+                setYearFilter("all");
+                setEventFilter("all");
+              }}
+            >
+              Clear filters
+            </button>
+          ) : null}
+        </div>
       ) : (
-        <div className="grid gap-4 xl:grid-cols-2">
+        <div className="divide-y divide-border rounded-md border border-border bg-card">
           {filteredResources.map((resource) => (
             <StudentResourceCard
               isOpeningPdf={openingPdfId === resource.id}
@@ -262,6 +310,7 @@ function FilterSelect({
     <label className="grid gap-2 text-sm font-semibold text-slate-800">
       {label}
       <select
+        aria-label={label}
         className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm font-normal text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
         onChange={(event) => onChange(event.target.value)}
         value={value}
@@ -287,71 +336,57 @@ function StudentResourceCard({
   onOpenPdf: () => void;
   resource: PublicResourceListItem;
 }) {
-  const isRoleplay = mode === "roleplay";
-
+  const practiceHref =
+    mode === "roleplay"
+      ? `/roleplays/${resource.id}/practice`
+      : `/exams/${resource.id}/take`;
   return (
-    <Card>
-      <div className="flex flex-wrap gap-2">
-        <Badge tone="blue">{resource.resource_type}</Badge>
-        {resource.event_code ? <Badge>{resource.event_code}</Badge> : null}
-        <Badge>{resource.year ?? "Year TBD"}</Badge>
-      </div>
-      <h2 className="mt-4 text-lg font-semibold text-slate-950">{resource.title}</h2>
-      {isRoleplay ? (
-        <p className="mt-1 text-sm font-medium text-slate-500">
-          {resource.event_name ?? "Event not assigned"}
+    <article className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
+      <div className="min-w-0">
+        <p className="text-xs text-[var(--muted)]">
+          {[resource.event_code, resource.cluster, resource.year]
+            .filter(Boolean)
+            .join(" · ") || "Chapter resource"}
         </p>
-      ) : null}
-
-      <dl className="mt-4 grid gap-3 text-sm">
-        {[
-          ...(isRoleplay
-            ? ([
-                ["Event category", resource.event_category],
-                ["Event", resource.event_name],
-              ] as const)
-            : []),
-          ["Cluster", resource.cluster],
-          ["Year", resource.year],
-        ].map(([label, value]) => (
-          <div className="rounded-lg bg-slate-50 p-3" key={label}>
-            <dt className="font-semibold text-slate-800">{label}</dt>
-            <dd className="mt-1 break-words text-slate-600">{formatValue(value)}</dd>
-          </div>
-        ))}
-      </dl>
-
-      <div className="mt-5 flex flex-wrap gap-2">
+        <h2 className="mt-2 text-base font-semibold leading-6">
+          <Link
+            className="hover:text-primary"
+            href={`/resources/${resource.id}`}
+          >
+            {resource.title}
+          </Link>
+        </h2>
+        {mode === "roleplay" && resource.event_name ? (
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            {resource.event_name}
+          </p>
+        ) : null}
+      </div>
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
         <button
-          className="inline-flex min-h-10 items-center justify-center rounded-md bg-blue-700 px-3 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:bg-blue-300"
+          className="min-h-10 rounded-md border border-border px-3 text-sm font-medium hover:bg-primary-soft disabled:opacity-50"
           disabled={isOpeningPdf}
           onClick={onOpenPdf}
           type="button"
         >
-          {isOpeningPdf ? "Opening..." : "Open / Download PDF"}
+          {isOpeningPdf ? "Opening…" : "Open PDF"}
         </button>
-        <Link
-          className="inline-flex min-h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
-          href={`/resources/${resource.id}`}
-        >
-          Details
-        </Link>
-        {isRoleplay ? (
+        {mode !== "reference" ? (
           <Link
-            className="inline-flex min-h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
-            href={`/roleplays/${resource.id}/practice`}
+            className="inline-flex min-h-10 items-center rounded-md bg-primary px-4 text-sm font-medium text-white hover:opacity-90"
+            href={practiceHref}
           >
-            Practice roleplay
+            {mode === "roleplay" ? "Practice" : "Open exam"}
           </Link>
         ) : (
           <Link
-            className="inline-flex min-h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
-            href={`/exams/${resource.id}/take`}
+            className="px-3 py-2 text-sm font-medium text-primary"
+            href={`/resources/${resource.id}`}
           >
-            Take exam
+            Details
           </Link>
         )}
       </div>
-    </Card>
+    </article>
   );
 }

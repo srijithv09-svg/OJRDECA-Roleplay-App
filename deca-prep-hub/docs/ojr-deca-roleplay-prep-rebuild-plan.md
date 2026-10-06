@@ -1,6 +1,8 @@
+> Historical plan, superseded October 5, 2026. The current app uses uploaded resources only; learning pathways and AI features have been removed. See AGENTS.md for the current product scope.
+
 # OJR DECA Roleplay Preparation App Rebuild Plan
 
-Rebuild plan for shifting DECA Prep Hub from a passive PDF resource library toward the OJR DECA Roleplay Preparation App direction: a structured, concept-centered DECA preparation platform.
+Rebuild plan for shifting OJR DECA Prep Database from a passive PDF resource library toward the OJR DECA Roleplay Preparation App direction: a structured, concept-centered DECA preparation platform.
 
 ## A. Current Architecture Summary
 

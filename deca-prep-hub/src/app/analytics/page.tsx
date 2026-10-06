@@ -12,14 +12,11 @@ import {
   EXAM_ATTEMPTS_CHANGED_EVENT,
   ExamAttemptsService,
 } from "@/lib/services/exam-attempts";
-import { ReadinessService } from "@/lib/services/readiness";
 import type {
   AnalyticsAreaSummary,
   AnalyticsAttemptSummary,
-  Json,
   RoleplayAttemptSummary,
   StudentAnalyticsSummary,
-  StudentReadinessSummary,
 } from "@/lib/types";
 
 function formatDate(value: string | null | undefined) {
@@ -152,20 +149,10 @@ function RoleplayAttemptRow({ attempt }: { attempt: RoleplayAttemptSummary }) {
   );
 }
 
-function jsonStringList(value: Json | null) {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
-}
-
 export default function AnalyticsPage() {
   const [analytics, setAnalytics] = useState<StudentAnalyticsSummary | null>(null);
-  const [readiness, setReadiness] = useState<StudentReadinessSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [readinessError, setReadinessError] = useState<string | null>(null);
   const [deletingAttemptId, setDeletingAttemptId] = useState<string | null>(null);
   const [deleteDialogAttemptId, setDeleteDialogAttemptId] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -175,9 +162,8 @@ export default function AnalyticsPage() {
 
     async function loadAnalytics() {
       try {
-        const [analyticsResult, readinessResult] = await Promise.allSettled([
+        const [analyticsResult] = await Promise.allSettled([
           AnalyticsService.getStudentAnalytics(),
-          ReadinessService.getStudentReadinessSummary(),
         ]);
 
         if (!isActive) {
@@ -185,19 +171,11 @@ export default function AnalyticsPage() {
         }
 
         setAnalytics(analyticsResult.status === "fulfilled" ? analyticsResult.value : null);
-        setReadiness(readinessResult.status === "fulfilled" ? readinessResult.value : null);
         setError(
           analyticsResult.status === "rejected"
             ? analyticsResult.reason instanceof Error
               ? analyticsResult.reason.message
               : "Unable to load analytics."
-            : null,
-        );
-        setReadinessError(
-          readinessResult.status === "rejected"
-            ? readinessResult.reason instanceof Error
-              ? readinessResult.reason.message
-              : "Unable to load readiness intelligence."
             : null,
         );
       } catch (caughtError) {
@@ -206,7 +184,6 @@ export default function AnalyticsPage() {
         }
 
         setAnalytics(null);
-        setReadiness(null);
         setError(
           caughtError instanceof Error ? caughtError.message : "Unable to load analytics.",
         );
@@ -241,7 +218,6 @@ export default function AnalyticsPage() {
   function retryLoad() {
     setIsLoading(true);
     setError(null);
-    setReadinessError(null);
     setReloadKey((currentKey) => currentKey + 1);
   }
 
@@ -266,11 +242,11 @@ export default function AnalyticsPage() {
     return <ResourceLoadingState />;
   }
 
-  if (error && !analytics && !readiness) {
+  if (error && !analytics) {
     return <ResourceErrorState message={error} onRetry={retryLoad} />;
   }
 
-  if (!analytics && !readiness) {
+  if (!analytics) {
     return null;
   }
 
@@ -285,18 +261,10 @@ export default function AnalyticsPage() {
         actions={<ButtonLink href="/exams">Take another exam</ButtonLink>}
         description="Attempt history, score trends, instructional area patterns, and missed-question summaries from your saved exams."
         eyebrow="Progress tracking"
-        title="Analytics"
+        title="History & scores"
       />
 
       {error ? <ResourceErrorState message={error} onRetry={retryLoad} /> : null}
-      {readinessError ? (
-        <Card className="border-amber-200 bg-amber-50">
-          <p className="text-sm font-semibold text-amber-950">
-            Readiness intelligence unavailable: {readinessError}
-          </p>
-        </Card>
-      ) : null}
-
       {deleteDialogAttemptId ? (
         <DeleteAttemptDialog
           isDeleting={deletingAttemptId === deleteDialogAttemptId}
@@ -332,74 +300,6 @@ export default function AnalyticsPage() {
               : `${analytics?.mostRecentScore}%`
           }
         />
-      </section>
-
-      <section className="grid gap-4 xl:grid-cols-3">
-        <Card>
-          <CardHeader eyebrow="Mastery" title="MCS concept distribution" />
-          {readiness ? (
-            <div className="space-y-3">
-              {Object.entries(readiness.learning.masteryCounts).map(([status, count]) => (
-                <div
-                  className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 p-3 text-sm"
-                  key={status}
-                >
-                  <span className="font-semibold capitalize text-slate-950">
-                    {status.replaceAll("_", " ")}
-                  </span>
-                  <Badge tone={status === "mastered" ? "green" : "blue"}>{count}</Badge>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm leading-6 text-slate-600">Learning progress unavailable.</p>
-          )}
-        </Card>
-
-        <Card>
-          <CardHeader eyebrow="Weak concepts" title="Next concept focus" />
-          {readiness && readiness.learning.weakestConcepts.length > 0 ? (
-            <div className="space-y-3">
-              {readiness.learning.weakestConcepts.slice(0, 4).map((concept) => (
-                <Link
-                  className="block rounded-lg border border-slate-100 p-3 transition hover:border-blue-200 hover:bg-blue-50"
-                  href={concept.href}
-                  key={concept.id}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="font-semibold text-slate-950">{concept.name}</p>
-                    <Badge tone="amber">{concept.status.replaceAll("_", " ")}</Badge>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm leading-6 text-slate-600">No weak concepts to show yet.</p>
-          )}
-        </Card>
-
-        <Card>
-          <CardHeader eyebrow="Feedback" title="Recent AI summaries" />
-          {readiness && readiness.recentConceptFeedback.items.length > 0 ? (
-            <div className="space-y-3">
-              {readiness.recentConceptFeedback.items.slice(0, 4).map((item) => (
-                <Link
-                  className="block rounded-lg border border-slate-100 p-3 transition hover:border-blue-200 hover:bg-blue-50"
-                  href={item.href}
-                  key={item.id}
-                >
-                  <p className="font-semibold text-slate-950">{item.concept_name}</p>
-                  <p className="mt-1 text-sm text-slate-500">
-                    Score {item.score ?? "N/A"}
-                    {item.revision_score === null ? "" : ` -> ${item.revision_score}`}
-                  </p>
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm leading-6 text-slate-600">No concept feedback yet.</p>
-          )}
-        </Card>
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
@@ -451,52 +351,6 @@ export default function AnalyticsPage() {
           )}
         </Card>
       </section>
-
-      <Card>
-        <CardHeader eyebrow="Roleplay AI feedback" title="Recent feedback summaries" />
-        {readiness && readiness.recentRoleplayFeedback.items.length > 0 ? (
-          <div className="grid gap-3 lg:grid-cols-2">
-            {readiness.recentRoleplayFeedback.items.map((attempt) => {
-              const strengths = jsonStringList(attempt.strengths);
-              const growthAreas = jsonStringList(attempt.growth_areas);
-
-              return (
-                <Link
-                  className="rounded-lg border border-slate-100 p-3 transition hover:border-blue-200 hover:bg-blue-50"
-                  href={attempt.href}
-                  key={attempt.id}
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="font-semibold text-slate-950">{attempt.resource_title}</p>
-                    <Badge tone={attempt.ai_overall_score === null ? "slate" : "blue"}>
-                      {attempt.ai_overall_score === null
-                        ? attempt.ai_feedback_status
-                        : `${attempt.ai_overall_score}%`}
-                    </Badge>
-                  </div>
-                  <p className="mt-2 text-sm text-slate-500">
-                    {attempt.event_code ?? "Event TBD"} - {formatDate(attempt.created_at)}
-                  </p>
-                  {strengths[0] ? (
-                    <p className="mt-3 text-sm leading-6 text-slate-600">
-                      Strength: {strengths[0]}
-                    </p>
-                  ) : null}
-                  {growthAreas[0] ? (
-                    <p className="mt-1 text-sm leading-6 text-slate-600">
-                      Focus: {growthAreas[0]}
-                    </p>
-                  ) : null}
-                </Link>
-              );
-            })}
-          </div>
-        ) : (
-          <p className="text-sm leading-6 text-slate-600">
-            Generate roleplay practice feedback to see strengths and growth areas here.
-          </p>
-        )}
-      </Card>
 
       <section className="grid gap-4 xl:grid-cols-[1.5fr_1fr]">
         <Card>

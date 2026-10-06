@@ -1,36 +1,37 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# OJR DECA Prep Database
 
-## Getting Started
+The Owen J. Roberts DECA chapter's preparation library for uploaded exams, roleplay scenarios, and reference documents.
 
-First, run the development server:
+- **Practice:** direct access to exams and roleplays, with recent saved attempts.
+- **Exams:** uploaded PDFs, answer entry, server-side grading, and score history.
+- **Roleplays:** scenario PDFs, preparation timer, notes, reflections, partner feedback, and optional recordings.
+- **Reference:** approved performance indicator documents, cluster guides, and other uploaded materials, searchable by topic and filterable by cluster/year.
+- **Management:** admins and advisors upload PDFs, review metadata, approve resources, create answer keys, and manage account roles.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+Access requires a school Google account ending in `@ojrsd.net`. Students see approved materials and their own attempts. The app contains no AI generation, extraction, or feedback functionality.
+
+## Development
+
+The application directory remains `deca-prep-hub` (also the Vercel root directory).
+
+1. Run `npm install`.
+2. Copy `.env.example` to `.env.local` and configure Supabase.
+3. Run `npm run dev`.
+4. Open [the local app](http://localhost:3000).
+
+Keep the service role key server-side. Google OAuth uses `/auth/callback`; configure the canonical site URL and callback allow list in Supabase. See `AGENTS.md` for project conventions.
+
+## Checks
+
+```sh
+npm run lint
+npx next typegen
+npx tsc --noEmit
+npm run build
+npm run check:db
+npm run smoke:routes
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The last check needs a running server; set `SMOKE_BASE_URL` for a different port. It checks active routes, removed routes, and unauthenticated API guards. Authenticated upload/approval/practice flows still require a school account.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Historical migrations are retained to preserve existing databases. Removing learning and AI code does not delete saved database records or uploaded files. No new migration is needed for this simplification.

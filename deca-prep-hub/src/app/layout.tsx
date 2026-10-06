@@ -3,9 +3,9 @@ import { AppShell } from "@/components/layout/app-shell";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "DECA Prep Hub",
+  title: "OJR DECA Prep Database",
   description:
-    "A student preparation hub for DECA roleplays, cluster exams, analytics, and event planning.",
+    "Owen J. Roberts DECA exam practice, roleplay preparation, and uploaded reference materials.",
 };
 
 export default function RootLayout({

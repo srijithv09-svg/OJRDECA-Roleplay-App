@@ -61,14 +61,14 @@ export function LoginView() {
             OJR DECA
           </p>
           <h1 className="mt-3 text-4xl font-bold text-slate-950">
-            DECA Prep Hub
+            OJR DECA Prep Database
           </h1>
           <p className="mt-4 text-base leading-7 text-slate-600">
             Sign in with your Owen J. Roberts school Google account to access
-            roleplays, exams, analytics, calendar tools, and approved chapter resources.
+            uploaded exams, roleplay scenarios, and cluster reference materials.
           </p>
           <div className="mt-6 grid gap-3 text-sm text-slate-600 sm:grid-cols-3">
-            {["Roleplay practice", "Cluster exams", "Progress analytics"].map((label) => (
+            {["Roleplay practice", "Cluster exams", "Reference library"].map((label) => (
               <div className="rounded-lg border border-slate-200 bg-white p-3 font-semibold" key={label}>
                 {label}
               </div>

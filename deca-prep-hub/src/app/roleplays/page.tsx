@@ -5,9 +5,9 @@ export default function RoleplaysPage() {
   return (
     <>
       <PageHeader
-        description="Browse approved roleplay resources by cluster, event, instructional area, indicator, difficulty, and year."
+        description="Choose an uploaded scenario, prepare your response, and save notes or a recording."
         eyebrow="Resource library"
-        title="Roleplays"
+        title="Roleplay practice"
       />
 
       <ApprovedResourceLibraryView emptyLabel="roleplays" mode="roleplay" />

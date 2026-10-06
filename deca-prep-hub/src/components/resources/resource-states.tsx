@@ -28,8 +28,8 @@ export function ResourceEmptyState({ label }: { label: string }) {
       <div>
         <h2 className="text-lg font-semibold text-slate-950">No {label} found</h2>
         <p className="mt-2 max-w-md text-sm leading-6 text-slate-600">
-          Resources from Supabase will appear here once matching rows are available
-          in the resources table.
+          Try a different search or filter. Newly uploaded materials appear here
+          after an admin or advisor approves them.
         </p>
       </div>
     </Card>

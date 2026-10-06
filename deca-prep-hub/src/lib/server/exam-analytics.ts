@@ -43,7 +43,6 @@ function toRoleplayAttemptSummary(
     cluster: resource?.cluster ?? null,
     confidence_rating: attempt.confidence_rating,
     transcript_status: attempt.transcript_status,
-    ai_feedback_status: attempt.ai_feedback_status,
     created_at: attempt.created_at,
   };
 }

@@ -28,53 +28,7 @@ type UploadResponse = {
   uploadedCount: number;
 };
 
-type ExtractionType = "answer_key" | "exam" | "judge_rubric" | "roleplay";
-type ExtractionTypeOption = "auto" | ExtractionType;
-type ExtractionSummary = {
-  duplicate?: boolean;
-  extractionType: ExtractionType;
-  jobId: string | null;
-  message?: string;
-  recordsCreated: Record<string, number>;
-  resourceId: string;
-  status: string;
-  warnings: string[];
-};
-type ExtractionState = {
-  error?: string;
-  extraction?: ExtractionSummary;
-  isLoading: boolean;
-};
-type ExtractionApiResponse =
-  | {
-      jobId: string | null;
-      ok: true;
-      status: string;
-      summary: ExtractionSummary;
-    }
-  | {
-      error: {
-        code: string;
-        details?: string;
-        message: string;
-        retryAfterSeconds?: number;
-      };
-      ok: false;
-    }
-  | {
-      code?: string;
-      error?: string;
-      extraction?: ExtractionSummary;
-    };
-
 const resourceTypeOptions: SupabaseResourceType[] = ["roleplay", "exam", "reference", "unknown"];
-const extractionTypeOptions: Array<{ label: string; value: ExtractionTypeOption }> = [
-  { label: "Auto-detect", value: "auto" },
-  { label: "Exam", value: "exam" },
-  { label: "Answer Key", value: "answer_key" },
-  { label: "Roleplay", value: "roleplay" },
-  { label: "Judge Rubric", value: "judge_rubric" },
-];
 
 function draftFromFile(file: File): UploadDraft {
   return {
@@ -88,78 +42,12 @@ function isPdf(file: File) {
   return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
 }
 
-function isExtractionSuccess(payload: ExtractionApiResponse): payload is Extract<ExtractionApiResponse, { ok: true }> {
-  return "ok" in payload && payload.ok === true;
-}
-
-function isExtractionFailure(payload: ExtractionApiResponse): payload is Extract<ExtractionApiResponse, { ok: false }> {
-  return "ok" in payload && payload.ok === false;
-}
-
-function formatNonJsonExtractionError(response: Response, bodyText: string) {
-  const trimmedBody = bodyText.trim();
-  const explanation =
-    trimmedBody.startsWith("<!DOCTYPE") || trimmedBody.startsWith("<html")
-      ? "The server returned an HTML page instead of JSON."
-      : "The server returned a non-JSON response.";
-
-  return `AI extraction request failed (HTTP ${response.status}). ${explanation}`;
-}
-
-async function readExtractionApiResponse(response: Response) {
-  const contentType = response.headers.get("content-type") ?? "";
-  const bodyText = await response.text();
-
-  if (!contentType.toLowerCase().includes("application/json")) {
-    throw new Error(formatNonJsonExtractionError(response, bodyText));
-  }
-
-  try {
-    return (bodyText ? JSON.parse(bodyText) : {}) as ExtractionApiResponse;
-  } catch {
-    throw new Error(`AI extraction returned invalid JSON (HTTP ${response.status}).`);
-  }
-}
-
-function getExtractionFailureMessage(response: Response, payload: ExtractionApiResponse) {
-  if (isExtractionFailure(payload)) {
-    if (payload.error.code === "gemini_missing_key") {
-      return "Gemini is not configured. Add GEMINI_API_KEY in the server environment to enable AI extraction.";
-    }
-
-    if (payload.error.code === "pdf_text_extraction_failed") {
-      return "PDF text extraction failed. Try a different PDF or review server logs.";
-    }
-
-    if (payload.error.code === "gemini_quota_exceeded") {
-      return payload.error.retryAfterSeconds
-        ? `Gemini quota limit reached. Try again in about ${payload.error.retryAfterSeconds} seconds, or test with a shorter PDF.`
-        : "Gemini quota limit reached. Try again later.";
-    }
-
-    return `AI extraction request failed (HTTP ${response.status}). ${payload.error.message}`;
-  }
-
-  if (!isExtractionSuccess(payload) && payload.code === "gemini_missing_key") {
-    return "Gemini is not configured. Add GEMINI_API_KEY in the server environment to enable AI extraction.";
-  }
-
-  if (!isExtractionSuccess(payload) && payload.error) {
-    return `AI extraction request failed (HTTP ${response.status}). ${payload.error}`;
-  }
-
-  return `AI extraction request failed (HTTP ${response.status}).`;
-}
-
 export function AdminUploadView() {
   const [profile, setProfile] = useState<Profile | null | undefined>(undefined);
   const [drafts, setDrafts] = useState<UploadDraft[]>([]);
   const [isCheckingAccess, setIsCheckingAccess] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadResponse, setUploadResponse] = useState<UploadResponse | null>(null);
-  const [runExtractionAfterUpload, setRunExtractionAfterUpload] = useState(false);
-  const [extractionStates, setExtractionStates] = useState<Record<string, ExtractionState>>({});
-  const [extractionTypes, setExtractionTypes] = useState<Record<string, ExtractionTypeOption>>({});
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -244,8 +132,6 @@ export function AdminUploadView() {
     setIsUploading(true);
     setError(null);
     setUploadResponse(null);
-    setExtractionStates({});
-    setExtractionTypes({});
 
     try {
       const supabase = getSupabaseClient();
@@ -297,99 +183,16 @@ export function AdminUploadView() {
       }
 
       setUploadResponse(payload);
-      const successfulResources = payload.results
-        .map((result) => result.resource)
-        .filter((resource): resource is ResourceListItem => Boolean(resource));
-
-      setExtractionTypes(
-        Object.fromEntries(successfulResources.map((resource) => [resource.id, "auto"])),
-      );
       setDrafts((currentDrafts) =>
         currentDrafts.filter((draft) =>
           payload.results.some((result) => result.originalFilename === draft.file.name && result.error),
         ),
       );
 
-      if (runExtractionAfterUpload) {
-        for (const resource of successfulResources) {
-          await runExtraction(resource.id, "auto");
-        }
-      }
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "Unable to upload resources.");
     } finally {
       setIsUploading(false);
-    }
-  }
-
-  async function runExtraction(
-    resourceId: string,
-    extractionType: ExtractionTypeOption = extractionTypes[resourceId] ?? "auto",
-    force = false,
-  ) {
-    setExtractionStates((current) => ({
-      ...current,
-      [resourceId]: { isLoading: true },
-    }));
-
-    try {
-      const supabase = getSupabaseClient();
-      const {
-        data: { session },
-        error: sessionError,
-      } = await supabase.auth.getSession();
-
-      if (sessionError || !session?.access_token) {
-        throw new Error(sessionError?.message ?? "You must be signed in as an admin.");
-      }
-
-      const response = await fetch("/api/admin/ai/extract-resource", {
-        body: JSON.stringify({
-          extraction_type: extractionType === "auto" ? undefined : extractionType,
-          force,
-          resource_id: resourceId,
-        }),
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        method: "POST",
-      });
-      const payload = await readExtractionApiResponse(response);
-
-      if (!response.ok) {
-        throw new Error(getExtractionFailureMessage(response, payload));
-      }
-
-      const extraction = isExtractionSuccess(payload)
-        ? payload.summary
-        : isExtractionFailure(payload)
-          ? undefined
-          : payload.extraction;
-
-      if (!extraction) {
-        throw new Error("AI extraction finished, but the response did not include a result summary.");
-      }
-
-      setExtractionStates((current) => ({
-        ...current,
-        [resourceId]: {
-          extraction,
-          isLoading: false,
-        },
-      }));
-    } catch (caughtError) {
-      setExtractionStates((current) => ({
-        ...current,
-        [resourceId]: {
-          error:
-            caughtError instanceof Error
-              ? caughtError.message
-              : "Unable to run AI extraction.",
-          isLoading: false,
-        },
-      }));
     }
   }
 
@@ -414,7 +217,7 @@ export function AdminUploadView() {
         </p>
         <h1 className="mt-2 text-2xl font-bold text-red-950">Access Denied</h1>
         <p className="mt-2 text-sm leading-6 text-red-800">
-          You must be an admin to upload resources.
+          You must be an admin or advisor to upload resources.
         </p>
       </Card>
     );
@@ -452,9 +255,6 @@ export function AdminUploadView() {
           </p>
           <LinkButton className="mt-4" href="/admin/resources">
             Open approval queue
-          </LinkButton>
-          <LinkButton className="ml-2 mt-4" href="/admin/ai-review">
-            Open AI Review
           </LinkButton>
         </Card>
       ) : null}
@@ -612,15 +412,6 @@ export function AdminUploadView() {
           </div>
 
           <div className="mt-5 flex flex-wrap justify-end gap-2">
-            <label className="mr-auto flex min-h-11 items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800">
-              <input
-                checked={runExtractionAfterUpload}
-                className="h-4 w-4 rounded border-slate-300 text-blue-700 focus:ring-blue-500"
-                onChange={(event) => setRunExtractionAfterUpload(event.target.checked)}
-                type="checkbox"
-              />
-              Run AI extraction after upload
-            </label>
             <button
               className="min-h-11 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
               onClick={() => {
@@ -643,112 +434,7 @@ export function AdminUploadView() {
         </Card>
       ) : null}
 
-      {uploadResponse?.results.some((result) => result.resource) ? (
-        <Card>
-          <CardHeader eyebrow="AI extraction" title="Run extraction for uploaded resources" />
-          <div className="grid gap-4">
-            {uploadResponse.results
-              .filter((result) => result.resource)
-              .map((result) => {
-                const resource = result.resource as ResourceListItem;
-                const extractionState = extractionStates[resource.id];
-                const selectedType = extractionTypes[resource.id] ?? "auto";
-
-                return (
-                  <div
-                    className="rounded-lg border border-slate-200 bg-white p-4"
-                    key={resource.id}
-                  >
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-950">{resource.title}</p>
-                        <p className="mt-1 text-sm text-slate-500">
-                          {resource.original_filename ?? result.originalFilename} · pending resource
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <select
-                          className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                          onChange={(event) =>
-                            setExtractionTypes((current) => ({
-                              ...current,
-                              [resource.id]: event.target.value as ExtractionTypeOption,
-                            }))
-                          }
-                          value={selectedType}
-                        >
-                          {extractionTypeOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                        <button
-                          className="min-h-10 rounded-md bg-blue-700 px-3 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300"
-                          disabled={Boolean(extractionState?.isLoading)}
-                          onClick={() => void runExtraction(resource.id, selectedType)}
-                          type="button"
-                        >
-                          {extractionState?.isLoading ? "Running..." : "Run AI Extraction"}
-                        </button>
-                        {extractionState?.extraction?.duplicate ? (
-                          <button
-                            className="min-h-10 rounded-md border border-amber-200 bg-amber-50 px-3 text-sm font-semibold text-amber-800 transition hover:bg-amber-100"
-                            disabled={Boolean(extractionState?.isLoading)}
-                            onClick={() => void runExtraction(resource.id, selectedType, true)}
-                            type="button"
-                          >
-                            Force re-extraction
-                          </button>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    {extractionState?.error ? (
-                      <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-                        {extractionState.error}
-                      </div>
-                    ) : null}
-
-                    {extractionState?.extraction ? (
-                      <ExtractionResultSummary extraction={extractionState.extraction} />
-                    ) : null}
-                  </div>
-                );
-              })}
-          </div>
-        </Card>
-      ) : null}
     </>
-  );
-}
-
-function ExtractionResultSummary({ extraction }: { extraction: ExtractionSummary }) {
-  const jobHref = extraction.jobId ? `/admin/ai-review/jobs/${extraction.jobId}` : "/admin/ai-review";
-
-  return (
-    <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm text-blue-900">
-      <p className="font-semibold">
-        {extraction.duplicate ? "Extraction already exists" : "Extraction request finished"} ·{" "}
-        {extraction.status}
-      </p>
-      <p className="mt-2">
-        Type: {extraction.extractionType}. Job: {extraction.jobId ?? "No new job"}.
-      </p>
-      <p className="mt-2">Records created: {JSON.stringify(extraction.recordsCreated)}</p>
-      {extraction.message ? <p className="mt-2">{extraction.message}</p> : null}
-      {extraction.warnings.length > 0 ? (
-        <ul className="mt-2 list-inside list-disc">
-          {extraction.warnings.map((warning) => (
-            <li key={warning}>{warning}</li>
-          ))}
-        </ul>
-      ) : null}
-      <div className="mt-3 flex flex-wrap gap-2">
-        <LinkButton href="/admin/ai-review">Open AI Review</LinkButton>
-        <LinkButton href={jobHref}>{extraction.jobId ? "Open job detail" : "Open review center"}</LinkButton>
-      </div>
-    </div>
   );
 }
 

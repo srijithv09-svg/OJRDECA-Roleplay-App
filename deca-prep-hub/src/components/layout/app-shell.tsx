@@ -19,13 +19,11 @@ import type { Profile } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const navItems: Array<{ label: string; href: string; icon: IconName; adminOnly?: boolean }> = [
-  { label: "Dashboard", href: "/dashboard", icon: "dashboard" },
-  { label: "Learn", href: "/learn", icon: "streak" },
+  { label: "Practice", href: "/dashboard", icon: "dashboard" },
   { label: "Roleplays", href: "/roleplays", icon: "roleplays" },
   { label: "Exams", href: "/exams", icon: "exams" },
-  { label: "Resources", href: "/resources", icon: "search" },
-  { label: "Analytics", href: "/analytics", icon: "analytics" },
-  { label: "Calendar", href: "/calendar", icon: "calendar" },
+  { label: "Reference", href: "/reference", icon: "search" },
+  { label: "History & scores", href: "/analytics", icon: "analytics" },
   { label: "Settings", href: "/settings", icon: "settings" },
   { label: "Admin", href: "/admin", icon: "users", adminOnly: true },
 ];
@@ -229,9 +227,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             OJR
           </span>
           <span>
-            <span className="block text-base font-bold text-slate-950">DECA Prep Hub</span>
+            <span className="block text-base font-bold text-slate-950">OJR DECA Prep Database</span>
             <span className="block text-xs font-medium text-slate-500">
-              OJR DECA workspace
+              Owen J. Roberts High School
             </span>
           </span>
         </Link>
@@ -245,7 +243,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 className={cn(
                   "flex min-h-11 items-center gap-3 rounded-md px-3 text-sm font-semibold transition",
                   active
-                    ? "bg-blue-700 text-white shadow-sm shadow-blue-200"
+                    ? "bg-primary-soft text-primary"
                     : "text-slate-600 hover:bg-blue-50 hover:text-blue-700",
                 )}
                 href={item.href}
@@ -261,26 +259,26 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="m-4 rounded-lg border border-blue-100 bg-blue-50 p-4">
           <p className="text-sm font-semibold text-blue-950">Owen J. Roberts DECA</p>
           <p className="mt-1 text-xs leading-5 text-blue-800">
-            Practice roleplays, exams, resources, and analytics in one chapter workspace.
+            Uploaded materials. Focused practice.
           </p>
         </div>
       </aside>
 
       <div className="lg:pl-72">
-        <header className="sticky top-0 z-20 border-b border-[var(--primary-soft-strong)] bg-[var(--card-muted)] shadow-sm shadow-slate-200/40 backdrop-blur dark:border-[var(--border-strong)] dark:shadow-black/20">
+        <header className="sticky top-0 z-20 border-b border-border bg-card">
           <div className="flex min-h-16 items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
             <Link className="flex items-center gap-3 lg:hidden" href="/dashboard">
               <span className="grid h-9 w-9 place-items-center rounded-lg bg-blue-700 text-xs font-black text-white shadow-sm shadow-blue-200">
                 OJR
               </span>
-              <span className="text-sm font-bold text-slate-950">DECA Prep Hub</span>
+              <span className="text-sm font-bold text-slate-950">OJR DECA Prep Database</span>
             </Link>
 
             <div className="hidden lg:block">
               <p className="text-sm font-semibold text-slate-950">
                 Owen J. Roberts DECA
               </p>
-              <p className="text-xs text-slate-500">Chapter preparation workspace</p>
+              <p className="text-xs text-slate-500">Practice & reference library</p>
             </div>
 
             <div className="flex items-center gap-3">

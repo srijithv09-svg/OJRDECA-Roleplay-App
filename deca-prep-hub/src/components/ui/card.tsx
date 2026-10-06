@@ -10,7 +10,7 @@ export function Card({ children, className }: CardProps) {
   return (
     <section
       className={cn(
-        "rounded-lg border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60",
+        "rounded-md border border-border bg-card p-5",
         className,
       )}
     >
@@ -32,7 +32,7 @@ export function CardHeader({
     <div className="mb-4 flex items-start justify-between gap-4">
       <div>
         {eyebrow ? (
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">
+          <p className="text-xs font-medium text-slate-500">
             {eyebrow}
           </p>
         ) : null}

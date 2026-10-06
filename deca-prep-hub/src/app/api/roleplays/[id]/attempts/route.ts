@@ -52,7 +52,6 @@ function toSummary(row: {
   resource_id: string;
   confidence_rating: number | null;
   transcript_status: RoleplayAttemptSummary["transcript_status"];
-  ai_feedback_status: RoleplayAttemptSummary["ai_feedback_status"];
   created_at: string | null;
 }, resource: {
   title: string | null;
@@ -71,7 +70,6 @@ function toSummary(row: {
     cluster: resource?.cluster ?? null,
     confidence_rating: row.confidence_rating,
     transcript_status: row.transcript_status,
-    ai_feedback_status: row.ai_feedback_status,
     created_at: row.created_at,
   };
 }
@@ -90,7 +88,7 @@ export async function GET(request: Request, context: RouteContext) {
       supabase
       .from("roleplay_attempts")
       .select(
-        "id,resource_id,confidence_rating,transcript_status,ai_feedback_status,created_at",
+        "id,resource_id,confidence_rating,transcript_status,created_at",
       )
       .eq("user_id", user.id)
       .eq("resource_id", id)

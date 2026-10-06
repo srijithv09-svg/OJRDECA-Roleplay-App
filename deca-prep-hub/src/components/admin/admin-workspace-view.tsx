@@ -25,16 +25,10 @@ const adminTools: AdminTool[] = [
     label: "Resource Management",
   },
   {
-    description: "Upload PDFs and run AI extraction.",
+    description: "Upload PDFs and prepare their details for approval.",
     href: "/admin/upload",
     icon: "upload",
     label: "Upload Resources",
-  },
-  {
-    description: "Review AI-extracted questions, roleplays, rubrics, and answer keys.",
-    href: "/admin/ai-review",
-    icon: "analytics",
-    label: "AI Review",
   },
   {
     description: "Manage official/admin-reviewed answer keys.",
@@ -53,12 +47,6 @@ const adminTools: AdminTool[] = [
     href: "/admin/analytics",
     icon: "analytics",
     label: "Admin Analytics",
-  },
-  {
-    description: "Create and review key sets, concepts, questions, and study resources.",
-    href: "/admin/content",
-    icon: "exams",
-    label: "Learning Content",
   },
 ];
 
@@ -132,7 +120,7 @@ export function AdminWorkspaceView() {
   return (
     <>
       <PageHeader
-        description="Manage resource approvals, AI extraction review, answer keys, users, and chapter-level analytics from one workspace."
+        description="Manage uploads, resource approvals, answer keys, users, and chapter activity from one workspace."
         eyebrow="Admin"
         title="Admin Workspace"
       />

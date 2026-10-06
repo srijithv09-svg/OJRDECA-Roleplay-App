@@ -261,7 +261,7 @@ export function ResourceDetailView() {
                   ? "/exams"
                   : resource.resource_type === "roleplay"
                     ? "/roleplays"
-                    : "/resources"
+                    : "/reference"
               }
             >
               Back to library
@@ -451,8 +451,7 @@ export function ResourceDetailView() {
                             : "Date unavailable"}
                         </span>
                         <span className="font-semibold text-slate-950">
-                          Confidence {attempt.confidence_rating ?? "N/A"} - AI{" "}
-                          {attempt.ai_feedback_status}
+                          Confidence {attempt.confidence_rating ?? "N/A"}
                         </span>
                       </Link>
                     ))}

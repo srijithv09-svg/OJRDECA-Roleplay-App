@@ -5,9 +5,9 @@ export default function ExamsPage() {
   return (
     <>
       <PageHeader
-        description="Find approved cluster exams by year and category."
+        description="Practice with uploaded cluster exams and review your results against saved answer keys."
         eyebrow="Exam library"
-        title="Cluster exams"
+        title="Exam practice"
       />
 
       <ApprovedResourceLibraryView emptyLabel="exams" mode="exam" />

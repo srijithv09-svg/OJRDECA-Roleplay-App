@@ -1,5 +1,7 @@
 "use client";
 
+import { PrepTimer } from "@/components/roleplays/prep-timer";
+
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import type { FormEvent, ReactNode } from "react";
@@ -353,7 +355,7 @@ export function RoleplayPracticeView() {
             {signedUrl ? <AnchorButton href={signedUrl}>Open / Download PDF</AnchorButton> : null}
           </>
         }
-        description="Save your written response and reflection now. Audio, transcription, and AI feedback are ready to plug in later."
+        description="Open the uploaded scenario, prepare your response, and save notes or a recording for review."
         eyebrow={editAttemptId ? "Edit practice attempt" : "Roleplay practice"}
         title={resource.title}
       />
@@ -391,13 +393,8 @@ export function RoleplayPracticeView() {
 
           <Card>
             <CardHeader eyebrow="Prep" title="Preparation" />
-            <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4">
-              <p className="font-semibold text-slate-950">Prep timer coming soon</p>
-              <p className="mt-1 text-sm leading-6 text-slate-600">
-                Use the PDF button and your usual DECA prep timing for now.
-              </p>
-              {signedUrl ? <AnchorButton className="mt-4" href={signedUrl}>Open PDF</AnchorButton> : null}
-            </div>
+            <PrepTimer />
+            {signedUrl ? <AnchorButton className="mt-4" href={signedUrl}>Open PDF</AnchorButton> : null}
           </Card>
 
           <Card>
@@ -482,9 +479,6 @@ export function RoleplayPracticeView() {
                   {audioPreviewUrl ? "Record again" : "Start recording"}
                 </button>
               )}
-              <button className="min-h-10 rounded-md border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-500" disabled type="button">
-                Generate AI feedback - Coming soon
-              </button>
             </div>
           </Card>
         </div>

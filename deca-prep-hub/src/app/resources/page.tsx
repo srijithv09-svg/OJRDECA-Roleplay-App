@@ -1,5 +1,5 @@
-import { ResourcesReviewView } from "@/components/resources/resources-review-view";
+import { redirect } from "next/navigation";
 
 export default function ResourcesPage() {
-  return <ResourcesReviewView />;
+  redirect("/reference");
 }

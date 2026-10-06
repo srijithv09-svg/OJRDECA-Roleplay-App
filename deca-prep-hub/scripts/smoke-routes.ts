@@ -1,4 +1,6 @@
 type RouteGroup =
+  | "removed"
+  | "api-guard"
   | "admin-protected"
   | "dynamic-sample"
   | "expected-redirect"
@@ -6,6 +8,7 @@ type RouteGroup =
   | "public";
 
 type SmokeRoute = {
+  method?: "GET" | "POST";
   expectedRedirect?: boolean;
   group: RouteGroup;
   note?: string;
@@ -30,11 +33,61 @@ const dynamicSampleStatuses = [200, 301, 302, 303, 307, 308, 404];
 
 const routeGroups: Array<{ label: string; routes: SmokeRoute[] }> = [
   {
+    label: "Removed features",
+    routes: [
+      "/learn",
+      "/learn/mcs",
+      "/calendar",
+      "/admin/ai-review",
+      "/admin/content",
+      "/api/readiness/student",
+      "/api/readiness/admin",
+    ].map((path) => ({ group: "removed", path, validStatuses: [404] })),
+  },
+  {
+    label: "Removed generation endpoints",
+    routes: [
+      "/api/admin/ai/classify-resource",
+      "/api/admin/ai/extract-resource",
+      "/api/admin/content/curriculum-drafts",
+      "/api/learn/concept-feedback",
+      `/api/roleplay-attempts/${sampleId}/ai-feedback`,
+    ].map((path) => ({
+      group: "removed",
+      method: "POST",
+      path,
+      validStatuses: [404],
+    })),
+  },
+  {
+    label: "Unauthenticated API guards",
+    routes: [
+      {
+        group: "api-guard",
+        path: "/api/admin/resources/upload",
+        method: "POST",
+        validStatuses: [401],
+      },
+      { group: "api-guard", path: "/api/admin/users", validStatuses: [401] },
+      {
+        group: "api-guard",
+        path: `/api/exams/${sampleId}/submit`,
+        method: "POST",
+        validStatuses: [401],
+      },
+      {
+        group: "api-guard",
+        path: `/api/roleplays/${sampleId}/attempts`,
+        method: "POST",
+        validStatuses: [401],
+      },
+    ],
+  },
+  {
     label: "Public routes",
     routes: [
       { group: "public", path: "/", validStatuses: publicStatuses },
       { group: "public", path: "/login", validStatuses: publicStatuses },
-      { group: "public", path: "/calendar", validStatuses: publicStatuses },
     ],
   },
   {
@@ -44,30 +97,6 @@ const routeGroups: Array<{ label: string; routes: SmokeRoute[] }> = [
         expectedRedirect: true,
         group: "protected",
         path: "/dashboard",
-        validStatuses: protectedStatuses,
-      },
-      {
-        expectedRedirect: true,
-        group: "protected",
-        path: "/learn",
-        validStatuses: protectedStatuses,
-      },
-      {
-        expectedRedirect: true,
-        group: "protected",
-        path: "/learn/mcs",
-        validStatuses: protectedStatuses,
-      },
-      {
-        expectedRedirect: true,
-        group: "protected",
-        path: "/learn/bltdm",
-        validStatuses: protectedStatuses,
-      },
-      {
-        expectedRedirect: true,
-        group: "protected",
-        path: "/learn/aam",
         validStatuses: protectedStatuses,
       },
       {
@@ -85,7 +114,7 @@ const routeGroups: Array<{ label: string; routes: SmokeRoute[] }> = [
       {
         expectedRedirect: true,
         group: "protected",
-        path: "/resources",
+        path: "/reference",
         validStatuses: protectedStatuses,
       },
       {
@@ -133,42 +162,6 @@ const routeGroups: Array<{ label: string; routes: SmokeRoute[] }> = [
         expectedRedirect: true,
         group: "admin-protected",
         path: "/admin/analytics",
-        validStatuses: protectedStatuses,
-      },
-      {
-        expectedRedirect: true,
-        group: "admin-protected",
-        path: "/admin/content",
-        validStatuses: protectedStatuses,
-      },
-      {
-        expectedRedirect: true,
-        group: "admin-protected",
-        path: "/admin/ai-review",
-        validStatuses: protectedStatuses,
-      },
-      {
-        expectedRedirect: true,
-        group: "admin-protected",
-        path: "/admin/ai-review/questions",
-        validStatuses: protectedStatuses,
-      },
-      {
-        expectedRedirect: true,
-        group: "admin-protected",
-        path: "/admin/ai-review/answer-keys",
-        validStatuses: protectedStatuses,
-      },
-      {
-        expectedRedirect: true,
-        group: "admin-protected",
-        path: "/admin/ai-review/roleplays",
-        validStatuses: protectedStatuses,
-      },
-      {
-        expectedRedirect: true,
-        group: "admin-protected",
-        path: "/admin/ai-review/rubrics",
         validStatuses: protectedStatuses,
       },
       {
@@ -222,10 +215,11 @@ const routeGroups: Array<{ label: string; routes: SmokeRoute[] }> = [
 ];
 
 function getBaseUrl() {
-  return (process.env.SMOKE_BASE_URL ?? process.env.BASE_URL ?? "http://localhost:3000").replace(
-    /\/$/,
-    "",
-  );
+  return (
+    process.env.SMOKE_BASE_URL ??
+    process.env.BASE_URL ??
+    "http://localhost:3000"
+  ).replace(/\/$/, "");
 }
 
 function formatStatuses(statuses: number[]) {
@@ -236,7 +230,11 @@ function isRedirectStatus(status: number) {
   return status >= 300 && status < 400;
 }
 
-function getPassReason(route: SmokeRoute, status: number, location: string | null) {
+function getPassReason(
+  route: SmokeRoute,
+  status: number,
+  location: string | null,
+) {
   if (isRedirectStatus(status)) {
     return route.expectedRedirect
       ? `redirect accepted${location ? ` to ${location}` : ""}`
@@ -244,7 +242,9 @@ function getPassReason(route: SmokeRoute, status: number, location: string | nul
   }
 
   if (status === 404) {
-    return "fake dynamic id returned 404 without crashing";
+    return route.group === "removed"
+      ? "removed feature is not accessible"
+      : "fake dynamic id returned 404 without crashing";
   }
 
   if (route.expectedRedirect && status === 200) {
@@ -254,12 +254,16 @@ function getPassReason(route: SmokeRoute, status: number, location: string | nul
   return "status matched expectation";
 }
 
-async function fetchRoute(baseUrl: string, route: SmokeRoute): Promise<SmokeResult> {
+async function fetchRoute(
+  baseUrl: string,
+  route: SmokeRoute,
+): Promise<SmokeResult> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10000);
 
   try {
     const response = await fetch(`${baseUrl}${route.path}`, {
+      method: route.method ?? "GET",
       redirect: "manual",
       signal: controller.signal,
     });
@@ -280,7 +284,9 @@ async function fetchRoute(baseUrl: string, route: SmokeRoute): Promise<SmokeResu
     };
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "Fetch failed before a response was received.";
+      error instanceof Error
+        ? error.message
+        : "Fetch failed before a response was received.";
 
     return {
       error: message,
@@ -344,10 +350,14 @@ async function main() {
     return;
   }
 
-  console.log("Route smoke test passed. No route returned an unexpected status or server error.");
+  console.log(
+    "Route smoke test passed. No route returned an unexpected status or server error.",
+  );
 }
 
 main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : "Route smoke test failed.");
+  console.error(
+    error instanceof Error ? error.message : "Route smoke test failed.",
+  );
   process.exitCode = 1;
 });

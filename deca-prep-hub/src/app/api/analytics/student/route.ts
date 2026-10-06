@@ -27,7 +27,7 @@ export async function GET(request: Request) {
       supabase
         .from("roleplay_attempts")
         .select(
-          "id,user_id,resource_id,response_notes,performance_indicator_notes,self_reflection,judge_feedback,audio_path,transcript,transcript_status,ai_feedback_status,ai_overall_score,ai_feedback_json,strengths,growth_areas,confidence_rating,created_at,updated_at",
+          "id,user_id,resource_id,response_notes,performance_indicator_notes,self_reflection,judge_feedback,audio_path,transcript,transcript_status,confidence_rating,created_at,updated_at",
         )
         .eq("user_id", user.id)
         .order("created_at", { ascending: false }),

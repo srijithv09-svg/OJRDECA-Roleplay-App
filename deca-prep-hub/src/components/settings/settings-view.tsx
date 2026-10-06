@@ -2,7 +2,6 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { getRoleLabel } from "@/lib/auth";
@@ -62,8 +61,8 @@ export function SettingsView() {
       setSelectedCluster(updatedProfile.selected_cluster ?? "");
       setSaveMessage(
         updatedProfile.selected_cluster
-          ? `Saved. Your dashboard will prioritize ${getDecaClusterLabel(updatedProfile.selected_cluster)}.`
-          : "Saved. Your dashboard will keep using the default recommendation order.",
+          ? `Saved. Your library shortcut will use ${getDecaClusterLabel(updatedProfile.selected_cluster)}.`
+          : "Saved. Browse resources from any cluster.",
       );
     } catch (caughtError) {
       setSaveError(caughtError instanceof Error ? caughtError.message : "Unable to save your DECA cluster.");
@@ -85,7 +84,7 @@ export function SettingsView() {
             {isSigningOut ? "Signing out..." : "Sign out"}
           </button>
         }
-        description="Manage account details, chapter context, and integration readiness."
+        description="Manage your school account and preferred practice cluster."
         eyebrow="Account"
         title="Settings"
       />
@@ -117,7 +116,7 @@ export function SettingsView() {
         <Card>
           <CardHeader eyebrow="Personalization" title="DECA Cluster" />
           <p className="text-sm leading-6 text-slate-600">
-            Choose your main DECA cluster so your dashboard can recommend the most relevant practice first.
+            Choose your main DECA cluster to quickly filter the resource libraries.
             You can still access all approved content.
           </p>
           <div className="mt-5 grid gap-3">
@@ -154,32 +153,6 @@ export function SettingsView() {
           </div>
         </Card>
 
-        <Card>
-          <CardHeader eyebrow="Roadmap" title="Integration status" />
-          <div className="space-y-3">
-            {[
-              ["Google authentication", "Connected"],
-              ["School domain restriction", "@ojrsd.net only"],
-              ["Supabase profiles", "Connected"],
-              ["Resource approvals", "Admin ready"],
-              ["OpenAI feedback", "Future"],
-            ].map(([label, status]) => (
-              <div
-                className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 p-3"
-                key={label}
-              >
-                <p className="text-sm font-semibold text-slate-800">{label}</p>
-                <Badge
-                  tone={
-                    status === "Connected" || status === "Admin ready" ? "green" : "blue"
-                  }
-                >
-                  {status}
-                </Badge>
-              </div>
-            ))}
-          </div>
-        </Card>
       </section>
     </>
   );
