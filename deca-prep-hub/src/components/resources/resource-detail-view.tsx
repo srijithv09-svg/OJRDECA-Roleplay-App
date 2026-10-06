@@ -232,8 +232,6 @@ export function ResourceDetailView() {
   }
 
   const isRoleplay = resource.resource_type === "roleplay";
-  const hasReviewedIndicators =
-    isRoleplay && resource.performance_indicators_reviewed && resource.performance_indicators?.length;
   const usefulOriginalFilename = getUsefulOriginalFilename(resource);
   const metadata = [
     ["Resource type", resource.resource_type],
@@ -459,22 +457,6 @@ export function ResourceDetailView() {
                 )}
               </Card>
 
-              <Card>
-                <CardHeader eyebrow="Indicators" title="Performance indicators" />
-                {hasReviewedIndicators ? (
-                  <ul className="space-y-2 text-sm text-slate-600">
-                    {resource.performance_indicators?.map((indicator) => (
-                      <li className="rounded-lg border border-slate-100 p-3" key={indicator}>
-                        {indicator}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-sm leading-6 text-slate-600">
-                    Performance indicators pending review
-                  </p>
-                )}
-              </Card>
             </>
           ) : null}
         </div>

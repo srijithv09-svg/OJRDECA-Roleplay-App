@@ -10,7 +10,7 @@ type RouteContext = {
 const attemptColumns =
   "id,user_id,resource_id,response_notes,performance_indicator_notes,self_reflection,judge_feedback,audio_path,transcript,transcript_status,confidence_rating,created_at,updated_at";
 const roleplayResourceColumns =
-  "id,title,cluster,event_code,event_name,event_category,year,resource_type,original_filename,performance_indicators,performance_indicators_reviewed";
+  "id,title,cluster,event_code,event_name,event_category,year,resource_type,original_filename";
 
 function normalizeText(value: unknown) {
   if (typeof value !== "string") {

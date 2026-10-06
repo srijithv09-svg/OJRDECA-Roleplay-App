@@ -43,8 +43,6 @@ export type ResourceListItem = {
   resource_type: SupabaseResourceType;
   approval_status: ResourceApprovalStatus | null;
   original_filename: string | null;
-  performance_indicators: string[] | null;
-  performance_indicators_reviewed: boolean | null;
   confidence_score: number | null;
   detected_text?: string | null;
   import_notes: string | null;
@@ -59,8 +57,6 @@ export type ResourceMetadataUpdate = Pick<
   | "event_code"
   | "event_name"
   | "instructional_area"
-  | "performance_indicators"
-  | "performance_indicators_reviewed"
   | "resource_type"
   | "title"
   | "year"
@@ -234,8 +230,6 @@ export type PublicRoleplayResource = Pick<
   | "event_name"
   | "id"
   | "original_filename"
-  | "performance_indicators"
-  | "performance_indicators_reviewed"
   | "resource_type"
   | "title"
   | "year"

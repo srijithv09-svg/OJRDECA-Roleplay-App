@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { detectDecaEventCodeFromText } from "../src/lib/deca/events";
-import { detectResourceMetadata } from "../src/lib/resources/metadata-detection";
+import { detectResourceMetadata, textClearlyIndicatesReference } from "../src/lib/resources/metadata-detection";
 
 type ResourceType = "roleplay" | "exam" | "reference" | "unknown";
 
@@ -21,8 +21,6 @@ type ImportMetadata = {
   event_code: string | null;
   event_name: string | null;
   instructional_area: string | null;
-  performance_indicators: string[] | null;
-  performance_indicators_reviewed: boolean;
   year: number | null;
   original_filename: string;
 };
@@ -153,13 +151,9 @@ function classifyResource(filePath: string): ClassificationResult {
   const normalizedPath = normalizeText(pathText).toLowerCase();
   const eventCode = detectDecaEventCodeFromText(pathText);
 
-  if (
-    /performance[-_\s]?indicators/i.test(filenameText) ||
-    /exam[-_\s]?blueprint/i.test(filenameText) ||
-    /\bblueprint\b/i.test(filenameText)
-  ) {
+  if (textClearlyIndicatesReference(pathText)) {
     return {
-      reason: "filename contains performance indicators or blueprint",
+      reason: "filename or folder identifies reference material",
       resourceType: "reference",
     };
   }
@@ -224,43 +218,6 @@ function detectYear(searchText: string): number | null {
   return fullYearMatch ? Number(fullYearMatch[1]) : null;
 }
 
-function detectPerformanceIndicators(text: string): string[] | null {
-  const indicators = new Set<string>();
-  const lines = text
-    .split(/\r?\n/)
-    .map((line) => normalizeText(line))
-    .filter(Boolean);
-
-  for (const line of lines) {
-    if (/performance indicator/i.test(line)) {
-      const cleaned = line
-        .replace(/^performance indicators?[:\s-]*/i, "")
-        .replace(/^pi[:\s-]*/i, "")
-        .trim();
-
-      if (cleaned.length > 6 && cleaned.length < 220) {
-        indicators.add(cleaned);
-      }
-    }
-  }
-
-  const sectionMatch = text.match(
-    /performance indicators?([\s\S]{0,1200}?)(?:instructional area|participant instructions|case study|judging|$)/i,
-  );
-
-  if (sectionMatch) {
-    for (const rawLine of sectionMatch[1].split(/\r?\n/)) {
-      const cleaned = normalizeText(rawLine.replace(/^[-*•\d.)\s]+/, ""));
-
-      if (cleaned.length > 12 && cleaned.length < 220) {
-        indicators.add(cleaned);
-      }
-    }
-  }
-
-  return indicators.size > 0 ? [...indicators].slice(0, 12) : null;
-}
-
 async function extractPdfText(filePath: string) {
   const data = await readFile(filePath);
   const parser = new PDFParse({ data });
@@ -291,9 +248,6 @@ function createMetadata(
     event_code: detected.event_code,
     event_name: detected.event_name,
     instructional_area: detected.instructional_area,
-    performance_indicators:
-      classification.resourceType === "roleplay" ? detectPerformanceIndicators(text) : null,
-    performance_indicators_reviewed: false,
     year: detected.year ?? detectYear(`${originalFilename} ${folderText}`),
     original_filename: originalFilename,
   };

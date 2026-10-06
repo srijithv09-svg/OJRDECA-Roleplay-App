@@ -24,8 +24,6 @@ type MetadataDraft = {
   event_code: string;
   event_name: string;
   instructional_area: string;
-  performance_indicators: string;
-  performance_indicators_reviewed: boolean;
   resource_type: SupabaseResourceType;
   title: string;
   year: string;
@@ -62,38 +60,20 @@ function toDraft(resource: ResourceListItem): MetadataDraft {
     event_code: resource.event_code ?? "",
     event_name: resource.event_name ?? "",
     instructional_area: resource.instructional_area ?? "",
-    performance_indicators: resource.performance_indicators?.join("\n") ?? "",
-    performance_indicators_reviewed: Boolean(resource.performance_indicators_reviewed),
     resource_type: resource.resource_type,
     title: resource.title,
     year: resource.year?.toString() ?? "",
   };
 }
 
-function toMetadataUpdate(
-  draft: MetadataDraft,
-  originalResource: ResourceListItem,
-): ResourceMetadataUpdate {
-  const performanceIndicators = draft.performance_indicators
-    .split(/\r?\n/)
-    .map((indicator) => indicator.trim())
-    .filter(Boolean);
-  const isRoleplay = draft.resource_type === "roleplay";
-
+function toMetadataUpdate(draft: MetadataDraft): ResourceMetadataUpdate {
   return {
     cluster: draft.cluster.trim() || null,
     event_category: draft.event_category.trim() || null,
     event_code: draft.event_code.trim().toUpperCase() || null,
     event_name: draft.event_name.trim() || null,
-    instructional_area: draft.instructional_area.trim() || null,
-    performance_indicators: isRoleplay
-      ? performanceIndicators.length > 0
-        ? performanceIndicators
-        : null
-      : originalResource.performance_indicators,
-    performance_indicators_reviewed: isRoleplay
-      ? draft.performance_indicators_reviewed
-      : originalResource.performance_indicators_reviewed,
+    instructional_area:
+      draft.resource_type === "roleplay" ? draft.instructional_area.trim() || null : null,
     resource_type: draft.resource_type,
     title: draft.title.trim(),
     year: draft.year.trim() ? Number(draft.year) : null,
@@ -266,6 +246,10 @@ export function AdminResourcesView() {
     yearFilter,
   ]);
 
+  const statusResourceCount = resources.filter((resource) =>
+    approvalStatusFilter === "all" || resource.approval_status === approvalStatusFilter,
+  ).length;
+
   const selectedVisibleIds = useMemo(
     () => filteredResources.filter((resource) => selectedIds.has(resource.id)).map((resource) => resource.id),
     [filteredResources, selectedIds],
@@ -399,7 +383,7 @@ export function AdminResourcesView() {
     try {
       const updatedResource = await ResourcesService.updateMetadata(
         editingResource.id,
-        toMetadataUpdate(draft, editingResource),
+        toMetadataUpdate(draft),
       );
       patchResources([updatedResource]);
       closeEditor();
@@ -526,7 +510,8 @@ export function AdminResourcesView() {
         </div>
 
         <p className="mt-4 text-sm text-slate-500">
-          Showing {filteredResources.length} of {resources.length} resources.
+          Showing {filteredResources.length} of {statusResourceCount}{" "}
+          {approvalStatusFilter === "all" ? "total" : approvalStatusFilter} resources.
         </p>
       </Card>
 
@@ -621,11 +606,6 @@ function ResourceApprovalCard({
   onToggleSelected: () => void;
   resource: ResourceListItem;
 }) {
-  const hasReviewedIndicators =
-    resource.resource_type === "roleplay" &&
-    resource.performance_indicators_reviewed &&
-    resource.performance_indicators?.length;
-
   return (
     <Card>
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
@@ -704,40 +684,6 @@ function ResourceApprovalCard({
       </dl>
 
       <div className="mt-4 grid gap-3 lg:grid-cols-2">
-        {resource.resource_type === "roleplay" ? (
-          <div className="rounded-lg border border-slate-100 bg-white p-3">
-            <p className="text-sm font-semibold text-slate-800">Performance indicators</p>
-            {hasReviewedIndicators ? (
-              <ul className="mt-2 space-y-1 text-sm text-slate-600">
-                {resource.performance_indicators?.map((indicator) => (
-                  <li key={indicator}>{indicator}</li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-2 text-sm text-slate-500">
-                Performance indicators pending review
-              </p>
-            )}
-            {resource.performance_indicators?.length ? (
-              <details className="mt-3">
-                <summary className="cursor-pointer text-sm font-semibold text-slate-700">
-                  Raw extracted indicators
-                </summary>
-                <ul className="mt-2 grid gap-2">
-                  {resource.performance_indicators.map((indicator) => (
-                    <li
-                      className="rounded-lg border border-slate-100 bg-slate-50 p-3 text-sm text-slate-600"
-                      key={indicator}
-                    >
-                      {indicator}
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            ) : null}
-          </div>
-        ) : null}
-
         <details className="rounded-lg border border-slate-100 bg-slate-50 p-3">
           <summary className="cursor-pointer text-sm font-semibold text-slate-800">
             Developer details
@@ -774,7 +720,6 @@ function MetadataEditModal({
   onDraftChange: (draft: MetadataDraft) => void;
   onSave: () => void;
 }) {
-  const isRoleplayDraft = draft.resource_type === "roleplay";
   function selectEventCode(eventCode: string) {
     const selectedEvent = getDecaEventByCode(eventCode);
 
@@ -849,6 +794,12 @@ function MetadataEditModal({
             </select>
           </label>
 
+          {draft.resource_type === "reference" ? (
+            <p className="text-sm text-slate-600 md:col-span-2">
+              This file will appear in Reference once approved.
+            </p>
+          ) : null}
+
           <label className="grid gap-2 text-sm font-semibold text-slate-800">
             Event code
             <select
@@ -860,7 +811,6 @@ function MetadataEditModal({
               {decaEvents.map((event) => (
                 <option key={event.code} value={event.code}>
                   {event.code} - {event.name}
-                  {event.code === "MCS" || event.code === "BLTDM" ? " (learning pilot)" : ""}
                 </option>
               ))}
             </select>
@@ -877,41 +827,6 @@ function MetadataEditModal({
               />
             </label>
           ))}
-
-          {isRoleplayDraft ? (
-            <>
-              <label className="grid gap-2 text-sm font-semibold text-slate-800 md:col-span-2">
-                Performance indicators
-                <textarea
-                  className="min-h-32 rounded-md border border-slate-200 px-3 py-2 text-sm font-normal outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                  onChange={(event) =>
-                    onDraftChange({ ...draft, performance_indicators: event.target.value })
-                  }
-                  value={draft.performance_indicators}
-                />
-              </label>
-
-              <label className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 text-sm font-semibold text-slate-800 md:col-span-2">
-                <input
-                  checked={draft.performance_indicators_reviewed}
-                  className="h-4 w-4 rounded border-slate-300 text-blue-700 focus:ring-blue-500"
-                  onChange={(event) =>
-                    onDraftChange({
-                      ...draft,
-                      performance_indicators_reviewed: event.target.checked,
-                    })
-                  }
-                  type="checkbox"
-                />
-                Mark performance indicators as reviewed
-              </label>
-            </>
-          ) : (
-            <div className="rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-600 md:col-span-2">
-              Performance indicators are only edited and displayed for roleplay resources.
-              Existing indicator data is preserved but hidden for exams, references, and unknown resources.
-            </div>
-          )}
         </div>
 
         <div className="mt-5 flex flex-wrap justify-end gap-2">

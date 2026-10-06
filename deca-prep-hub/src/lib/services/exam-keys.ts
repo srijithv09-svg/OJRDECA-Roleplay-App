@@ -8,7 +8,7 @@ import type {
 } from "@/lib/types";
 
 const examResourceColumns =
-  "id,title,cluster,event_code,event_name,event_category,instructional_area,year,resource_type,approval_status,original_filename,performance_indicators,performance_indicators_reviewed,confidence_score,import_notes,file_path,storage_path";
+  "id,title,cluster,event_code,event_name,event_category,instructional_area,year,resource_type,approval_status,original_filename,confidence_score,import_notes,file_path,storage_path";
 
 const answerKeyColumns =
   "id,resource_id,question_number,correct_answer,instructional_area,created_at,updated_at";

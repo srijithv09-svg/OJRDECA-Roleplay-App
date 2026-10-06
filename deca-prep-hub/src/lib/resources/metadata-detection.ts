@@ -47,11 +47,14 @@ function detectYear(value: string) {
 }
 
 export function textClearlyIndicatesReference(value: string) {
+  const normalized = value.replace(/[_-]+/g, " ");
   return (
-    /\bperformance[-_\s]*indicators?\b/i.test(value) ||
-    /\bexam[-_\s]*blueprint\b/i.test(value) ||
-    /\bblueprint\b/i.test(value) ||
-    /\bguidelines?\b/i.test(value)
+    /\bperformance\s*indicators?\b/i.test(normalized) ||
+    /\bblueprints?\b/i.test(normalized) ||
+    /\bguidelines?\b/i.test(normalized) ||
+    /\breferences?\b/i.test(normalized) ||
+    /\bcluster\s+guides?\b/i.test(normalized) ||
+    /\bPIs\b/i.test(normalized)
   );
 }
 

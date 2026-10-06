@@ -8,10 +8,10 @@ import type {
 } from "@/lib/types";
 
 const resourceColumns =
-  "id,title,cluster,event_code,event_name,event_category,instructional_area,year,resource_type,approval_status,original_filename,performance_indicators,performance_indicators_reviewed,confidence_score,import_notes,file_path,storage_path";
+  "id,title,cluster,event_code,event_name,event_category,instructional_area,year,resource_type,approval_status,original_filename,confidence_score,import_notes,file_path,storage_path";
 const resourceColumnsWithCreatedAt = `${resourceColumns},created_at`;
 const publicResourceColumns =
-  "id,title,cluster,event_code,event_name,event_category,instructional_area,year,resource_type,approval_status,original_filename,performance_indicators,performance_indicators_reviewed";
+  "id,title,cluster,event_code,event_name,event_category,instructional_area,year,resource_type,approval_status,original_filename";
 
 export type PublicResourceListItem = Omit<
   ResourceListItem,

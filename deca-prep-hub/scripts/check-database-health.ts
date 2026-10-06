@@ -6,7 +6,7 @@ loadEnvConfig(process.cwd());
 const requiredTables = {
   profiles: "id,role,selected_cluster",
   resources:
-    "id,title,resource_type,approval_status,event_code,event_category,performance_indicators_reviewed,storage_path",
+    "id,title,resource_type,approval_status,event_code,event_category,storage_path",
   exam_answer_keys: "id,resource_id,question_number,correct_answer",
   exam_attempts:
     "id,user_id,resource_id,score,total_questions,percentage,completed_at",

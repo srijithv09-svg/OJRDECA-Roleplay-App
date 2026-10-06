@@ -46,7 +46,7 @@ Environment: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_
 - Unknown event matches remain unknown; never default them to MCS or BLTDM.
 - PDFs live in the private `resources` bucket. Signed URLs use object paths without a bucket prefix. Open/download PDFs; don't expose storage paths or import debugging fields to students.
 - Audio lives in the private `roleplay-audio` bucket. Server routes verify attempt ownership for upload, signed playback links, and deletion.
-- Show PI arrays only for roleplays with `performance_indicators_reviewed = true`. Unreviewed roleplay indicators show a pending-review message. Reference PDFs are documents, not extracted PI arrays.
+- Do not read, extract, edit, or display performance indicator arrays on individual resources. PI documents remain uploaded reference PDFs. Legacy database columns and migrations are retained for compatibility.
 - Preserve approval/edit/bulk actions and manual answer-key entry/paste. Keep students' correct answers off exam-taking payloads.
 - Imported PDFs under `import_data/` stay Git-ignored.
 

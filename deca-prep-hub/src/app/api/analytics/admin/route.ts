@@ -23,7 +23,7 @@ export async function GET(request: Request) {
         .from("exam_attempts")
         .select("id,user_id,resource_id,score,total_questions,percentage,completed_at")
         .order("completed_at", { ascending: false }),
-      supabase.from("resources").select("*"),
+      supabase.from("resources").select("id,title,cluster,event_code,event_name,event_category,instructional_area,year,resource_type,approval_status,original_filename,confidence_score,import_notes,file_path,storage_path"),
       supabase
         .from("exam_attempt_answers")
         .select(
