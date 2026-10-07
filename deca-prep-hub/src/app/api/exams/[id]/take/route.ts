@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getExamKeyStatus } from "@/lib/exams/answer-key-status";
 import { requireAuthenticatedSchoolUser } from "@/lib/server/api-auth";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 
@@ -43,11 +44,13 @@ export async function GET(request: Request, context: RouteContext) {
       return NextResponse.json({ error: answerKeyError.message }, { status: 500 });
     }
 
+    const hasAnswerKey = getExamKeyStatus((questions ?? []).map((question) => question.question_number)) === "complete";
+
     return NextResponse.json({
       resource,
-      hasAnswerKey: Boolean(questions?.length),
-      questionCount: questions?.length ?? 0,
-      questions: questions ?? [],
+      hasAnswerKey,
+      questionCount: hasAnswerKey ? questions?.length ?? 0 : 0,
+      questions: hasAnswerKey ? questions ?? [] : [],
     });
   } catch (caughtError) {
     return NextResponse.json(

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { DECA_EXAM_QUESTION_COUNT, getExamKeyStatus } from "@/lib/exams/answer-key-status";
 import { requireAuthenticatedSchoolUser } from "@/lib/server/api-auth";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import type { ExamCorrectAnswer, ExamSelectedAnswer } from "@/lib/types";
@@ -26,6 +27,7 @@ function parseSubmittedAnswers(payload: unknown) {
   }
 
   const parsedAnswers: SubmittedAnswer[] = [];
+  const seenQuestions = new Set<number>();
 
   for (const answer of answers) {
     if (!answer || typeof answer !== "object") {
@@ -37,9 +39,14 @@ function parseSubmittedAnswers(payload: unknown) {
       (answer as { selected_answer?: unknown }).selected_answer ?? "",
     ).toUpperCase();
 
-    if (!Number.isInteger(questionNumber) || questionNumber <= 0) {
-      throw new Error("Question numbers must be positive integers.");
+    if (!Number.isInteger(questionNumber) || questionNumber <= 0 || questionNumber > DECA_EXAM_QUESTION_COUNT) {
+      throw new Error("Question numbers must be between 1 and 100.");
     }
+
+    if (seenQuestions.has(questionNumber)) {
+      throw new Error(`Question ${questionNumber} was submitted more than once.`);
+    }
+    seenQuestions.add(questionNumber);
 
     if (!answerOptions.includes(selectedAnswer as ExamCorrectAnswer)) {
       throw new Error("Selected answers must be A, B, C, D, or E.");
@@ -107,9 +114,9 @@ export async function POST(request: Request, context: RouteContext) {
       return NextResponse.json({ error: answerKeyError.message }, { status: 500 });
     }
 
-    if (!answerKeyRows?.length) {
+    if (!answerKeyRows || getExamKeyStatus(answerKeyRows.map((row) => row.question_number)) !== "complete") {
       return NextResponse.json(
-        { error: "This exam is not ready for grading yet." },
+        { error: "This exam needs a complete answer key before it can be graded." },
         { status: 409 },
       );
     }

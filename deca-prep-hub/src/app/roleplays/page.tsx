@@ -5,8 +5,7 @@ export default function RoleplaysPage() {
   return (
     <>
       <PageHeader
-        description="Choose an uploaded scenario, prepare your response, and save notes or a recording."
-        eyebrow="Resource library"
+        description="Choose a scenario, prepare your response, and save notes or a recording."
         title="Roleplay practice"
       />
 

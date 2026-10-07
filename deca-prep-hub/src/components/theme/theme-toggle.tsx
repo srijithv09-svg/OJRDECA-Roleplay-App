@@ -58,7 +58,7 @@ export function ThemeToggle() {
   return (
     <button
       aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-      className="inline-grid h-10 w-10 place-items-center rounded-md border border-slate-200 bg-white text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
+      className="ui-button ui-button-secondary h-10 w-10 shrink-0 !p-0"
       onClick={toggleTheme}
       title={isDark ? "Switch to light mode" : "Switch to dark mode"}
       type="button"

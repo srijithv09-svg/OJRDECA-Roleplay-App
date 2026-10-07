@@ -36,7 +36,7 @@ export function CardHeader({
             {eyebrow}
           </p>
         ) : null}
-        <h2 className="mt-1 text-lg font-semibold text-slate-950">{title}</h2>
+        <h2 className="mt-1 text-base font-semibold text-foreground">{title}</h2>
       </div>
       {action}
     </div>

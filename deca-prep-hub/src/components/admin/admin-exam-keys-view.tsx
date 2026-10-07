@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button-link";
 import { Card, CardHeader } from "@/components/ui/card";
@@ -157,8 +157,8 @@ function parseBulkAnswers(value: string) {
     const questionNumber = Number(match[1]);
     const answer = match[2].toUpperCase();
 
-    if (!Number.isInteger(questionNumber) || questionNumber <= 0) {
-      errors.push(`Line ${index + 1}: question number must be a positive integer.`);
+    if (!Number.isInteger(questionNumber) || questionNumber <= 0 || questionNumber > 100) {
+      errors.push(`Line ${index + 1}: question number must be between 1 and 100.`);
       return;
     }
 
@@ -190,8 +190,8 @@ function validateDraftRows(rows: KeyDraftRow[]): { errors: string[]; rows: ExamA
   rows.forEach((row, index) => {
     const questionNumber = Number(row.question_number);
 
-    if (!Number.isInteger(questionNumber) || questionNumber <= 0) {
-      errors.push(`Row ${index + 1}: question number must be a positive integer.`);
+    if (!Number.isInteger(questionNumber) || questionNumber <= 0 || questionNumber > 100) {
+      errors.push(`Row ${index + 1}: question number must be between 1 and 100.`);
       return;
     }
 
@@ -228,6 +228,7 @@ export function AdminExamKeysView() {
   const [isLoading, setIsLoading] = useState(true);
   const [isEditorLoading, setIsEditorLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isExtracting, setIsExtracting] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [examError, setExamError] = useState<string | null>(null);
   const [editorError, setEditorError] = useState<string | null>(null);
@@ -329,14 +330,16 @@ export function AdminExamKeysView() {
     setReloadKey((currentKey) => currentKey + 1);
   }
 
-  function updateExamStatus(resourceId: string, answerKeyCount: number) {
+  function updateExamStatus(resourceId: string, rows: ExamAnswerKeyRow[]) {
+    const answerKeyCount = rows.length;
+    const questionNumbers = rows.map((row) => row.question_number);
     setExams((currentExams) =>
       currentExams.map((exam) =>
         exam.id === resourceId
           ? {
               ...exam,
               answer_key_count: answerKeyCount,
-              answer_key_status: ExamKeysService.getExamKeyStatus(answerKeyCount),
+              answer_key_status: ExamKeysService.getExamKeyStatus(questionNumbers),
             }
           : exam,
       ),
@@ -347,7 +350,7 @@ export function AdminExamKeysView() {
         ? {
             ...currentExam,
             answer_key_count: answerKeyCount,
-            answer_key_status: ExamKeysService.getExamKeyStatus(answerKeyCount),
+            answer_key_status: ExamKeysService.getExamKeyStatus(questionNumbers),
           }
         : currentExam,
     );
@@ -390,12 +393,30 @@ export function AdminExamKeysView() {
   }
 
   function closeEditor() {
+    if (isSaving || isExtracting || isEditorLoading) return;
     setSelectedExam(null);
     setOriginalRows([]);
     setDraftRows([]);
     setBulkText("");
     setEditorError(null);
     setSuccessMessage(null);
+  }
+
+  async function extractPdfKey() {
+    if (!selectedExam || isExtracting || isSaving) return;
+    setIsExtracting(true);
+    setEditorError(null);
+    setSuccessMessage(null);
+
+    try {
+      const rows = await ExamKeysService.extractExamAnswerKey(selectedExam.id);
+      setBulkText(rows.map((row) => `${row.question_number}. ${row.correct_answer}`).join("\n"));
+      setSuccessMessage("Read 100 answers from the printed key. Review the preview, then apply it to the editor and save.");
+    } catch (error) {
+      setEditorError(error instanceof Error ? error.message : "Unable to read the answer key.");
+    } finally {
+      setIsExtracting(false);
+    }
   }
 
   function applyParsedAnswers() {
@@ -454,7 +475,7 @@ export function AdminExamKeysView() {
   }
 
   async function saveAnswerKey() {
-    if (!selectedExam) {
+    if (!selectedExam || isSaving || isExtracting || isEditorLoading) {
       return;
     }
 
@@ -478,14 +499,17 @@ export function AdminExamKeysView() {
         .map((row) => row.question_number)
         .filter((questionNumber) => !currentQuestionNumbers.has(questionNumber));
 
-      await ExamKeysService.deleteExamAnswerKeyRows(selectedExam.id, deletedQuestionNumbers);
       await ExamKeysService.upsertExamAnswerKey(selectedExam.id, validation.rows);
+      await ExamKeysService.deleteExamAnswerKeyRows(selectedExam.id, deletedQuestionNumbers);
 
       const nextRows = await ExamKeysService.getExamAnswerKey(selectedExam.id);
       setOriginalRows(nextRows);
       setDraftRows(nextRows.map(keyRowToDraft));
-      updateExamStatus(selectedExam.id, nextRows.length);
-      setSuccessMessage(`Saved ${nextRows.length} answer key rows.`);
+      updateExamStatus(selectedExam.id, nextRows);
+      const complete = ExamKeysService.getExamKeyStatus(nextRows.map((row) => row.question_number)) === "complete";
+      setSuccessMessage(complete
+        ? "Saved all 100 answers. This exam is ready for student practice."
+        : `Saved ${nextRows.length} answers. Complete questions 1–100 to enable grading.`);
     } catch (caughtError) {
       setEditorError(caughtError instanceof Error ? caughtError.message : "Unable to save key.");
     } finally {
@@ -525,7 +549,7 @@ export function AdminExamKeysView() {
     <>
       <PageHeader
         actions={<ButtonLink href="/admin">Back to Admin</ButtonLink>}
-        description="Create and maintain answer keys for approved exam PDFs before student grading is enabled."
+        description="Read the printed answer key from an approved exam, review it, and save to enable grading."
         eyebrow="Admin"
         title="Exam answer keys"
       />
@@ -573,13 +597,12 @@ export function AdminExamKeysView() {
           <div>
             <h2 className="text-lg font-semibold text-slate-950">No approved exams found</h2>
             <p className="mt-2 max-w-md text-sm leading-6 text-slate-600">
-              Approved exam resources will appear here once they exist in Supabase and
-              match the current filters.
+              Upload and approve an exam to prepare its answer key, or adjust your filters.
             </p>
           </div>
         </Card>
       ) : (
-        <div className="grid gap-4 xl:grid-cols-2">
+        <div className="grid gap-3">
           {filteredExams.map((exam) => (
             <ExamKeyCard
               exam={exam}
@@ -599,12 +622,15 @@ export function AdminExamKeysView() {
           editorError={editorError}
           exam={selectedExam}
           isEditorLoading={isEditorLoading}
+          isExtracting={isExtracting}
           isSaving={isSaving}
           onAddRow={addDraftRow}
           onApplyParsed={applyParsedAnswers}
           onBulkTextChange={setBulkText}
           onClose={closeEditor}
           onDeleteRow={deleteDraftRow}
+          onExtract={() => void extractPdfKey()}
+          onOpenPdf={() => void openPdf(selectedExam)}
           onSave={() => void saveAnswerKey()}
           onUpdateRow={updateDraftRow}
           parsedAnswers={parsedBulk.parsedAnswers}

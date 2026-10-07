@@ -5,8 +5,7 @@ export default function ExamsPage() {
   return (
     <>
       <PageHeader
-        description="Practice with uploaded cluster exams and review your results against saved answer keys."
-        eyebrow="Exam library"
+        description="Choose a cluster exam. Enter your answers and review your score."
         title="Exam practice"
       />
 

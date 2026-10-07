@@ -16,7 +16,6 @@ import { getProfileDisplayName, getProfileInitials } from "@/lib/profile-display
 import { getCurrentProfile } from "@/lib/services/profiles";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import type { Profile } from "@/lib/types";
-import { cn } from "@/lib/utils";
 
 const navItems: Array<{ label: string; href: string; icon: IconName; adminOnly?: boolean }> = [
   { label: "Practice", href: "/dashboard", icon: "dashboard" },
@@ -44,9 +43,9 @@ function FullPageAuthState({
   detail?: string;
 }) {
   return (
-    <div className="grid min-h-screen place-items-center bg-slate-50 px-4">
-      <div className="rounded-lg border border-slate-200 bg-white p-6 text-center shadow-sm shadow-slate-200/60">
-        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-700">
+    <div className="grid min-h-screen place-items-center bg-background px-4">
+      <div className="rounded-md border border-border bg-card p-8 text-center" role="status">
+        <p className="text-sm font-semibold text-primary">
           OJR DECA
         </p>
         <h1 className="mt-3 text-xl font-bold text-slate-950">{message}</h1>
@@ -221,31 +220,25 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background">
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-72 border-r border-slate-200 bg-white lg:flex lg:flex-col">
-        <Link className="flex h-20 items-center gap-3 px-6" href="/dashboard">
-          <span className="grid h-11 w-11 place-items-center rounded-lg bg-blue-700 text-sm font-black text-white">
+      <a className="skip-link ui-button ui-button-primary" href="#main-content">Skip to content</a>
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 border-r border-border bg-card lg:flex lg:flex-col">
+        <Link className="flex min-h-24 items-center gap-3 px-5" href="/dashboard">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-primary text-xs font-bold text-white">
             OJR
           </span>
           <span>
-            <span className="block text-base font-bold text-slate-950">OJR DECA Prep Database</span>
-            <span className="block text-xs font-medium text-slate-500">
-              Owen J. Roberts High School
-            </span>
+            <span className="block text-sm font-semibold leading-5 text-foreground">OJR DECA<br />Prep Database</span>
           </span>
         </Link>
 
-        <nav className="flex flex-1 flex-col gap-1 px-3 py-2">
+        <nav aria-label="Main navigation" className="flex flex-1 flex-col gap-1 px-3 py-2">
           {visibleNavItems.map((item) => {
             const active = isActive(pathname, item.href);
 
             return (
               <Link
-                className={cn(
-                  "flex min-h-11 items-center gap-3 rounded-md px-3 text-sm font-semibold transition",
-                  active
-                    ? "bg-primary-soft text-primary"
-                    : "text-slate-600 hover:bg-blue-50 hover:text-blue-700",
-                )}
+                aria-current={active ? "page" : undefined}
+                className={`app-nav-link ${item.adminOnly ? "mt-5 border-t border-border" : ""}`}
                 href={item.href}
                 key={item.href}
               >
@@ -256,44 +249,37 @@ export function AppShell({ children }: { children: ReactNode }) {
           })}
         </nav>
 
-        <div className="m-4 rounded-lg border border-blue-100 bg-blue-50 p-4">
-          <p className="text-sm font-semibold text-blue-950">Owen J. Roberts DECA</p>
-          <p className="mt-1 text-xs leading-5 text-blue-800">
-            Uploaded materials. Focused practice.
-          </p>
+        <div className="border-t border-border px-5 py-5 text-xs leading-5 text-[var(--muted)]">
+          Owen J. Roberts High School<br />DECA preparation library
         </div>
       </aside>
 
-      <div className="lg:pl-72">
+      <div className="lg:pl-60">
         <header className="sticky top-0 z-20 border-b border-border bg-card">
-          <div className="flex min-h-16 items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-            <Link className="flex items-center gap-3 lg:hidden" href="/dashboard">
-              <span className="grid h-9 w-9 place-items-center rounded-lg bg-blue-700 text-xs font-black text-white shadow-sm shadow-blue-200">
-                OJR
-              </span>
-              <span className="text-sm font-bold text-slate-950">OJR DECA Prep Database</span>
+          <div className="flex min-h-16 items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
+            <Link className="min-w-0 text-sm font-semibold leading-5 lg:hidden" href="/dashboard">
+              OJR DECA<br /><span className="text-xs font-normal text-[var(--muted)]">Prep Database</span>
             </Link>
 
             <div className="hidden lg:block">
-              <p className="text-sm font-semibold text-slate-950">
-                Owen J. Roberts DECA
+              <p className="text-sm font-medium text-[var(--muted)]">
+                {pathname.startsWith("/admin") ? "Chapter management" : "Practice & reference"}
               </p>
-              <p className="text-xs text-slate-500">Practice & reference library</p>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex min-w-0 items-center gap-2 sm:gap-3">
               <div className="hidden text-right sm:block">
-                <p className="text-sm font-semibold text-slate-950">
-                  {profile?.email ?? displayName}
+                <p className="max-w-64 truncate text-sm font-medium text-foreground" title={profile?.email ?? displayName}>
+                  {displayName}
                 </p>
                 <p className="text-xs text-slate-500">{getRoleLabel(profile?.role)}</p>
               </div>
               <ThemeToggle />
-              <div className="grid h-10 w-10 place-items-center rounded-lg border border-blue-100 bg-blue-50 text-sm font-bold text-blue-700">
+              <div aria-hidden="true" className="hidden h-9 w-9 place-items-center rounded-full bg-card-muted text-xs font-semibold text-[var(--muted-foreground)] sm:grid">
                 {profileInitials}
               </div>
               <button
-                className="hidden min-h-10 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700 sm:inline-flex sm:items-center"
+                className="ui-button ui-button-secondary"
                 onClick={handleSignOut}
                 type="button"
               >
@@ -302,18 +288,14 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
           </div>
 
-          <nav className="flex gap-2 overflow-x-auto border-t border-[var(--primary-soft-strong)] px-4 py-2 dark:border-[var(--border-strong)] lg:hidden">
+          <nav aria-label="Main navigation" className="flex gap-1 overflow-x-auto border-t border-border px-3 py-2 lg:hidden">
             {visibleNavItems.map((item) => {
               const active = isActive(pathname, item.href);
 
               return (
                 <Link
-                  className={cn(
-                    "inline-flex min-h-9 shrink-0 items-center gap-2 rounded-md px-3 text-xs font-semibold",
-                    active
-                      ? "bg-blue-700 text-white"
-                      : "bg-slate-100 text-slate-600 hover:bg-blue-50 hover:text-blue-700",
-                  )}
+                  aria-current={active ? "page" : undefined}
+                  className="app-nav-link shrink-0"
                   href={item.href}
                   key={item.href}
                 >
@@ -325,7 +307,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </nav>
         </header>
 
-        <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+        <main id="main-content" tabIndex={-1} className="mx-auto flex w-full min-w-0 max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
           {children}
         </main>
       </div>

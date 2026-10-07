@@ -16,7 +16,7 @@ Internal preparation library for Owen J. Roberts High School DECA. The current p
 - Practice uses approved uploaded PDFs. Reference includes uploaded PI documents, cluster guides, and exam blueprints.
 - Roleplay practice supports a preparation timer, written notes, self-reflection, partner feedback, confidence, and optional audio recordings.
 - Exam answers are graded server-side using manually managed answer keys; unanswered questions count as incorrect.
-- Preserve users' existing resources, profiles, saved attempts, and recordings. Historical SQL migrations stay intact; don't drop legacy tables or rewrite migration history as part of UI cleanup.
+- Preserve existing data unless the user explicitly authorizes a reset. The user authorized a content reset on 2026-10-06; resources, answer keys, attempts, recordings, and retired Learn/AI tables were cleared after a local recovery export. Accounts and roles were preserved. Historical SQL migrations stay intact.
 - `docs/ojr-deca-roleplay-prep-rebuild-plan.md` is historical, superseded by this direction.
 
 ## Stack and local setup
@@ -36,6 +36,8 @@ Environment: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_
 - User role management prevents demoting the final admin/advisor.
 - During session checks show a loading screen; don't flash the login card after successful OAuth.
 - Student attempt APIs check ownership before read/update/delete or audio access.
+- Active public tables: `profiles`, `resources`, `exam_answer_keys`, `exam_attempts`, `exam_attempt_answers`, `roleplay_attempts`. Retired Learn/AI tables are removed by the 20261006234623 migration.
+- Browser clients may read their own attempts, but grading and attempt writes use verified server routes. Profile role changes remain server-only. Both admins and advisors can review resources and manage answer keys through RLS.
 
 ## Resource lifecycle
 

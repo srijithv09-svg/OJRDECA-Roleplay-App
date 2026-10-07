@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Card, CardHeader } from "@/components/ui/card";
 import { ButtonLink } from "@/components/ui/button-link";
 import { PageHeader } from "@/components/ui/page-header";
+import { Icon, type IconName } from "@/components/ui/icon";
 import { isAdminRole } from "@/lib/auth";
 import { getCurrentProfile } from "@/lib/services/profiles";
 import { AnalyticsService } from "@/lib/services/analytics";
@@ -14,20 +15,27 @@ import type { Profile, StudentAnalyticsSummary } from "@/lib/types";
 
 const practiceOptions = [
   {
-    number: "01",
+    icon: "exams" as IconName,
     title: "Exam practice",
     href: "/exams",
     action: "Browse exams",
     description:
-      "Work through an uploaded cluster exam. Submit your answers and review your score.",
+      "Work through a cluster exam and review your results.",
   },
   {
-    number: "02",
+    icon: "roleplays" as IconName,
     title: "Roleplay practice",
     href: "/roleplays",
     action: "Browse roleplays",
     description:
-      "Prepare a scenario, practice your presentation, and keep your notes and recordings.",
+      "Prepare a scenario, present your response, and save your notes.",
+  },
+  {
+    icon: "search" as IconName,
+    title: "Reference library",
+    href: "/reference",
+    action: "Browse reference",
+    description: "Find performance indicators, cluster guides, and exam blueprints.",
   },
 ];
 
@@ -120,14 +128,13 @@ export function DashboardView() {
   return (
     <>
       <PageHeader
-        eyebrow="Owen J. Roberts DECA"
-        title="Your practice desk"
-        description="Choose your materials. Put in a session. Come back to your progress."
+        title="Practice"
+        description="Your chapter’s materials, ready for your next session."
         actions={<ButtonLink href="/analytics">History & scores</ButtonLink>}
       />
       <section
         aria-label="Start a practice session"
-        className="grid gap-5 md:grid-cols-2"
+        className="grid gap-4 md:grid-cols-3"
       >
         {practiceOptions.map((option) => (
           <Link
@@ -135,40 +142,23 @@ export function DashboardView() {
             href={option.href}
             key={option.href}
           >
-            <span className="text-xs font-medium tabular-nums text-[var(--muted)]">
-              {option.number} / PRACTICE
-            </span>
-            <h2 className="mt-6 text-2xl font-semibold tracking-tight">
+            <Icon className="h-6 w-6 text-primary" name={option.icon} />
+            <h2 className="mt-5 text-lg font-semibold">
               {option.title}
             </h2>
-            <p className="mt-3 max-w-md text-sm leading-6 text-[var(--muted-foreground)]">
+            <p className="mt-2 max-w-md text-sm leading-6 text-[var(--muted)]">
               {option.description}
             </p>
-            <span className="mt-8 flex items-center justify-between text-sm font-semibold text-primary">
+            <span className="mt-5 flex items-center justify-between text-sm font-semibold text-primary">
               {option.action}
-              <span aria-hidden="true">↗</span>
+              <Icon className="h-4 w-4" name="chevronRight" />
             </span>
           </Link>
         ))}
       </section>
-      <Link
-        href="/reference"
-        className="flex flex-wrap items-center justify-between gap-4 border-y border-border py-5"
-      >
-        <div>
-          <h2 className="font-semibold">Reference library</h2>
-          <p className="mt-1 text-sm text-[var(--muted)]">
-            Performance indicators, cluster guides, exam blueprints, and other
-            uploaded documents.
-          </p>
-        </div>
-        <span className="text-sm font-semibold text-primary">
-          Browse reference <span aria-hidden="true">→</span>
-        </span>
-      </Link>
       <section
         aria-label="Practice totals"
-        className="grid grid-cols-3 divide-x divide-border border-b border-border pb-6"
+        className="grid grid-cols-3 divide-x divide-border border-y border-border py-5"
       >
         {[
           [
@@ -193,7 +183,7 @@ export function DashboardView() {
           ],
         ].map(([label, value]) => (
           <div className="px-3 first:pl-0 sm:px-6" key={label}>
-            <p className="text-2xl font-semibold tabular-nums">{value}</p>
+            <p className="text-xl font-semibold tabular-nums">{value}</p>
             <p className="mt-1 text-xs text-[var(--muted)] sm:text-sm">
               {label}
             </p>
@@ -217,13 +207,13 @@ export function DashboardView() {
           </button>
         </div>
       ) : null}
-      <section className="grid gap-5 xl:grid-cols-2">
+      <section aria-label="Recent practice" className="grid gap-4 xl:grid-cols-2">
         {recentSessions.map((group) => (
           <Card key={group.title}>
             <CardHeader
               title={group.title}
               action={
-                <Link className="text-sm text-primary" href="/analytics">
+                <Link className="inline-flex min-h-8 items-center text-sm text-primary" href="/analytics">
                   View history
                 </Link>
               }

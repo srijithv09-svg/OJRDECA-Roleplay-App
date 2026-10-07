@@ -3,33 +3,28 @@ import { getFriendlyErrorMessage } from "@/lib/errors";
 
 export function ResourceLoadingState() {
   return (
-    <div className="grid gap-4 xl:grid-cols-2">
+    <div className="divide-y divide-border rounded-md border border-border bg-card" role="status">
+      <span className="sr-only">Loading resources</span>
       {Array.from({ length: 4 }).map((_, index) => (
-        <Card className="min-h-64 animate-pulse" key={index}>
-          <div className="flex gap-2">
-            <div className="h-7 w-24 rounded-md bg-slate-100" />
-            <div className="h-7 w-16 rounded-md bg-slate-100" />
+        <div aria-hidden="true" className="flex animate-pulse items-center justify-between gap-5 p-5" key={index}>
+          <div className="w-3/4">
+            <div className="h-4 w-3/4 rounded bg-card-muted" />
+            <div className="mt-3 h-3 w-1/2 rounded bg-card-muted" />
           </div>
-          <div className="mt-6 h-6 w-3/4 rounded bg-slate-100" />
-          <div className="mt-3 h-4 w-1/2 rounded bg-slate-100" />
-          <div className="mt-8 space-y-3">
-            <div className="h-4 rounded bg-slate-100" />
-            <div className="h-4 w-5/6 rounded bg-slate-100" />
-          </div>
-        </Card>
+          <div className="h-10 w-24 rounded bg-card-muted" />
+        </div>
       ))}
     </div>
   );
 }
 
-export function ResourceEmptyState({ label }: { label: string }) {
+export function ResourceEmptyState({ label, filtered = false }: { label: string; filtered?: boolean }) {
   return (
-    <Card className="grid min-h-64 place-items-center text-center">
+    <Card className="grid min-h-48 place-items-center text-center">
       <div>
-        <h2 className="text-lg font-semibold text-slate-950">No {label} found</h2>
+        <h2 className="text-base font-semibold text-foreground">{filtered ? `No matching ${label}` : `No ${label} yet`}</h2>
         <p className="mt-2 max-w-md text-sm leading-6 text-slate-600">
-          Try a different search or filter. Newly uploaded materials appear here
-          after an admin or advisor approves them.
+          {filtered ? "Try a different search or clear your filters to see all materials." : "Your chapter’s materials will appear here after an admin or advisor approves them."}
         </p>
       </div>
     </Card>
@@ -52,7 +47,7 @@ export function ResourceErrorState({
       <h2 className="text-lg font-semibold text-red-950">{title}</h2>
       <p className="mt-2 text-sm leading-6 text-red-800">{friendlyMessage}</p>
       <button
-        className="mt-5 h-10 rounded-md bg-red-700 px-3 text-sm font-semibold text-white transition hover:bg-red-800"
+        className="ui-button ui-button-danger mt-4"
         onClick={onRetry}
         type="button"
       >

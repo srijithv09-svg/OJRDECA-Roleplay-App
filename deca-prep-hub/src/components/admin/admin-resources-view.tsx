@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button-link";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
@@ -12,7 +11,6 @@ import { getCurrentProfile } from "@/lib/services/profiles";
 import { ResourcesService } from "@/lib/services/resources";
 import type {
   Profile,
-  ResourceApprovalStatus,
   ResourceListItem,
   ResourceMetadataUpdate,
   SupabaseResourceType,
@@ -78,26 +76,6 @@ function toMetadataUpdate(draft: MetadataDraft): ResourceMetadataUpdate {
     title: draft.title.trim(),
     year: draft.year.trim() ? Number(draft.year) : null,
   };
-}
-
-function formatValue(value: boolean | number | string | null | undefined) {
-  if (value === null || value === undefined || value === "") {
-    return "Not available";
-  }
-
-  return String(value);
-}
-
-function getStatusTone(status: ResourceApprovalStatus | null) {
-  if (status === "approved") {
-    return "green";
-  }
-
-  if (status === "rejected") {
-    return "slate";
-  }
-
-  return "amber";
 }
 
 function optionize(values: Array<number | string | null | undefined>): SelectOption[] {
@@ -345,7 +323,7 @@ export function AdminResourcesView() {
   }
 
   async function bulkUpdateStatus(status: "approved" | "rejected") {
-    const ids = Array.from(selectedIds);
+    const ids = selectedVisibleIds;
 
     if (ids.length === 0) {
       return;
@@ -373,7 +351,7 @@ export function AdminResourcesView() {
   }
 
   async function saveMetadata() {
-    if (!draft || !editingResource) {
+    if (!draft || !editingResource || !draft.title.trim()) {
       return;
     }
 
@@ -416,436 +394,141 @@ export function AdminResourcesView() {
         </p>
         <h1 className="mt-2 text-2xl font-bold text-red-950">Access Denied</h1>
         <p className="mt-2 text-sm leading-6 text-red-800">
-          You must be an admin to review imported resources.
+          You must be an admin or advisor to manage resources.
         </p>
       </Card>
     );
   }
 
+  const hasFilters = Boolean(search.trim()) || resourceTypeFilter !== "all" || clusterFilter !== "all" || instructionalAreaFilter !== "all" || yearFilter !== "all";
+
+  function resetFilters() {
+    setSearch("");
+    setResourceTypeFilter("all");
+    setClusterFilter("all");
+    setInstructionalAreaFilter("all");
+    setYearFilter("all");
+  }
+
   return (
     <>
       <PageHeader
-        actions={<ButtonLink href="/admin">Back to Admin</ButtonLink>}
-        description="Review imported PDFs, tune metadata, and approve resources for student visibility."
+        actions={<><ButtonLink href="/admin">Admin overview</ButtonLink><ButtonLink href="/admin/upload" variant="primary">Upload PDFs</ButtonLink></>}
+        description="Review documents, edit their details, and decide what students can access."
         eyebrow="Admin"
-        title="Resource approvals"
+        title="Manage resources"
       />
-
       {error ? <ResourceErrorState message={error} onRetry={retryLoad} /> : null}
-
-      <Card>
-        <div className="grid gap-3 xl:grid-cols-[1.4fr_180px_180px_180px]">
-          <label className="grid gap-2 text-sm font-semibold text-slate-800">
-            Search
-            <input
-              className="h-11 rounded-md border border-slate-200 px-3 text-sm font-normal outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search title, filename, event, cluster, type, year..."
-              type="search"
-              value={search}
-            />
-          </label>
-
-          <FilterSelect
-            label="Status"
-            onChange={(value) => setApprovalStatusFilter(value as ApprovalStatusFilter)}
-            options={approvalStatusOptions.map((status) => ({ label: status, value: status }))}
-            value={approvalStatusFilter}
-          />
-          <FilterSelect
-            label="Type"
-            onChange={(value) => setResourceTypeFilter(value as "all" | SupabaseResourceType)}
-            options={resourceTypeOptions.map((type) => ({ label: type, value: type }))}
-            value={resourceTypeFilter}
-          />
-          <FilterSelect
-            label="Year"
-            onChange={setYearFilter}
-            options={[{ label: "all", value: "all" }, ...yearOptions]}
-            value={yearFilter}
-          />
+      <section aria-label="Resource library" className="overflow-hidden rounded-md border border-border bg-card">
+        <div className="flex flex-wrap gap-x-5 border-b border-border px-4 sm:px-5" aria-label="Filter by approval status">
+          {approvalStatusOptions.map((status) => (
+            <button aria-pressed={approvalStatusFilter === status} className={`flex min-h-12 items-center gap-2 border-b-2 text-sm font-medium capitalize ${approvalStatusFilter === status ? "border-primary text-primary" : "border-transparent text-[var(--muted-foreground)] hover:text-foreground"}`} key={status} onClick={() => { setApprovalStatusFilter(status); setSelectedIds(new Set()); closeEditor(); }} type="button">
+              {status === "all" ? "All resources" : status}
+              <span className="text-xs tabular-nums text-[var(--muted)]">{resources.filter((resource) => status === "all" || resource.approval_status === status).length}</span>
+            </button>
+          ))}
         </div>
-
-        <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_auto]">
-          <FilterSelect
-            label="Cluster"
-            onChange={setClusterFilter}
-            options={[{ label: "all", value: "all" }, ...clusterOptions]}
-            value={clusterFilter}
-          />
-          <FilterSelect
-            label="Instructional area"
-            onChange={setInstructionalAreaFilter}
-            options={[{ label: "all", value: "all" }, ...instructionalAreaOptions]}
-            value={instructionalAreaFilter}
-          />
-          <div className="flex flex-wrap items-end gap-2">
-            <button
-              className="min-h-11 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
-              disabled={filteredResources.length === 0}
-              onClick={toggleAllVisible}
-              type="button"
-            >
-              {selectedVisibleIds.length === filteredResources.length && filteredResources.length > 0
-                ? "Clear visible"
-                : "Select visible"}
-            </button>
-            <button
-              className="min-h-11 rounded-md bg-blue-700 px-4 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300"
-              disabled={isSaving || selectedIds.size === 0}
-              onClick={() => void bulkUpdateStatus("approved")}
-              type="button"
-            >
-              Approve selected ({selectedIds.size})
-            </button>
-            <button
-              className="min-h-11 rounded-md bg-red-700 px-4 text-sm font-semibold text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:bg-red-300"
-              disabled={isSaving || selectedIds.size === 0}
-              onClick={() => void bulkUpdateStatus("rejected")}
-              type="button"
-            >
-              Reject selected
-            </button>
+        <div className="space-y-3 border-b border-border p-4 sm:p-5">
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_180px]">
+            <label className="ui-label">Search resources<input className="ui-field" onChange={(event) => setSearch(event.target.value)} placeholder="Title, filename, event, or cluster" type="search" value={search} /></label>
+            <FilterSelect label="Resource type" onChange={(value) => setResourceTypeFilter(value as "all" | SupabaseResourceType)} options={resourceTypeOptions.map((type) => ({ label: type === "all" ? "All types" : typeLabels[type], value: type }))} value={resourceTypeFilter} />
+          </div>
+          <details>
+            <summary className="w-fit cursor-pointer py-1 text-sm font-medium text-[var(--muted-foreground)]">More filters</summary>
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              <FilterSelect label="Cluster" onChange={setClusterFilter} options={[{ label: "All clusters", value: "all" }, ...clusterOptions]} value={clusterFilter} />
+              <FilterSelect label="Instructional area" onChange={setInstructionalAreaFilter} options={[{ label: "All areas", value: "all" }, ...instructionalAreaOptions]} value={instructionalAreaFilter} />
+              <FilterSelect label="Year" onChange={setYearFilter} options={[{ label: "All years", value: "all" }, ...yearOptions]} value={yearFilter} />
+            </div>
+          </details>
+          <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+            <p className="text-[var(--muted)]" role="status">Showing {filteredResources.length} of {statusResourceCount} {approvalStatusFilter === "all" ? "total" : approvalStatusFilter} resources.</p>
+            {hasFilters ? <button className="min-h-10 text-sm font-medium text-primary underline underline-offset-4" onClick={resetFilters} type="button">Clear filters</button> : null}
           </div>
         </div>
-
-        <p className="mt-4 text-sm text-slate-500">
-          Showing {filteredResources.length} of {statusResourceCount}{" "}
-          {approvalStatusFilter === "all" ? "total" : approvalStatusFilter} resources.
-        </p>
-      </Card>
-
-      <div className="grid gap-4">
-        {filteredResources.length === 0 ? (
-          <Card className="grid min-h-56 place-items-center text-center">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-950">No resources found</h2>
-              <p className="mt-2 text-sm leading-6 text-slate-600">
-                Adjust the search or filters to find imported resources.
-              </p>
-            </div>
-          </Card>
-        ) : null}
-
-        {filteredResources.map((resource) => (
-          <ResourceApprovalCard
-            isOpeningPdf={openingPdfId === resource.id}
-            isSaving={isSaving}
-            isSelected={selectedIds.has(resource.id)}
-            key={resource.id}
-            onEdit={() => startEditing(resource)}
-            onOpenPdf={() => void openPdf(resource)}
-            onReject={() => void updateStatus(resource.id, "rejected")}
-            onApprove={() => void updateStatus(resource.id, "approved")}
-            onToggleSelected={() => toggleSelected(resource.id)}
-            resource={resource}
-          />
-        ))}
-      </div>
-
-      {editingResource && draft ? (
-        <MetadataEditModal
-          draft={draft}
-          isSaving={isSaving}
-          onClose={closeEditor}
-          onDraftChange={setDraft}
-          onSave={() => void saveMetadata()}
-        />
-      ) : null}
+        {filteredResources.length > 0 ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-card-muted px-4 py-2 sm:px-5">
+            <label className="flex min-h-10 cursor-pointer items-center gap-3 text-sm"><input checked={selectedVisibleIds.length === filteredResources.length} className="h-4 w-4 accent-[var(--primary)]" disabled={isSaving} onChange={toggleAllVisible} type="checkbox" />{selectedVisibleIds.length ? `${selectedVisibleIds.length} selected` : "Select all shown"}</label>
+            {selectedVisibleIds.length > 0 ? (
+              <div className="flex flex-wrap gap-2" aria-label="Actions for selected resources">
+                <button className="ui-button ui-button-secondary" disabled={isSaving} onClick={() => setSelectedIds(new Set())} type="button">Clear selection</button>
+                <button className="ui-button ui-button-danger" disabled={isSaving} onClick={() => void bulkUpdateStatus("rejected")} type="button">Reject selected</button>
+                <button className="ui-button ui-button-primary" disabled={isSaving} onClick={() => void bulkUpdateStatus("approved")} type="button">Approve selected</button>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <div className="px-5 py-14 text-center">
+            <h2 className="text-lg font-semibold">{hasFilters ? "No matching resources" : approvalStatusFilter === "pending" ? "Nothing waiting for approval" : "No resources here yet"}</h2>
+            <p className="mt-2 text-sm text-[var(--muted)]">{hasFilters ? "Try a different search or clear the filters." : "Uploaded PDFs arrive in Pending before students can see them."}</p>
+            {!hasFilters ? <ButtonLink className="mt-5" href="/admin/upload">Upload PDFs</ButtonLink> : null}
+          </div>
+        )}
+        <div className="divide-y divide-[var(--border)]">
+          {filteredResources.map((resource) => (
+            <article className="min-w-0" key={resource.id}>
+              <div className="flex gap-3 p-4 sm:p-5">
+                <input aria-label={`Select ${resource.title}`} checked={selectedIds.has(resource.id)} className="mt-1.5 h-4 w-4 shrink-0 accent-[var(--primary)]" disabled={isSaving} onChange={() => toggleSelected(resource.id)} type="checkbox" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
+                    <div className="min-w-0">
+                      <h2 className="break-words text-base font-semibold">{resource.title}</h2>
+                      <p className="mt-1 text-sm text-[var(--muted)]">{[typeLabels[resource.resource_type], resource.cluster, resource.event_code, resource.year].filter(Boolean).join(" · ")}</p>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
+                      <span className={`mr-1 text-xs font-medium capitalize ${resource.approval_status === "approved" ? "text-emerald-700" : resource.approval_status === "pending" ? "text-amber-800" : "text-[var(--muted)]"}`}>{resource.approval_status ?? "No status"}</span>
+                      <button className="ui-button ui-button-secondary" disabled={openingPdfId === resource.id} onClick={() => void openPdf(resource)} type="button">{openingPdfId === resource.id ? "Opening…" : "Open PDF"}</button>
+                      <button aria-controls={`review-${resource.id}`} aria-expanded={editingResource?.id === resource.id} className="ui-button ui-button-secondary" disabled={isSaving} onClick={() => editingResource?.id === resource.id ? closeEditor() : startEditing(resource)} type="button">{editingResource?.id === resource.id ? "Close review" : "Review / edit"}</button>
+                      {resource.approval_status !== "approved" ? <button className="ui-button ui-button-primary" disabled={isSaving} onClick={() => void updateStatus(resource.id, "approved")} type="button">Approve</button> : null}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {editingResource?.id === resource.id && draft ? (
+                <div className="border-t border-border bg-card-muted p-4 sm:p-5" id={`review-${resource.id}`}>
+                  <MetadataEditor draft={draft} filename={resource.original_filename} isSaving={isSaving} onClose={closeEditor} onDraftChange={setDraft} onSave={() => void saveMetadata()} />
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+                    <p className="text-sm text-[var(--muted)]">{resource.approval_status === "approved" ? "Approved. Students can access this document." : "Students cannot access this document until it is approved."}</p>
+                    {resource.approval_status !== "rejected" ? <button className="ui-button ui-button-danger" disabled={isSaving} onClick={() => void updateStatus(resource.id, "rejected")} type="button">Reject resource</button> : null}
+                  </div>
+                </div>
+              ) : null}
+            </article>
+          ))}
+        </div>
+      </section>
     </>
   );
 }
 
-function FilterSelect({
-  label,
-  onChange,
-  options,
-  value,
-}: {
-  label: string;
-  onChange: (value: string) => void;
-  options: SelectOption[];
-  value: string;
-}) {
-  return (
-    <label className="grid gap-2 text-sm font-semibold text-slate-800">
-      {label}
-      <select
-        className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm font-normal text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-        onChange={(event) => onChange(event.target.value)}
-        value={value}
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
+const typeLabels: Record<SupabaseResourceType, string> = { roleplay: "Roleplay", exam: "Exam", reference: "Reference", unknown: "Unclassified" };
+
+function FilterSelect({ label, onChange, options, value }: { label: string; onChange: (value: string) => void; options: SelectOption[]; value: string }) {
+  return <label className="ui-label">{label}<select className="ui-field" onChange={(event) => onChange(event.target.value)} value={value}>{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>;
 }
 
-function ResourceApprovalCard({
-  isOpeningPdf,
-  isSaving,
-  isSelected,
-  onApprove,
-  onEdit,
-  onOpenPdf,
-  onReject,
-  onToggleSelected,
-  resource,
-}: {
-  isOpeningPdf: boolean;
-  isSaving: boolean;
-  isSelected: boolean;
-  onApprove: () => void;
-  onEdit: () => void;
-  onOpenPdf: () => void;
-  onReject: () => void;
-  onToggleSelected: () => void;
-  resource: ResourceListItem;
-}) {
-  return (
-    <Card>
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-        <div className="flex gap-3">
-          <input
-            aria-label={`Select ${resource.title}`}
-            checked={isSelected}
-            className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-700 focus:ring-blue-500"
-            onChange={onToggleSelected}
-            type="checkbox"
-          />
-          <div>
-            <div className="flex flex-wrap gap-2">
-              <Badge tone={getStatusTone(resource.approval_status)}>
-                {resource.approval_status ?? "No status"}
-              </Badge>
-              <Badge tone="blue">{resource.resource_type}</Badge>
-              {resource.event_code ? <Badge>{resource.event_code}</Badge> : null}
-              <Badge>{resource.year ?? "Year TBD"}</Badge>
-            </div>
-            <h2 className="mt-3 text-xl font-semibold text-slate-950">{resource.title}</h2>
-            <p className="mt-1 break-words text-sm text-slate-500">
-              {resource.original_filename ?? "No original filename"}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <button
-            className="min-h-10 rounded-md border border-blue-200 bg-blue-50 px-3 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:text-blue-300"
-            disabled={isOpeningPdf}
-            onClick={onOpenPdf}
-            type="button"
-          >
-            {isOpeningPdf ? "Opening..." : "Open / Download PDF"}
-          </button>
-          <button
-            className="min-h-10 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
-            disabled={isSaving}
-            onClick={onEdit}
-            type="button"
-          >
-            Edit metadata
-          </button>
-          <button
-            className="min-h-10 rounded-md bg-emerald-600 px-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:bg-emerald-300"
-            disabled={isSaving}
-            onClick={onApprove}
-            type="button"
-          >
-            Approve
-          </button>
-          <button
-            className="min-h-10 rounded-md bg-red-700 px-3 text-sm font-semibold text-white transition hover:bg-red-800 disabled:bg-red-300"
-            disabled={isSaving}
-            onClick={onReject}
-            type="button"
-          >
-            Reject
-          </button>
-        </div>
-      </div>
-
-      <dl className="mt-5 grid gap-3 md:grid-cols-3">
-        {[
-          ["Event code", resource.event_code],
-          ["Event name", resource.event_name],
-          ["Event category", resource.event_category],
-          ["Cluster", resource.cluster],
-        ].map(([label, value]) => (
-          <div className="rounded-lg bg-slate-50 p-3 text-sm" key={label}>
-            <dt className="font-semibold text-slate-800">{label}</dt>
-            <dd className="mt-1 break-words text-slate-600">{formatValue(value)}</dd>
-          </div>
-        ))}
-      </dl>
-
-      <div className="mt-4 grid gap-3 lg:grid-cols-2">
-        <details className="rounded-lg border border-slate-100 bg-slate-50 p-3">
-          <summary className="cursor-pointer text-sm font-semibold text-slate-800">
-            Developer details
-          </summary>
-          <dl className="mt-3 grid gap-3 text-sm">
-            {[
-              ["storage_path", resource.storage_path],
-              ["file_path", resource.file_path],
-              ["import_notes", resource.import_notes],
-              ["confidence_score", resource.confidence_score],
-            ].map(([label, value]) => (
-              <div className="rounded-lg bg-white p-3" key={label}>
-                <dt className="font-semibold text-slate-800">{label}</dt>
-                <dd className="mt-1 break-words text-slate-600">{formatValue(value)}</dd>
-              </div>
-            ))}
-          </dl>
-        </details>
-      </div>
-    </Card>
-  );
-}
-
-function MetadataEditModal({
-  draft,
-  isSaving,
-  onClose,
-  onDraftChange,
-  onSave,
-}: {
-  draft: MetadataDraft;
-  isSaving: boolean;
-  onClose: () => void;
-  onDraftChange: (draft: MetadataDraft) => void;
-  onSave: () => void;
-}) {
+function MetadataEditor({ draft, filename, isSaving, onClose, onDraftChange, onSave }: { draft: MetadataDraft; filename: string | null; isSaving: boolean; onClose: () => void; onDraftChange: (draft: MetadataDraft) => void; onSave: () => void }) {
   function selectEventCode(eventCode: string) {
     const selectedEvent = getDecaEventByCode(eventCode);
-
-    if (!selectedEvent) {
-      onDraftChange({ ...draft, event_code: "" });
-      return;
-    }
-
-    onDraftChange({
-      ...draft,
-      cluster: selectedEvent.cluster,
-      event_category: selectedEvent.category,
-      event_code: selectedEvent.code,
-      event_name: selectedEvent.name,
-    });
+    onDraftChange(selectedEvent ? { ...draft, cluster: selectedEvent.cluster, event_category: selectedEvent.category, event_code: selectedEvent.code, event_name: selectedEvent.name } : { ...draft, event_code: "" });
   }
-
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4">
-      <form
-        className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-lg border border-blue-100 bg-blue-50 p-5 shadow-xl"
-        onSubmit={(event) => {
-          event.preventDefault();
-          onSave();
-        }}
-      >
-        <div className="mb-4 flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">
-              Edit
-            </p>
-            <h2 className="mt-1 text-lg font-semibold text-slate-950">Metadata</h2>
-          </div>
-          <button
-            className="min-h-10 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
-            onClick={onClose}
-            type="button"
-          >
-            Close
-          </button>
+    <form aria-label={`Edit ${draft.title}`} onSubmit={(event) => { event.preventDefault(); onSave(); }}>
+      <fieldset className="min-w-0" disabled={isSaving}>
+        <legend className="font-semibold">Document details</legend>
+        {filename ? <p className="mt-1 break-words text-xs text-[var(--muted)]">{filename}</p> : null}
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <label className="ui-label sm:col-span-2 lg:col-span-3">Title<input className="ui-field" onChange={(event) => onDraftChange({ ...draft, title: event.target.value })} required value={draft.title} /></label>
+          <FilterSelect label="Resource type" onChange={(value) => onDraftChange({ ...draft, resource_type: value as SupabaseResourceType })} options={resourceTypeOptions.filter((type) => type !== "all").map((type) => ({ label: typeLabels[type as SupabaseResourceType], value: type }))} value={draft.resource_type} />
+          <label className="ui-label">Event<select className="ui-field" onChange={(event) => selectEventCode(event.target.value)} value={draft.event_code}><option value="">No specific event</option>{decaEvents.map((event) => <option key={event.code} value={event.code}>{event.code} — {event.name}</option>)}</select></label>
+          <label className="ui-label">Year<input className="ui-field" max="2100" min="1900" onChange={(event) => onDraftChange({ ...draft, year: event.target.value })} type="number" value={draft.year} /></label>
+          <label className="ui-label">Cluster<input className="ui-field" onChange={(event) => onDraftChange({ ...draft, cluster: event.target.value })} value={draft.cluster} /></label>
+          {draft.resource_type === "roleplay" ? <label className="ui-label sm:col-span-2">Instructional area<input className="ui-field" onChange={(event) => onDraftChange({ ...draft, instructional_area: event.target.value })} value={draft.instructional_area} /></label> : null}
         </div>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <label className="grid gap-2 text-sm font-semibold text-slate-800 md:col-span-2">
-            Title
-            <input
-              className="h-11 rounded-md border border-slate-200 px-3 text-sm font-normal outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-              onChange={(event) => onDraftChange({ ...draft, title: event.target.value })}
-              value={draft.title}
-            />
-          </label>
-
-          <label className="grid gap-2 text-sm font-semibold text-slate-800">
-            Resource type
-            <select
-              className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm font-normal text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-              onChange={(event) =>
-                onDraftChange({
-                  ...draft,
-                  resource_type: event.target.value as SupabaseResourceType,
-                })
-              }
-              value={draft.resource_type}
-            >
-              {resourceTypeOptions
-                .filter((type) => type !== "all")
-                .map((type) => (
-                  <option key={type} value={type}>
-                    {type}
-                  </option>
-                ))}
-            </select>
-          </label>
-
-          {draft.resource_type === "reference" ? (
-            <p className="text-sm text-slate-600 md:col-span-2">
-              This file will appear in Reference once approved.
-            </p>
-          ) : null}
-
-          <label className="grid gap-2 text-sm font-semibold text-slate-800">
-            Event code
-            <select
-              className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm font-normal text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-              onChange={(event) => selectEventCode(event.target.value)}
-              value={draft.event_code}
-            >
-              <option value="">No event matched - choose manually</option>
-              {decaEvents.map((event) => (
-                <option key={event.code} value={event.code}>
-                  {event.code} - {event.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          {metadataTextFields.map(([key, label]) => (
-            <label className="grid gap-2 text-sm font-semibold text-slate-800" key={key}>
-              {label}
-              <input
-                className="h-11 rounded-md border border-slate-200 px-3 text-sm font-normal outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                onChange={(event) => onDraftChange({ ...draft, [key]: event.target.value })}
-                type={key === "year" ? "number" : "text"}
-                value={draft[key]}
-              />
-            </label>
-          ))}
-        </div>
-
-        <div className="mt-5 flex flex-wrap justify-end gap-2">
-          <button
-            className="min-h-10 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
-            onClick={onClose}
-            type="button"
-          >
-            Cancel
-          </button>
-          <button
-            className="min-h-10 rounded-md bg-blue-700 px-3 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:bg-blue-300"
-            disabled={isSaving}
-            type="submit"
-          >
-            Save metadata
-          </button>
-        </div>
-      </form>
-    </div>
+        <details className="mt-4"><summary className="w-fit cursor-pointer py-1 text-sm font-medium">Additional event details</summary><div className="mt-3 grid gap-4 sm:grid-cols-2">{metadataTextFields.filter(([key]) => key === "event_name" || key === "event_category").map(([key, label]) => <label className="ui-label" key={key}>{label}<input className="ui-field" onChange={(event) => onDraftChange({ ...draft, [key]: event.target.value })} value={draft[key]} /></label>)}</div></details>
+        <p className="mt-4 text-sm text-[var(--muted)]">{draft.resource_type === "reference" ? "Approved reference files appear in the Reference section." : draft.resource_type === "exam" ? "Manage this exam’s answers in Answer keys after saving its details." : draft.resource_type === "unknown" ? "Choose a resource type so students can find this document." : "Approved roleplays appear in Roleplay practice."}</p>
+        <div className="mt-4 flex flex-wrap justify-end gap-2"><button className="ui-button ui-button-secondary" onClick={onClose} type="button">Cancel</button><button className="ui-button ui-button-primary" disabled={!draft.title.trim()} type="submit">{isSaving ? "Saving…" : "Save details"}</button></div>
+      </fieldset>
+    </form>
   );
 }

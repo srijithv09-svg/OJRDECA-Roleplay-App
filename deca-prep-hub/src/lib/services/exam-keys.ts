@@ -1,9 +1,9 @@
 import { getFriendlyErrorMessage, logDeveloperError } from "@/lib/errors";
+import { getExamKeyStatus } from "@/lib/exams/answer-key-status";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import type {
   ExamAnswerKeyInput,
   ExamAnswerKeyRow,
-  ExamKeyStatus,
   ExamResourceWithKeyStatus,
 } from "@/lib/types";
 
@@ -12,18 +12,6 @@ const examResourceColumns =
 
 const answerKeyColumns =
   "id,resource_id,question_number,correct_answer,instructional_area,created_at,updated_at";
-
-function getExamKeyStatus(answerKeyCount: number): ExamKeyStatus {
-  if (answerKeyCount === 0) {
-    return "no-key";
-  }
-
-  if (answerKeyCount >= 100) {
-    return "complete";
-  }
-
-  return "partial";
-}
 
 function normalizeAnswerKeyRow(row: ExamAnswerKeyRow): ExamAnswerKeyRow {
   return {
@@ -36,51 +24,95 @@ function normalizeAnswerKeyRow(row: ExamAnswerKeyRow): ExamAnswerKeyRow {
 export const ExamKeysService = {
   async getApprovedExamResourcesWithKeyStatus(): Promise<ExamResourceWithKeyStatus[]> {
     const supabase = getSupabaseClient();
-    const { data: exams, error: examsError } = await supabase
-      .from("resources")
-      .select(examResourceColumns)
-      .eq("approval_status", "approved")
-      .eq("resource_type", "exam")
-      .order("year", { ascending: false })
-      .order("title", { ascending: true });
+    const pageSize = 1000;
+    const examRows = [];
 
-    if (examsError) {
-      logDeveloperError("[exam keys] approved exam resources failed", examsError);
-      throw new Error(getFriendlyErrorMessage(examsError, "Unable to load approved exams."));
+    for (let offset = 0; ; offset += pageSize) {
+      const { data: exams, error: examsError } = await supabase
+        .from("resources")
+        .select(examResourceColumns)
+        .eq("approval_status", "approved")
+        .eq("resource_type", "exam")
+        .order("year", { ascending: false })
+        .order("title", { ascending: true })
+        .order("id", { ascending: true })
+        .range(offset, offset + pageSize - 1);
+
+      if (examsError) {
+        logDeveloperError("[exam keys] approved exam resources failed", examsError);
+        throw new Error(getFriendlyErrorMessage(examsError, "Unable to load approved exams."));
+      }
+
+      examRows.push(...(exams ?? []));
+      if ((exams?.length ?? 0) < pageSize) break;
     }
-
-    const examRows = exams ?? [];
 
     if (examRows.length === 0) {
       return [];
     }
 
     const resourceIds = examRows.map((exam) => exam.id);
-    const { data: answerKeyRows, error: answerKeyError } = await supabase
-      .from("exam_answer_keys")
-      .select("resource_id,question_number")
-      .in("resource_id", resourceIds);
+    const questionsByResourceId = new Map<string, number[]>();
 
-    if (answerKeyError) {
-      logDeveloperError("[exam keys] answer key counts failed", answerKeyError);
-      throw new Error(getFriendlyErrorMessage(answerKeyError, "Unable to load answer key status."));
-    }
+    // Paginate keys too: ten complete exams already fill the Data API's default row limit.
+    // Small ID batches also keep the filter URL bounded for large libraries.
+    for (let start = 0; start < resourceIds.length; start += 100) {
+      for (let offset = 0; ; offset += pageSize) {
+        const { data: answerKeyRows, error: answerKeyError } = await supabase
+          .from("exam_answer_keys")
+          .select("resource_id,question_number")
+          .in("resource_id", resourceIds.slice(start, start + 100))
+          .order("resource_id", { ascending: true })
+          .order("question_number", { ascending: true })
+          .range(offset, offset + pageSize - 1);
 
-    const countsByResourceId = new Map<string, number>();
+        if (answerKeyError) {
+          logDeveloperError("[exam keys] answer key counts failed", answerKeyError);
+          throw new Error(getFriendlyErrorMessage(answerKeyError, "Unable to load answer key status."));
+        }
 
-    for (const row of answerKeyRows ?? []) {
-      countsByResourceId.set(row.resource_id, (countsByResourceId.get(row.resource_id) ?? 0) + 1);
+        for (const row of answerKeyRows ?? []) {
+          const questions = questionsByResourceId.get(row.resource_id) ?? [];
+          questions.push(row.question_number);
+          questionsByResourceId.set(row.resource_id, questions);
+        }
+
+        if ((answerKeyRows?.length ?? 0) < pageSize) break;
+      }
     }
 
     return examRows.map((exam) => {
-      const answerKeyCount = countsByResourceId.get(exam.id) ?? 0;
+      const questionNumbers = questionsByResourceId.get(exam.id) ?? [];
 
       return {
         ...exam,
-        answer_key_count: answerKeyCount,
-        answer_key_status: getExamKeyStatus(answerKeyCount),
+        answer_key_count: questionNumbers.length,
+        answer_key_status: getExamKeyStatus(questionNumbers),
       };
     });
+  },
+
+  async extractExamAnswerKey(resourceId: string): Promise<ExamAnswerKeyInput[]> {
+    const { data, error } = await getSupabaseClient().auth.getSession();
+
+    if (error || !data.session?.access_token) {
+      throw new Error("Your session has expired. Sign in again to read this key.");
+    }
+
+    const response = await fetch(`/api/admin/exam-keys/${encodeURIComponent(resourceId)}/extract`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${data.session.access_token}` },
+    });
+    const payload = await response.json().catch(() => null) as {
+      error?: string;
+      rows?: ExamAnswerKeyInput[];
+    } | null;
+
+    if (!response.ok || !payload?.rows) {
+      throw new Error(payload?.error ?? "Unable to read the PDF answer key. Try again or paste the answers manually.");
+    }
+
+    return payload.rows;
   },
 
   async getExamAnswerKey(resourceId: string): Promise<ExamAnswerKeyRow[]> {

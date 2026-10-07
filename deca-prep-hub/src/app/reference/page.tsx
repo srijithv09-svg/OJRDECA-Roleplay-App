@@ -5,9 +5,8 @@ export default function ReferencePage() {
   return (
     <>
       <PageHeader
-        eyebrow="Chapter library"
         title="Reference"
-        description="Find uploaded performance indicators, cluster guides, exam blueprints, and supporting documents. Filter by cluster or search for a topic."
+        description="Performance indicators, cluster guides, exam blueprints, and supporting documents."
       />
       <ApprovedResourceLibraryView
         emptyLabel="reference documents"

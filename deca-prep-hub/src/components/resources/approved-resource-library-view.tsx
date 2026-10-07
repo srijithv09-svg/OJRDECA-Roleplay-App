@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import {
   ResourceEmptyState,
@@ -140,6 +139,14 @@ export function ApprovedResourceLibraryView({
     });
   }, [clusterFilter, eventFilter, resources, search, yearFilter]);
   const selectedClusterLabel = getDecaClusterLabel(selectedCluster);
+  const hasFilters = Boolean(search.trim()) || [clusterFilter, eventFilter, yearFilter].some((value) => value !== "all");
+
+  function clearFilters() {
+    setSearch("");
+    setClusterFilter("all");
+    setYearFilter("all");
+    setEventFilter("all");
+  }
   const selectedClusterFilter = useMemo(() => {
     if (!selectedCluster) {
       return null;
@@ -186,11 +193,11 @@ export function ApprovedResourceLibraryView({
 
   return (
     <section className="space-y-5">
-      <Card>
+      <div>
         <div
           className={`grid gap-3 sm:grid-cols-2 ${mode === "roleplay" ? "xl:grid-cols-4" : "xl:grid-cols-[2fr_1fr_1fr]"}`}
         >
-          <label className="relative grid gap-2 text-sm font-semibold text-slate-800">
+          <label className="ui-label">
             Search
             <span className="relative">
               <Icon
@@ -198,7 +205,7 @@ export function ApprovedResourceLibraryView({
                 name="search"
               />
               <input
-                className="h-11 w-full rounded-md border border-slate-200 bg-white pl-10 pr-3 text-sm font-normal text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                className="ui-field !pl-10"
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder={`Search ${emptyLabel}, events, clusters...`}
                 type="search"
@@ -234,15 +241,17 @@ export function ApprovedResourceLibraryView({
             value={yearFilter}
           />
         </div>
-        <p className="mt-4 text-sm text-slate-500">
-          Showing {filteredResources.length} of {resources.length} approved{" "}
-          {emptyLabel}.
-        </p>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm">
+          <p className="text-[var(--muted)]" role="status">
+            {hasFilters ? `${filteredResources.length} of ${resources.length}` : resources.length} {emptyLabel}
+          </p>
+          {hasFilters ? <button className="inline-flex min-h-9 items-center font-medium text-primary" onClick={clearFilters} type="button">Clear filters</button> : null}
+        </div>
         {selectedClusterLabel && selectedClusterFilter ? (
-          <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-[var(--muted)]">
             <span>Your cluster: {selectedClusterLabel}</span>
             <button
-              className="min-h-9 rounded-md border border-slate-200 bg-white px-3 font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
+              className="inline-flex min-h-9 items-center font-medium text-primary"
               onClick={() => setClusterFilter(selectedClusterFilter)}
               type="button"
             >
@@ -250,7 +259,7 @@ export function ApprovedResourceLibraryView({
             </button>
             {clusterFilter !== "all" ? (
               <button
-                className="min-h-9 rounded-md border border-slate-200 bg-white px-3 font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
+                className="inline-flex min-h-9 items-center font-medium text-primary"
                 onClick={() => setClusterFilter("all")}
                 type="button"
               >
@@ -259,27 +268,12 @@ export function ApprovedResourceLibraryView({
             ) : null}
           </div>
         ) : null}
-      </Card>
+      </div>
 
       {filteredResources.length === 0 ? (
-        <div className="space-y-3">
-          <ResourceEmptyState label={emptyLabel} />
-          {resources.length > 0 ? (
-            <button
-              className="text-sm font-semibold text-primary"
-              onClick={() => {
-                setSearch("");
-                setClusterFilter("all");
-                setYearFilter("all");
-                setEventFilter("all");
-              }}
-            >
-              Clear filters
-            </button>
-          ) : null}
-        </div>
+        <ResourceEmptyState label={emptyLabel} filtered={resources.length > 0} />
       ) : (
-        <div className="divide-y divide-border rounded-md border border-border bg-card">
+        <ul className="divide-y divide-border rounded-md border border-border bg-card">
           {filteredResources.map((resource) => (
             <StudentResourceCard
               isOpeningPdf={openingPdfId === resource.id}
@@ -289,7 +283,7 @@ export function ApprovedResourceLibraryView({
               resource={resource}
             />
           ))}
-        </div>
+        </ul>
       )}
     </section>
   );
@@ -307,11 +301,11 @@ function FilterSelect({
   value: string;
 }) {
   return (
-    <label className="grid gap-2 text-sm font-semibold text-slate-800">
+    <label className="ui-label">
       {label}
       <select
         aria-label={label}
-        className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm font-normal text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+        className="ui-field"
         onChange={(event) => onChange(event.target.value)}
         value={value}
       >
@@ -341,14 +335,9 @@ function StudentResourceCard({
       ? `/roleplays/${resource.id}/practice`
       : `/exams/${resource.id}/take`;
   return (
-    <article className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
+    <li className="flex min-w-0 flex-col gap-4 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
       <div className="min-w-0">
-        <p className="text-xs text-[var(--muted)]">
-          {[resource.event_code, resource.cluster, resource.year]
-            .filter(Boolean)
-            .join(" · ") || "Chapter resource"}
-        </p>
-        <h2 className="mt-2 text-base font-semibold leading-6">
+        <h2 className="text-base font-semibold leading-6">
           <Link
             className="hover:text-primary"
             href={`/resources/${resource.id}`}
@@ -356,15 +345,14 @@ function StudentResourceCard({
             {resource.title}
           </Link>
         </h2>
-        {mode === "roleplay" && resource.event_name ? (
-          <p className="mt-1 text-sm text-[var(--muted)]">
-            {resource.event_name}
-          </p>
-        ) : null}
+        <p className="mt-1 text-sm text-[var(--muted)]">
+          {[resource.event_code, resource.cluster, resource.year].filter(Boolean).join(" · ") || "Chapter resource"}
+        </p>
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-2">
         <button
-          className="min-h-10 rounded-md border border-border px-3 text-sm font-medium hover:bg-primary-soft disabled:opacity-50"
+          aria-label={`Open PDF: ${resource.title}`}
+          className={`ui-button ${mode === "reference" ? "ui-button-primary" : "ui-button-secondary"}`}
           disabled={isOpeningPdf}
           onClick={onOpenPdf}
           type="button"
@@ -373,20 +361,14 @@ function StudentResourceCard({
         </button>
         {mode !== "reference" ? (
           <Link
-            className="inline-flex min-h-10 items-center rounded-md bg-primary px-4 text-sm font-medium text-white hover:opacity-90"
+            aria-label={`${mode === "roleplay" ? "Practice roleplay" : "Practice exam"}: ${resource.title}`}
+            className="ui-button ui-button-primary"
             href={practiceHref}
           >
-            {mode === "roleplay" ? "Practice" : "Open exam"}
+            {mode === "roleplay" ? "Practice roleplay" : "Practice exam"}
           </Link>
-        ) : (
-          <Link
-            className="px-3 py-2 text-sm font-medium text-primary"
-            href={`/resources/${resource.id}`}
-          >
-            Details
-          </Link>
-        )}
+        ) : null}
       </div>
-    </article>
+    </li>
   );
 }

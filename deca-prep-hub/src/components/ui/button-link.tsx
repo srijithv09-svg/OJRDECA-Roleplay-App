@@ -1,6 +1,5 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Icon } from "./icon";
 import { cn } from "@/lib/utils";
 
 type ButtonLinkProps = {
@@ -19,16 +18,15 @@ export function ButtonLink({
   return (
     <Link
       className={cn(
-        "inline-flex min-h-10 items-center justify-center gap-2 rounded-md px-3 text-sm font-semibold transition",
+        "ui-button",
         variant === "primary"
-          ? "bg-blue-700 text-white hover:bg-blue-800"
-          : "border border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:text-blue-700",
+          ? "ui-button-primary"
+          : "ui-button-secondary",
         className,
       )}
       href={href}
     >
       {children}
-      <Icon className="h-4 w-4" name="chevronRight" />
     </Link>
   );
 }
