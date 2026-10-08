@@ -22,6 +22,7 @@ Internal preparation library for Owen J. Roberts High School DECA. The current p
 - Roleplay practice supports a preparation timer, written notes, self-reflection, partner feedback, confidence, and optional audio recordings.
 - Exam answers are graded server-side using manually managed answer keys; unanswered questions count as incorrect.
 - Admins/advisors may read the explicitly printed PDF answer key into a preview without AI. Review, apply, and save are separate steps. Grading requires exactly questions 1–100; missing or duplicate answers never enable grading.
+- Printed-key extraction compares two free PDF readers. Conflicting answers block the preview; a single-reader fallback is labeled for manual review. Load `pdf-parse/worker` before `pdf-parse` and retain canvas/native/worker files in the deployment trace.
 - Preserve existing data unless the user explicitly authorizes a reset. The user authorized a content reset on 2026-10-06; resources, answer keys, attempts, recordings, and retired Learn/AI tables were cleared after a local recovery export. Accounts and roles were preserved. Historical SQL migrations stay intact.
 - `docs/ojr-deca-roleplay-prep-rebuild-plan.md` is historical, superseded by this direction.
 
@@ -69,3 +70,5 @@ Light/dark themes use tokens in `src/app/globals.css`, the `dark` class on `<htm
 Run `npm run lint`, `npx tsc --noEmit`, and `npm run build` after changes. `npx next typegen` regenerates route declarations after removing routes. Against a running server, run `npm run smoke:routes`. `npm run check:db` verifies the active tables without writing data. Smoke tests don't prove authenticated flows; report the limits of browser or API checks honestly.
 
 `npm run test:answer-keys` checks extraction, readiness, and response-limit regressions. `npm run verify:answer-key-corpus` checks all local exam PDFs against independently read answer hashes; PDFs remain ignored. `npm run test:resource-upload`, `npm run test:resource-metadata`, and `npm run test:resource-listing` cover upload recovery, classification, and large libraries. `npm run test:browser` runs isolated student/admin browser fixtures on port 3103; it mocks backend requests and does not write production data.
+
+`npm run verify:uploaded-answer-keys` audits uploaded exam PDFs without saving keys; it requires server credentials and distinguishes new PDFs from pinned baseline files. `npm run verify:pdf-runtime` checks the built extraction route's native/worker dependencies; run it after the production build.

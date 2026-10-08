@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { AnswerKeyExtractionError, extractExamAnswerKey } from "@/lib/exams/answer-key-extraction";
-import { extractPdfTextFromBuffer, PdfTextExtractionError } from "@/lib/pdf/server-text-extraction";
+import { AnswerKeyExtractionError } from "@/lib/exams/answer-key-extraction";
+import { readVerifiedPdfAnswerKey } from "@/lib/pdf/verified-answer-key";
 import { requireAdminRequester } from "@/lib/server/api-auth";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 
@@ -46,13 +46,12 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       return NextResponse.json({ error: "Unable to open the uploaded exam PDF. Check that the file is available and try again." }, { status: 502 });
     }
 
-    const { text } = await extractPdfTextFromBuffer(new Uint8Array(await pdf.arrayBuffer()));
-    const rows = extractExamAnswerKey(text);
+    const preview = await readVerifiedPdfAnswerKey(new Uint8Array(await pdf.arrayBuffer()));
 
     // Extraction is a preview. The existing manual save is the only publication step.
-    return NextResponse.json({ rows, source: "printed-key" }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json(preview, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    if (error instanceof AnswerKeyExtractionError || error instanceof PdfTextExtractionError) {
+    if (error instanceof AnswerKeyExtractionError) {
       return NextResponse.json({ error: error.message }, { status: 422 });
     }
 

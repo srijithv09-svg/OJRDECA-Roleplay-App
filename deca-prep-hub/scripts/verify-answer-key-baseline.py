@@ -35,7 +35,8 @@ def main():
     baseline = json.loads((Path(__file__).parent / "fixtures/exam-key-corpus.json").read_text())["exams"]
     paths = {}
     for file in sorted(root.rglob("*.pdf")):
-        if "exam" not in file.name.lower() or "blueprint" in file.name.lower():
+        known_filename = file.name in {entry["filename"] for entry in baseline.values()}
+        if ("exam" not in file.name.lower() and not known_filename) or "blueprint" in file.name.lower():
             continue
         pdf_hash = sha256(file.read_bytes()).hexdigest()
         assert pdf_hash in baseline, f"Unverified PDF: {file}"

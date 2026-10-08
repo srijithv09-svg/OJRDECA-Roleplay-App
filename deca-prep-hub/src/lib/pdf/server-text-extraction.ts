@@ -1,7 +1,5 @@
 import "server-only";
 
-import { PDFParse } from "pdf-parse";
-
 export type PdfTextExtractionResult = {
   parser: "pdf-parse";
   text: string;
@@ -23,9 +21,15 @@ function toSafePdfErrorMessage(error: unknown) {
 export async function extractPdfTextFromBuffer(
   buffer: Buffer | Uint8Array,
 ): Promise<PdfTextExtractionResult> {
-  const parser = new PDFParse({ data: Buffer.from(buffer) });
+  let parser: InstanceType<typeof import("pdf-parse").PDFParse> | undefined;
 
   try {
+    // The worker installs Node's canvas globals before PDF.js evaluates DOMMatrix.
+    // Sequential imports are intentional; static imports can crash the route at startup.
+    const { CanvasFactory, getData } = await import("pdf-parse/worker");
+    const { PDFParse } = await import("pdf-parse");
+    PDFParse.setWorker(getData());
+    parser = new PDFParse({ data: Buffer.from(buffer), CanvasFactory });
     const result = await parser.getText();
 
     return {
@@ -37,6 +41,8 @@ export async function extractPdfTextFromBuffer(
       `PDF text extraction failed: ${toSafePdfErrorMessage(error)}`,
     );
   } finally {
-    await parser.destroy();
+    await parser?.destroy().catch((error: unknown) => {
+      console.error("[PDF parser] Cleanup failed", error);
+    });
   }
 }

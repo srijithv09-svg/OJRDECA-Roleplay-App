@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { extractExamAnswerKey } from "../src/lib/exams/answer-key-extraction";
 import { getExamKeyStatus } from "../src/lib/exams/answer-key-status";
+import { verifyPrintedAnswerKeys } from "../src/lib/exams/answer-key-verification";
 
 const numbers = Array.from({ length: 100 }, (_, index) => index + 1);
 const printedRows = numbers.map((number) => `${number}. ${["B", "D", "A", "C"][number % 4]}\nExplanation text.`);
@@ -39,6 +40,26 @@ test("grading readiness requires exactly questions 1–100, never just a row cou
   for (const rows of [numbers.slice(0, 99), [...numbers, 101], [...numbers.slice(1), 101], [...numbers.slice(0, 99), 99]]) {
     assert.equal(getExamKeyStatus(rows), "partial");
   }
+});
+
+test("reads explicitly headed compact tables and split number/letter lines", () => {
+  const table = numbers.reduce((lines, number, index) => {
+    const line = Math.floor(index / 4);
+    lines[line] = `${lines[line] ?? ""}${number} A\t`;
+    return lines;
+  }, [] as string[]);
+  assert.equal(extractExamAnswerKey(`ANSWER KEY\n${table.join("\n")}`).length, 100);
+  assert.equal(extractExamAnswerKey(`EXAM KEY\n${numbers.map((n) => `${n}.\nB`).join("\n")}`).length, 100);
+  assert.equal(extractExamAnswerKey(key.replaceAll(". ", ".")).length, 100);
+});
+
+test("cross-check blocks conflicting readers, identifies single-reader previews, and rejects missing keys", () => {
+  assert.equal(verifyPrintedAnswerKeys([key, key]).verification, "matched");
+  assert.equal(verifyPrintedAnswerKeys([null, key]).verification, "single-reader");
+  assert.match(verifyPrintedAnswerKeys([key, ""]).notice, /could not verify/);
+  assert.throws(() => verifyPrintedAnswerKeys([key, key.replace("1. D", "1. A")]), /disagree on questions 1/);
+  assert.throws(() => verifyPrintedAnswerKeys([null, null]), /could not be read/);
+  assert.throws(() => verifyPrintedAnswerKeys(["", "EXAM BLUEPRINT"]), /No readable/);
 });
 
 test("loads all answer-key statuses beyond the 1000-row response cap and 100-resource batch", async () => {

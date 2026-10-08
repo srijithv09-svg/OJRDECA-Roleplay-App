@@ -82,7 +82,7 @@ export class LibraryFixture {
         this.resources.push(item);
         return route.fulfill({ json: { uploadedCount: 1, failedCount: 0, results: [{ originalFilename: metadata.original_filename, resource: item }] } });
       }
-      if (path.endsWith("/extract")) return route.fulfill({ json: { rows: Array.from({ length: 100 }, (_, index) => ({ question_number: index + 1, correct_answer: "A", instructional_area: null })), source: "printed-key" } });
+      if (path.endsWith("/extract")) return route.fulfill({ json: { rows: Array.from({ length: 100 }, (_, index) => ({ question_number: index + 1, correct_answer: "A", instructional_area: null })), source: "printed-key", verification: "matched", notice: "Both PDF readers agree on all 100 printed answers. Review the preview, then apply and save." } });
       if (path === "/api/analytics/student") return route.fulfill({ json: buildStudentAnalytics({ attempts: this.attempts, answers: this.answers, roleplayAttempts: this.roleplays, resources: this.resources, examAnalyticsUnavailable: false, roleplayPracticeUnavailable: false }) });
       if (path === "/api/exams/exam/take") return route.fulfill({ json: { resource: this.resources[0], hasAnswerKey: true, questionCount: 100, questions: this.keys.map(({ question_number, instructional_area }) => ({ question_number, instructional_area })) } });
       if (path === "/api/exams/exam/submit") {

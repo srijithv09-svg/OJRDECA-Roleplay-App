@@ -4,6 +4,7 @@ import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { extractExamAnswerKey } from "../src/lib/exams/answer-key-extraction";
 import { extractPdfTextFromBuffer } from "../src/lib/pdf/server-text-extraction";
+import { readVerifiedPdfAnswerKey } from "../src/lib/pdf/verified-answer-key";
 import { detectResourceMetadata } from "../src/lib/resources/metadata-detection";
 import baseline from "./fixtures/exam-key-corpus.json";
 
@@ -28,6 +29,7 @@ async function main() {
   const failures: string[] = [];
   const references = new Set<string>();
   const filesByFolder = new Map<string, string[]>();
+  const knownFilenames = new Set(Object.values(baseline.exams).map((exam) => exam.filename));
 
   for (const file of await findPdfs(root)) {
     const folder = path.dirname(path.relative(root, file));
@@ -40,7 +42,7 @@ async function main() {
     for (const file of files) {
       const filename = path.basename(file);
       const metadata = detectResourceMetadata(filename);
-      if (metadata.resource_type !== "exam" && !/exam.*blueprint/i.test(filename)) continue;
+      if (metadata.resource_type !== "exam" && !knownFilenames.has(filename) && !/exam.*blueprint/i.test(filename)) continue;
       try {
         const buffer = await readFile(file);
         const pdfHash = hash(buffer);
@@ -57,8 +59,8 @@ async function main() {
         if (!cache.has(pdfHash)) {
           const expected = baseline.exams[pdfHash as keyof typeof baseline.exams];
           assert.ok(expected, "PDF is not in the independently verified baseline; review it before claiming support");
-          const { text } = await extractPdfTextFromBuffer(buffer);
-          const rows = extractExamAnswerKey(text);
+          const { rows, verification } = await readVerifiedPdfAnswerKey(buffer);
+          assert.equal(verification, "matched", "both PDF readers must agree for the verified corpus");
           assert.equal(rows.length, 100);
           assert.equal(hash(rows.map((row) => row.correct_answer).join("")), expected.answer_sha256, "extracted answers differ from independent pdfplumber baseline");
           cache.set(pdfHash, rows.length);

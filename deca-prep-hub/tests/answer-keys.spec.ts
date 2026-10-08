@@ -9,6 +9,7 @@ test("admin reviews extracted answers before saving a complete key, then edits a
   await expect(editor).toBeVisible();
   await editor.getByRole("button", { name: "Extract from PDF", exact: true }).click();
   await expect(editor.getByLabel("Preview or paste answers")).toContainText("100. A");
+  await expect(editor.getByText(/Both PDF readers agree on all 100/)).toBeVisible();
   expect(library.keys).toHaveLength(0);
   await editor.getByRole("button", { name: "Apply 100 answers", exact: true }).click();
   await expect(editor.getByLabel("Answer for question 100", { exact: true })).toHaveValue("A");
@@ -41,6 +42,22 @@ test("manual paste identifies duplicate and missing answers without saving them"
   await editor.getByRole("button", { name: "Save key", exact: true }).click();
   await expect(editor.getByText("Saved 2 answers. Complete questions 1–100 to enable grading.")).toBeVisible();
   expect(library.keys).toHaveLength(2);
+});
+
+test("conflicting PDF readers leave the preview empty and do not publish answers", async ({ page, library }) => {
+  library.role = "admin";
+  library.keys = [];
+  await page.route("**/api/admin/exam-keys/*/extract", (route) => route.fulfill({
+    status: 422, json: { error: "The two PDF readers disagree on questions 7. No preview was applied. Check the printed key." },
+  }));
+  await page.goto("/admin/exam-keys");
+  await page.getByRole("button", { name: "Manage key", exact: true }).click();
+  const editor = page.getByRole("dialog");
+  await editor.getByRole("button", { name: "Extract from PDF", exact: true }).click();
+  await expect(editor.getByText(/The two PDF readers disagree on questions 7/)).toBeVisible();
+  await expect(editor.getByLabel("Preview or paste answers")).toHaveValue("");
+  await expect(editor.getByRole("button", { name: "Apply preview answers", exact: true })).toBeDisabled();
+  expect(library.keys).toHaveLength(0);
 });
 
 test("answer-key editing remains usable on mobile in both themes", async ({ page, library }, testInfo) => {

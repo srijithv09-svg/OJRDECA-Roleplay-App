@@ -11,20 +11,29 @@ export class AnswerKeyExtractionError extends Error {
 /** Read the printed key only. Never infer answers from exam questions or explanations. */
 export function extractExamAnswerKey(text: string): ExamAnswerKeyInput[] {
   const normalizedText = text.replace(/\r\n?/g, "\n").replace(/\u00a0/g, " ");
-  const heading = /^.*\bEXAM\s*[—–-]\s*KEY\b.*$/im.exec(normalizedText);
+  const heading = /^.*\b(?:EXAM\s*[—–:-]?\s*KEY|ANSWER\s+KEY)\b.*$/im.exec(normalizedText);
 
   if (!heading) {
     throw new AnswerKeyExtractionError(
-      "No readable EXAM–KEY section was found in this PDF. Paste the official answers or enter them manually.",
+      "No readable printed answer-key section was found. Scanned PDFs need a text layer, and question-only PDFs need the official key. Paste the official answers or upload a readable exam/key PDF.",
     );
   }
 
-  const keyText = normalizedText.slice(heading.index + heading[0].length);
+  const keyText = normalizedText.slice(heading.index + heading[0].length)
+    .replace(/^([ \t]*\d{1,3}[.)]?)[ \t]*\n[ \t]*([A-Z])[ \t]*(?=\n|$)/gm, "$1 $2");
   const answers = new Map<number, ExamAnswerKeyInput>();
 
   // DECA's printed key begins each explanation with a numbered, standalone answer letter.
   // Only the explicitly headed key section is examined, never the question pages.
-  for (const match of keyText.matchAll(/^\s*(\d{1,3})[.)][ \t]+([A-Z])(?=[ \t\n]|$)/gm)) {
+  // Compact official tables may omit punctuation and put several answers on one line.
+  // Accept such a line only when it consists entirely of numbered answer cells.
+  const matches = keyText.split("\n").flatMap((line) => {
+    if (/^\s*(?:\d{1,3}(?:[.)][ \t]*|[ \t]+)[A-Z](?:[ \t]+|$))+\s*$/.test(line)) {
+      return [...line.matchAll(/(\d{1,3})(?:[.)][ \t]*|[ \t]+)([A-Z])\b/g)];
+    }
+    return [...line.matchAll(/^[ \t]*(\d{1,3})[.)][ \t]*([A-Z])(?=[ \t]|$)/g)];
+  });
+  for (const match of matches) {
     const questionNumber = Number(match[1]);
     const answer = match[2];
 

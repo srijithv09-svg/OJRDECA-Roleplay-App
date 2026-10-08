@@ -409,9 +409,9 @@ export function AdminExamKeysView() {
     setSuccessMessage(null);
 
     try {
-      const rows = await ExamKeysService.extractExamAnswerKey(selectedExam.id);
-      setBulkText(rows.map((row) => `${row.question_number}. ${row.correct_answer}`).join("\n"));
-      setSuccessMessage("Read 100 answers from the printed key. Review the preview, then apply it to the editor and save.");
+      const preview = await ExamKeysService.extractExamAnswerKey(selectedExam.id);
+      setBulkText(preview.rows.map((row) => `${row.question_number}. ${row.correct_answer}`).join("\n"));
+      setSuccessMessage(preview.notice);
     } catch (error) {
       setEditorError(error instanceof Error ? error.message : "Unable to read the answer key.");
     } finally {

@@ -1,5 +1,6 @@
 import { getFriendlyErrorMessage, logDeveloperError } from "@/lib/errors";
 import { getExamKeyStatus } from "@/lib/exams/answer-key-status";
+import type { AnswerKeyPreview } from "@/lib/exams/answer-key-verification";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import type {
   ExamAnswerKeyInput,
@@ -92,7 +93,7 @@ export const ExamKeysService = {
     });
   },
 
-  async extractExamAnswerKey(resourceId: string): Promise<ExamAnswerKeyInput[]> {
+  async extractExamAnswerKey(resourceId: string): Promise<AnswerKeyPreview> {
     const { data, error } = await getSupabaseClient().auth.getSession();
 
     if (error || !data.session?.access_token) {
@@ -112,7 +113,11 @@ export const ExamKeysService = {
       throw new Error(payload?.error ?? "Unable to read the PDF answer key. Try again or paste the answers manually.");
     }
 
-    return payload.rows;
+    return {
+      rows: payload.rows, source: "printed-key",
+      verification: "verification" in payload && payload.verification === "matched" ? "matched" : "single-reader",
+      notice: "notice" in payload && typeof payload.notice === "string" ? payload.notice : "Read 100 printed answers. Review the preview, then apply and save.",
+    };
   },
 
   async getExamAnswerKey(resourceId: string): Promise<ExamAnswerKeyRow[]> {
