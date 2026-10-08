@@ -29,6 +29,7 @@ function normalizeForTitle(value: string) {
 }
 
 function detectYear(value: string) {
+  value = value.replace(/_/g, " ");
   const yearMatch = value.match(/\b(20[1-3]\d)\b/);
 
   if (yearMatch) {

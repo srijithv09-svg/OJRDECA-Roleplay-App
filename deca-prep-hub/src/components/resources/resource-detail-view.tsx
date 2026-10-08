@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { ExamAttemptsService } from "@/lib/services/exam-attempts";
@@ -232,234 +231,104 @@ export function ResourceDetailView() {
   }
 
   const isRoleplay = resource.resource_type === "roleplay";
+  const isExam = resource.resource_type === "exam";
+  const libraryHref = isExam ? "/exams" : isRoleplay ? "/roleplays" : "/reference";
   const usefulOriginalFilename = getUsefulOriginalFilename(resource);
   const metadata = [
-    ["Resource type", resource.resource_type],
-    ...(resource.resource_type === "roleplay"
-      ? ([
-          ["Event code", resource.event_code],
-          ["Event name", resource.event_name],
-          ["Event category", resource.event_category],
-        ] as const)
-      : []),
+    ["Type", isRoleplay ? "Roleplay" : isExam ? "Exam" : "Reference"],
     ["Cluster", resource.cluster],
     ["Year", resource.year],
-    ...(usefulOriginalFilename ? ([["Original filename", usefulOriginalFilename]] as const) : []),
-  ];
+    ...(isRoleplay ? [["Event", resource.event_code], ["Event name", resource.event_name], ["Category", resource.event_category]] : []),
+    ...(usefulOriginalFilename ? [["Filename", usefulOriginalFilename]] : []),
+  ].filter(([, value]) => value !== null && value !== undefined && value !== "");
 
   return (
     <>
+      <Link className="inline-flex min-h-8 w-fit items-center text-sm font-medium text-primary" href={libraryHref}>
+        ← Back to {isExam ? "exams" : isRoleplay ? "roleplays" : "reference"}
+      </Link>
       <PageHeader
+        title={resource.title}
+        description={[resource.cluster, resource.year, resource.event_name].filter(Boolean).join(" · ") || "Chapter resource"}
         actions={
           <>
-            <Link
-              className="inline-flex min-h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
-              href={
-                resource.resource_type === "exam"
-                  ? "/exams"
-                  : resource.resource_type === "roleplay"
-                    ? "/roleplays"
-                    : "/reference"
-              }
-            >
-              Back to library
-            </Link>
             {signedUrl ? (
-              <a
-                className="inline-flex min-h-10 items-center justify-center rounded-md bg-blue-700 px-3 text-sm font-semibold text-white transition hover:bg-blue-800"
-                href={signedUrl}
-                rel="noreferrer"
-                target="_blank"
-              >
-                Open / Download PDF
+              <a className={`ui-button ${isRoleplay || (isExam && examKeyState === "available") ? "ui-button-secondary" : "ui-button-primary"}`} href={signedUrl} rel="noreferrer" target="_blank">
+                Open PDF <span className="sr-only">in a new tab</span>
               </a>
             ) : null}
-            {resource.resource_type === "roleplay" ? (
-              <Link
-                className="inline-flex min-h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
-                href={`/roleplays/${resource.id}/practice`}
-              >
-                Practice Roleplay
-              </Link>
-            ) : null}
-            {resource.resource_type === "exam" ? (
-              examKeyState === "available" ? (
-                <Link
-                  className="inline-flex min-h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
-                  href={`/exams/${resource.id}/take`}
-                >
-                  Take Exam
-                </Link>
-              ) : (
-                <span className="inline-flex min-h-10 items-center justify-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-500">
-                  {examKeyState === "loading" ? "Checking answer key..." : "Answer key not available yet"}
-                </span>
-              )
-            ) : null}
+            {isRoleplay ? <Link className="ui-button ui-button-primary" href={`/roleplays/${resource.id}/practice`}>Practice roleplay</Link> : null}
+            {isExam && examKeyState === "available" ? <Link className="ui-button ui-button-primary" href={`/exams/${resource.id}/take`}>Practice exam</Link> : null}
           </>
         }
-        description="Review the resource details and open the approved PDF."
-        eyebrow="Resource detail"
-        title={resource.title}
       />
 
-      <section className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
-        <Card>
-          <CardHeader eyebrow="Metadata" title="Resource details" />
-          <div className="grid gap-4">
-            <div className="flex flex-wrap gap-2">
-              <Badge tone="blue">{resource.resource_type}</Badge>
-              {resource.event_code ? <Badge>{resource.event_code}</Badge> : null}
-              <Badge>{resource.year ?? "Year TBD"}</Badge>
-            </div>
+      {!signedUrl ? (
+        <div className="ui-notice flex flex-wrap items-center justify-between gap-3" role="alert">
+          <div><p className="font-semibold">PDF unavailable</p><p className="mt-1 text-[var(--muted)]">{pdfError ?? "The file could not be opened. Try again."}</p></div>
+          <button className="ui-button ui-button-secondary" onClick={retryLoad} type="button">Retry PDF</button>
+        </div>
+      ) : null}
 
-            <dl className="grid gap-3 text-sm">
-              {metadata.map(([label, value]) => (
-                <div className="rounded-lg bg-slate-50 p-3" key={label}>
-                  <dt className="font-semibold text-slate-800">{label}</dt>
-                  <dd className="mt-1 break-words text-slate-600">{formatValue(value)}</dd>
-                </div>
-              ))}
-            </dl>
-          </div>
+      <section className={`grid items-start gap-6 ${isRoleplay || isExam ? "lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]" : "max-w-3xl"}`}>
+        <Card>
+          <CardHeader title="Document details" />
+          <dl className="divide-y divide-border text-sm">
+            {metadata.map(([label, value]) => (
+              <div className="grid gap-1 py-3 first:pt-0 sm:grid-cols-[8rem_minmax(0,1fr)] sm:gap-4" key={label}>
+                <dt className="text-[var(--muted)]">{label}</dt>
+                <dd className="break-words font-medium">{formatValue(value)}</dd>
+              </div>
+            ))}
+          </dl>
+          {!isRoleplay && !isExam ? <p className="mt-4 border-t border-border pt-4 text-sm text-[var(--muted)]">Open the PDF to read or download this reference document.</p> : null}
         </Card>
 
-        <div className="space-y-5">
+        {isExam ? (
           <Card>
-            <CardHeader eyebrow="PDF" title="Resource file" />
-            {signedUrl ? (
-              <div className="rounded-lg border border-blue-100 bg-blue-50 p-5">
-                <p className="text-sm font-semibold text-blue-950">PDF link ready</p>
-                <p className="mt-2 text-sm leading-6 text-blue-800">
-                  Open the approved resource in a new tab to view or download the PDF.
-                </p>
-                <a
-                  className="mt-5 inline-flex min-h-14 w-full items-center justify-center rounded-md bg-blue-700 px-5 text-base font-semibold text-white transition hover:bg-blue-800 sm:w-auto"
-                  href={signedUrl}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  Open / Download PDF
-                </a>
-              </div>
+            <CardHeader title="Exam practice" />
+            {examKeyState === "available" ? (
+              <p className="text-sm leading-6 text-[var(--muted)]">{examQuestionCount} questions. Open the PDF, enter your answers, then submit to see your score.</p>
             ) : (
-              <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6">
-                <h2 className="text-lg font-semibold text-slate-950">PDF link unavailable</h2>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
-                  {pdfError ?? "No signed URL was generated."}
-                </p>
+              <div className="ui-notice">
+                <p className="font-semibold">{examKeyState === "loading" ? "Checking answer key…" : examKeyState === "error" ? "Unable to check grading availability" : "Not ready for grading yet"}</p>
+                <p className="mt-2 leading-6 text-[var(--muted)]">{examKeyState === "error" ? "Try again to check whether you can submit this exam." : "You can read the PDF now. Answer entry will be available once the answer key is ready."}</p>
+                {examKeyState === "error" ? <button className="ui-button ui-button-secondary mt-3" onClick={retryLoad} type="button">Try again</button> : null}
               </div>
             )}
-          </Card>
-
-          {resource.resource_type === "exam" ? (
-            <Card>
-              <CardHeader eyebrow="Exam" title="Answer entry" />
-              {examKeyState === "available" ? (
-                <div className="rounded-lg border border-blue-100 bg-blue-50 p-5">
-                  <p className="text-sm font-semibold text-blue-950">
-                    Answer key ready
-                  </p>
-                  <p className="mt-2 text-sm leading-6 text-blue-800">
-                    This exam has {examQuestionCount} questions ready for grading.
-                  </p>
-                  <Link
-                    className="mt-5 inline-flex min-h-11 items-center justify-center rounded-md bg-blue-700 px-4 text-sm font-semibold text-white transition hover:bg-blue-800"
-                    href={`/exams/${resource.id}/take`}
-                  >
-                    Take Exam
-                  </Link>
-                </div>
-              ) : (
-                <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-5">
-                  <p className="text-sm font-semibold text-slate-950">
-                    {examKeyState === "loading"
-                      ? "Checking answer key"
-                      : "Answer key not available yet"}
-                  </p>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">
-                    {examKeyState === "error"
-                      ? "Unable to check the answer key right now."
-                      : "You can still open the PDF, but automatic grading is not ready for this exam."}
-                  </p>
-                </div>
-              )}
-              {recentAttempts.length > 0 ? (
-                <div className="mt-4">
-                  <p className="text-sm font-semibold text-slate-800">Recent attempts</p>
-                  <div className="mt-2 space-y-2">
-                    {recentAttempts.map((attempt) => (
-                      <Link
-                        className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 p-3 text-sm transition hover:border-blue-200 hover:bg-blue-50"
-                        href={`/exams/attempts/${attempt.id}`}
-                        key={attempt.id}
-                      >
-                        <span className="font-medium text-slate-700">
-                          {attempt.completed_at
-                            ? new Intl.DateTimeFormat("en-US", {
-                                dateStyle: "medium",
-                              }).format(new Date(attempt.completed_at))
-                            : "Date unavailable"}
-                        </span>
-                        <span className="font-semibold text-slate-950">
-                          {attempt.score ?? 0} / {attempt.total_questions ?? 0} ·{" "}
-                          {attempt.percentage ?? 0}%
-                        </span>
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-            </Card>
-          ) : null}
-
-          {isRoleplay ? (
-            <>
-              <Card>
-                <CardHeader
-                  action={
-                    <Link
-                      className="rounded-md bg-blue-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-blue-800"
-                      href={`/roleplays/${resource.id}/practice`}
-                    >
-                      Practice Roleplay
+            <h3 className="mt-6 border-t border-border pt-5 text-sm font-semibold">Your attempts</h3>
+            {recentAttempts.length ? (
+              <ul className="mt-2 divide-y divide-border">
+                {recentAttempts.map((attempt) => (
+                  <li key={attempt.id}>
+                    <Link className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm hover:text-primary" href={`/exams/attempts/${attempt.id}`}>
+                      <span>{attempt.completed_at ? new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(new Date(attempt.completed_at)) : "Date unavailable"}</span>
+                      <span className="font-semibold tabular-nums">{attempt.score ?? 0} / {attempt.total_questions ?? 0} · {attempt.percentage ?? 0}%</span>
                     </Link>
-                  }
-                  eyebrow="Practice"
-                  title="Your roleplay attempts"
-                />
-                {recentRoleplayAttempts.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-5 text-sm leading-6 text-slate-600">
-                    No saved attempts for this roleplay yet. Start a practice attempt to save your
-                    response, reflection, and future feedback data.
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {recentRoleplayAttempts.map((attempt) => (
-                      <Link
-                        className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-100 p-3 text-sm transition hover:border-blue-200 hover:bg-blue-50"
-                        href={`/roleplays/attempts/${attempt.id}`}
-                        key={attempt.id}
-                      >
-                        <span className="font-medium text-slate-700">
-                          {attempt.created_at
-                            ? new Intl.DateTimeFormat("en-US", {
-                                dateStyle: "medium",
-                              }).format(new Date(attempt.created_at))
-                            : "Date unavailable"}
-                        </span>
-                        <span className="font-semibold text-slate-950">
-                          Confidence {attempt.confidence_rating ?? "N/A"}
-                        </span>
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </Card>
+                  </li>
+                ))}
+              </ul>
+            ) : <p className="mt-2 text-sm text-[var(--muted)]">Your completed attempts will appear here.</p>}
+          </Card>
+        ) : null}
 
-            </>
-          ) : null}
-        </div>
+        {isRoleplay ? (
+          <Card>
+            <CardHeader title="Your roleplay attempts" />
+            {recentRoleplayAttempts.length ? (
+              <ul className="divide-y divide-border">
+                {recentRoleplayAttempts.map((attempt) => (
+                  <li key={attempt.id}>
+                    <Link className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm hover:text-primary" href={`/roleplays/attempts/${attempt.id}`}>
+                      <span>{attempt.created_at ? new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(new Date(attempt.created_at)) : "Date unavailable"}</span>
+                      <span className="font-medium">Confidence {attempt.confidence_rating ?? "—"} / 5</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : <p className="text-sm leading-6 text-[var(--muted)]">No saved attempts yet. Practice this scenario to save your response, reflection, and optional recording.</p>}
+          </Card>
+        ) : null}
       </section>
     </>
   );

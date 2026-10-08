@@ -1,18 +1,10 @@
 import { NextResponse } from "next/server";
-import {
-  detectResourceMetadata,
-  sanitizeStorageFilename,
-  type DetectedResourceMetadata,
-} from "@/lib/resources/metadata-detection";
+import { sanitizeStorageFilename } from "@/lib/resources/metadata-detection";
+import { normalizeResourceUploadMetadata, type UploadMetadataInput } from "@/lib/resources/upload-metadata";
 import { isAdminRole } from "@/lib/auth";
-import { getDecaEventByCode } from "@/lib/deca/events";
 import { requireAuthenticatedSchoolUser } from "@/lib/server/api-auth";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
-import type { ResourceListItem, SupabaseResourceType } from "@/lib/types";
-
-type UploadMetadataInput = Partial<DetectedResourceMetadata> & {
-  original_filename: string;
-};
+import type { ResourceListItem } from "@/lib/types";
 
 type UploadResult = {
   error?: string;
@@ -22,12 +14,6 @@ type UploadResult = {
 
 const resourceColumns =
   "id,title,cluster,event_code,event_name,event_category,instructional_area,year,resource_type,approval_status,original_filename,confidence_score,import_notes,file_path,storage_path";
-const allowedResourceTypes = new Set<SupabaseResourceType>([
-  "roleplay",
-  "exam",
-  "reference",
-  "unknown",
-]);
 
 function parseMetadata(value: FormDataEntryValue | null) {
   if (typeof value !== "string" || !value.trim()) {
@@ -39,35 +25,7 @@ function parseMetadata(value: FormDataEntryValue | null) {
   return new Map(parsed.map((metadata) => [metadata.original_filename, metadata]));
 }
 
-function normalizeMetadata(file: File, metadataByFilename: Map<string, UploadMetadataInput>) {
-  const detected = detectResourceMetadata(file.name);
-  const submitted = metadataByFilename.get(file.name);
-  const submittedEvent = getDecaEventByCode(submitted?.event_code);
-  const resourceType = submitted?.resource_type ?? detected.resource_type;
-
-  return {
-    cluster: submittedEvent?.cluster ?? submitted?.cluster?.trim() ?? detected.cluster,
-    confidence_score: submitted?.confidence_score ?? detected.confidence_score,
-    event_category:
-      submittedEvent?.category ?? submitted?.event_category?.trim() ?? detected.event_category,
-    event_code: submittedEvent?.code ?? submitted?.event_code?.trim().toUpperCase() ?? detected.event_code,
-    event_name: submittedEvent?.name ?? submitted?.event_name?.trim() ?? detected.event_name,
-    import_notes: submitted?.import_notes?.trim() || detected.import_notes,
-    instructional_area:
-      resourceType === "roleplay"
-        ? submitted?.instructional_area?.trim() || detected.instructional_area
-        : null,
-    original_filename: file.name,
-    resource_type: allowedResourceTypes.has(resourceType) ? resourceType : "unknown",
-    title: submitted?.title?.trim() || detected.title,
-    year:
-      submitted?.year === null || submitted?.year === undefined || Number.isNaN(Number(submitted.year))
-        ? detected.year
-        : Number(submitted.year),
-  };
-}
-
-function buildStoragePath(metadata: ReturnType<typeof normalizeMetadata>, filename: string) {
+function buildStoragePath(metadata: ReturnType<typeof normalizeResourceUploadMetadata>, filename: string) {
   const year = metadata.year ?? new Date().getFullYear();
   const uniquePrefix = crypto.randomUUID().slice(0, 12);
 
@@ -128,7 +86,7 @@ export async function POST(request: Request) {
       continue;
     }
 
-    const metadata = normalizeMetadata(file, metadataByFilename);
+    const metadata = normalizeResourceUploadMetadata(file.name, metadataByFilename.get(file.name));
     const storagePath = buildStoragePath(metadata, file.name);
 
     const { error: uploadError } = await adminSupabase.storage

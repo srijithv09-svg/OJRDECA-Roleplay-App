@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button-link";
-import { Card, CardHeader } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { ResourceErrorState, ResourceLoadingState } from "@/components/resources/resource-states";
 import { isAdminRole } from "@/lib/auth";
@@ -686,303 +686,149 @@ function ExamKeyCard({
 
   return (
     <Card>
-      <div className="flex flex-wrap gap-2">
-        <Badge tone={getStatusTone(exam.answer_key_status)}>
-          {getStatusLabel(exam.answer_key_status)}
-        </Badge>
-        <Badge tone="blue">exam</Badge>
-        <Badge>{exam.year ?? "Year TBD"}</Badge>
-      </div>
-
-      <h2 className="mt-4 text-lg font-semibold text-slate-950">{exam.title}</h2>
-
-      <dl className="mt-4 grid gap-3 text-sm md:grid-cols-2">
-        {[
-          ["Cluster", exam.cluster],
-          ["Year", exam.year],
-          ["Answer key questions", exam.answer_key_count],
-          ...(usefulOriginalFilename
-            ? ([["Original filename", usefulOriginalFilename]] as const)
-            : []),
-        ].map(([label, value]) => (
-          <div className="rounded-lg bg-slate-50 p-3" key={label}>
-            <dt className="font-semibold text-slate-800">{label}</dt>
-            <dd className="mt-1 break-words text-slate-600">
-              {value === null || value === undefined || value === "" ? "Not available" : value}
-            </dd>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-base font-semibold text-foreground">{exam.title}</h2>
+            <Badge tone={getStatusTone(exam.answer_key_status)}>{getStatusLabel(exam.answer_key_status)}</Badge>
           </div>
-        ))}
-      </dl>
-
-      <div className="mt-5 flex flex-wrap gap-2">
-        <button
-          className="min-h-10 rounded-md bg-blue-700 px-3 text-sm font-semibold text-white transition hover:bg-blue-800"
-          onClick={onManage}
-          type="button"
-        >
-          Manage Key
-        </button>
-        <button
-          className="min-h-10 rounded-md border border-blue-200 bg-blue-50 px-3 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:text-blue-300"
-          disabled={isOpeningPdf}
-          onClick={onOpenPdf}
-          type="button"
-        >
-          {isOpeningPdf ? "Opening..." : "Open PDF"}
-        </button>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            {exam.cluster ?? "Cluster not set"} · {exam.year ?? "Year not set"} · {exam.answer_key_count}/100 answers
+          </p>
+          {usefulOriginalFilename ? <p className="mt-1 break-all text-xs text-[var(--muted)]">{usefulOriginalFilename}</p> : null}
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <button className="ui-button ui-button-secondary" disabled={isOpeningPdf} onClick={onOpenPdf} type="button">
+            {isOpeningPdf ? "Opening…" : "Open PDF"}
+          </button>
+          <button className="ui-button ui-button-primary" onClick={onManage} type="button">Manage key</button>
+        </div>
       </div>
     </Card>
   );
 }
 
 function ExamKeyEditorModal({
-  bulkText,
-  draftRows,
-  editorError,
-  exam,
-  isEditorLoading,
-  isSaving,
-  onAddRow,
-  onApplyParsed,
-  onBulkTextChange,
-  onClose,
-  onDeleteRow,
-  onSave,
-  onUpdateRow,
-  parsedAnswers,
-  parseErrors,
-  successMessage,
+  bulkText, draftRows, editorError, exam, isEditorLoading, isExtracting, isSaving,
+  onAddRow, onApplyParsed, onBulkTextChange, onClose, onDeleteRow, onExtract, onOpenPdf,
+  onSave, onUpdateRow, parsedAnswers, parseErrors, successMessage,
 }: {
   bulkText: string;
   draftRows: KeyDraftRow[];
   editorError: string | null;
   exam: ExamResourceWithKeyStatus;
   isEditorLoading: boolean;
+  isExtracting: boolean;
   isSaving: boolean;
   onAddRow: () => void;
   onApplyParsed: () => void;
   onBulkTextChange: (value: string) => void;
   onClose: () => void;
   onDeleteRow: (clientId: string) => void;
+  onExtract: () => void;
+  onOpenPdf: () => void;
   onSave: () => void;
   onUpdateRow: (clientId: string, patch: Partial<KeyDraftRow>) => void;
   parsedAnswers: ParsedAnswer[];
   parseErrors: string[];
   successMessage: string | null;
 }) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const isBusy = isEditorLoading || isExtracting || isSaving;
+  const isComplete = ExamKeysService.getExamKeyStatus(draftRows.map((row) => Number(row.question_number))) === "complete";
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    const returnFocusTarget = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    dialog?.showModal();
+    document.body.style.overflow = "hidden";
+    return () => {
+      dialog?.close();
+      document.body.style.overflow = previousOverflow;
+      returnFocusTarget?.focus({ preventScroll: true });
+    };
+  }, []);
+
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4">
-      <form
-        className="max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-lg border border-blue-100 bg-blue-50 p-5 shadow-xl"
-        onSubmit={(event) => {
-          event.preventDefault();
-          onSave();
-        }}
-      >
-        <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">
-              Answer key
-            </p>
-            <h2 className="mt-1 text-xl font-semibold text-slate-950">{exam.title}</h2>
-            <p className="mt-1 text-sm text-slate-600">
-              {exam.cluster ?? "Cluster TBD"} · {exam.year ?? "Year TBD"} ·{" "}
-              {draftRows.length} saved rows in editor
-            </p>
+    <dialog
+      aria-labelledby="answer-key-title"
+      className="m-auto max-h-[92dvh] w-[calc(100%_-_2rem)] max-w-6xl overflow-y-auto rounded-lg border border-border bg-card p-0 text-foreground shadow-xl backdrop:bg-black/50"
+      onCancel={(event) => { event.preventDefault(); if (!isBusy) onClose(); }}
+      ref={dialogRef}
+    >
+      <form onSubmit={(event) => { event.preventDefault(); onSave(); }}>
+        <div className="sticky top-0 z-10 flex flex-wrap items-start justify-between gap-4 border-b border-border bg-card px-5 py-4">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Answer key</p>
+            <h2 className="mt-1 text-lg font-semibold" id="answer-key-title">{exam.title}</h2>
+            <p className="mt-1 text-sm text-[var(--muted)]">{draftRows.length}/100 answers in editor · {isComplete ? "Ready to save" : "Complete questions 1–100 to enable grading"}</p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              className="min-h-10 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
-              onClick={onClose}
-              type="button"
-            >
-              Close
-            </button>
-            <button
-              className="min-h-10 rounded-md bg-blue-700 px-4 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:bg-blue-300"
-              disabled={isSaving || isEditorLoading}
-              type="submit"
-            >
-              {isSaving ? "Saving..." : "Save key"}
-            </button>
+          <div className="flex gap-2">
+            <button className="ui-button ui-button-secondary" disabled={isBusy} onClick={onClose} type="button">Close</button>
+            <button className="ui-button ui-button-primary" disabled={isBusy} type="submit">{isSaving ? "Saving…" : "Save key"}</button>
           </div>
         </div>
-
-        {isEditorLoading ? <ResourceLoadingState /> : null}
-
-        {!isEditorLoading ? (
-          <div className="grid gap-5 xl:grid-cols-[0.85fr_1.15fr]">
-            <Card>
-              <CardHeader eyebrow="Bulk paste" title="Paste answers" />
-              <label className="grid gap-2 text-sm font-semibold text-slate-800">
-                Answer key text
-                <textarea
-                  className="min-h-52 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                  onChange={(event) => onBulkTextChange(event.target.value)}
-                  placeholder={"1 B\n2. D\n3,A"}
-                  value={bulkText}
-                />
-              </label>
-
-              <div className="mt-4 rounded-lg border border-slate-100 bg-white p-3">
-                <p className="text-sm font-semibold text-slate-800">
-                  Parsed preview ({parsedAnswers.length})
-                </p>
-                {parseErrors.length > 0 ? (
-                  <ul className="mt-3 grid gap-2 text-sm text-red-700">
-                    {parseErrors.map((parseError) => (
-                      <li className="rounded-md bg-red-50 p-2" key={parseError}>
-                        {parseError}
-                      </li>
-                    ))}
-                  </ul>
-                ) : parsedAnswers.length > 0 ? (
-                  <div className="mt-3 max-h-44 overflow-y-auto rounded-md border border-slate-100">
-                    {parsedAnswers.slice(0, 20).map((answer) => (
-                      <div
-                        className="flex items-center justify-between border-b border-slate-100 px-3 py-2 text-sm last:border-b-0"
-                        key={answer.question_number}
-                      >
-                        <span>Question {answer.question_number}</span>
-                        <span className="font-semibold text-slate-950">
-                          {answer.correct_answer}
-                        </span>
-                      </div>
-                    ))}
-                    {parsedAnswers.length > 20 ? (
-                      <p className="px-3 py-2 text-sm text-slate-500">
-                        + {parsedAnswers.length - 20} more
-                      </p>
-                    ) : null}
+        <div className="p-5">
+          {isEditorLoading ? <ResourceLoadingState /> : null}
+          {editorError ? <div className="mb-4 whitespace-pre-line rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">{editorError}</div> : null}
+          {successMessage ? <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800" role="status">{successMessage}</div> : null}
+          {!isEditorLoading ? (
+            <fieldset className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]" disabled={isBusy}>
+              <div className="min-w-0 space-y-5">
+                <section className="rounded-md border border-border p-4" aria-labelledby="read-key-heading">
+                  <h3 className="font-semibold" id="read-key-heading">1. Read the printed key</h3>
+                  <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Copy the 100 answers printed in this exam PDF into a preview. Review them before applying and saving.</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button className="ui-button ui-button-primary" onClick={onExtract} type="button">{isExtracting ? "Reading PDF…" : "Extract from PDF"}</button>
+                    <button className="ui-button ui-button-secondary" onClick={onOpenPdf} type="button">Open PDF</button>
                   </div>
-                ) : (
-                  <p className="mt-2 text-sm leading-6 text-slate-500">
-                    Paste question-answer lines to preview them before adding them to the editor.
-                  </p>
-                )}
+                </section>
+                <section className="rounded-md border border-border p-4" aria-labelledby="preview-key-heading">
+                  <h3 className="font-semibold" id="preview-key-heading">2. Review and apply</h3>
+                  <label className="ui-label mt-3">
+                    Preview or paste answers
+                    <textarea className="ui-field min-h-36 font-mono" onChange={(event) => onBulkTextChange(event.target.value)} placeholder={"1 B\n2. D\n3,A"} value={bulkText} />
+                  </label>
+                  <p className="mt-2 text-xs text-[var(--muted)]">One question and answer per line. Applying replaces matching answers in the editor; other rows stay as they are.</p>
+                  {parseErrors.length > 0 ? (
+                    <ul className="mt-3 max-h-40 list-inside list-disc overflow-y-auto text-sm text-red-700" role="alert">{parseErrors.map((error) => <li key={error}>{error}</li>)}</ul>
+                  ) : parsedAnswers.length > 0 ? (
+                    <div className="mt-3 grid max-h-44 grid-cols-5 gap-1 overflow-y-auto text-xs" aria-label="Parsed answer preview">
+                      {parsedAnswers.map((answer) => <span className="rounded bg-card-muted p-1.5 text-center" key={answer.question_number}>{answer.question_number}. <strong>{answer.correct_answer}</strong></span>)}
+                    </div>
+                  ) : null}
+                  <button className="ui-button ui-button-secondary mt-3" disabled={parseErrors.length > 0 || parsedAnswers.length === 0} onClick={onApplyParsed} type="button">Apply {parsedAnswers.length || "preview"} answers</button>
+                </section>
               </div>
-
-              <button
-                className="mt-4 min-h-10 rounded-md border border-blue-200 bg-blue-50 px-3 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:text-blue-300"
-                disabled={parseErrors.length > 0 || parsedAnswers.length === 0}
-                onClick={onApplyParsed}
-                type="button"
-              >
-                Apply parsed answers
-              </button>
-            </Card>
-
-            <Card>
-              <CardHeader
-                action={
-                  <button
-                    className="min-h-10 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
-                    onClick={onAddRow}
-                    type="button"
-                  >
-                    Add row
-                  </button>
-                }
-                eyebrow="Manual edit"
-                title="Answer rows"
-              />
-
-              {editorError ? (
-                <div className="mb-4 whitespace-pre-line rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-                  {editorError}
+              <section className="min-w-0 rounded-md border border-border p-4" aria-labelledby="edit-key-heading">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="font-semibold" id="edit-key-heading">3. Edit and save</h3>
+                  <button className="ui-button ui-button-secondary" onClick={onAddRow} type="button">Add answer</button>
                 </div>
-              ) : null}
-
-              {successMessage ? (
-                <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-                  {successMessage}
-                </div>
-              ) : null}
-
-              {draftRows.length === 0 ? (
-                <div className="grid min-h-44 place-items-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-center">
-                  <div>
-                    <p className="font-semibold text-slate-950">No answer rows yet</p>
-                    <p className="mt-1 text-sm text-slate-600">
-                      Paste answers or add rows manually to start this key.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[720px] text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-xs uppercase tracking-[0.14em] text-slate-500">
-                        <th className="py-3 pr-3">Question</th>
-                        <th className="py-3 pr-3">Correct answer</th>
-                        <th className="py-3 pr-3">Instructional area</th>
-                        <th className="py-3 text-right">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {draftRows.map((row) => (
-                        <tr className="border-b border-slate-100 last:border-b-0" key={row.clientId}>
-                          <td className="py-3 pr-3">
-                            <input
-                              className="h-10 w-28 rounded-md border border-slate-200 px-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                              min={1}
-                              onChange={(event) =>
-                                onUpdateRow(row.clientId, {
-                                  question_number: event.target.value,
-                                })
-                              }
-                              type="number"
-                              value={row.question_number}
-                            />
-                          </td>
-                          <td className="py-3 pr-3">
-                            <select
-                              className="h-10 rounded-md border border-slate-200 bg-white px-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                              onChange={(event) =>
-                                onUpdateRow(row.clientId, {
-                                  correct_answer: event.target.value as ExamCorrectAnswer,
-                                })
-                              }
-                              value={row.correct_answer}
-                            >
-                              {answerOptions.map((answer) => (
-                                <option key={answer} value={answer}>
-                                  {answer}
-                                </option>
-                              ))}
-                            </select>
-                          </td>
-                          <td className="py-3 pr-3">
-                            <input
-                              className="h-10 w-full rounded-md border border-slate-200 px-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                              onChange={(event) =>
-                                onUpdateRow(row.clientId, {
-                                  instructional_area: event.target.value,
-                                })
-                              }
-                              placeholder="Optional"
-                              value={row.instructional_area}
-                            />
-                          </td>
-                          <td className="py-3 text-right">
-                            <button
-                              className="min-h-10 rounded-md border border-red-200 bg-white px-3 text-sm font-semibold text-red-700 transition hover:bg-red-50"
-                              onClick={() => onDeleteRow(row.clientId)}
-                              type="button"
-                            >
-                              Delete
-                            </button>
-                          </td>
+                <p className="mt-2 text-sm text-[var(--muted)]">Partial keys can be saved. Grading opens when all 100 answers are present.</p>
+                {draftRows.length === 0 ? (
+                  <p className="mt-5 rounded-md bg-card-muted p-5 text-sm text-[var(--muted)]">No answers yet. Extract the printed key, paste answers, or add them manually.</p>
+                ) : (
+                  <div className="mt-4 max-h-[55vh] overflow-auto">
+                    <table className="w-full min-w-[420px] text-left text-sm">
+                      <thead className="sticky top-0 bg-card"><tr className="border-b border-border text-xs text-[var(--muted)]"><th className="py-2 pr-2">Question</th><th className="py-2 pr-2">Answer</th><th className="py-2 pr-2">Area (optional)</th><th><span className="sr-only">Actions</span></th></tr></thead>
+                      <tbody>{draftRows.map((row, index) => (
+                        <tr className="border-b border-border last:border-0" key={row.clientId}>
+                          <td className="py-2 pr-2"><input aria-label={`Question number, row ${index + 1}`} className="ui-field w-20" max={100} min={1} onChange={(event) => onUpdateRow(row.clientId, { question_number: event.target.value })} type="number" value={row.question_number} /></td>
+                          <td className="py-2 pr-2"><select aria-label={`Answer for question ${row.question_number || index + 1}`} className="ui-field w-20" onChange={(event) => onUpdateRow(row.clientId, { correct_answer: event.target.value as ExamCorrectAnswer })} value={row.correct_answer}>{answerOptions.map((answer) => <option key={answer} value={answer}>{answer}</option>)}</select></td>
+                          <td className="py-2 pr-2"><input aria-label={`Instructional area for question ${row.question_number || index + 1}`} className="ui-field" onChange={(event) => onUpdateRow(row.clientId, { instructional_area: event.target.value })} placeholder="Optional" value={row.instructional_area} /></td>
+                          <td className="py-2 text-right"><button aria-label={`Remove question ${row.question_number || index + 1}`} className="ui-button ui-button-danger" onClick={() => onDeleteRow(row.clientId)} type="button">Remove</button></td>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </Card>
-          </div>
-        ) : null}
+                      ))}</tbody>
+                    </table>
+                  </div>
+                )}
+              </section>
+            </fieldset>
+          ) : null}
+        </div>
       </form>
-    </div>
+    </dialog>
   );
 }

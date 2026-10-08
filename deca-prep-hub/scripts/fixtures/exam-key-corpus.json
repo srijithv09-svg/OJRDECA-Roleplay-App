@@ -1,0 +1,201 @@
+{
+  "source": "Independent pdfplumber extraction of explicitly headed key pages; keyed by PDF SHA-256.",
+  "exams": {
+    "036623fa5bd5093677ec014524be6d9b353b2adc491a6c00e05c42dcc3155394": {
+      "filename": "64b178f961225d5f105ac261_HS_Finance_Cluster_Sample_Exam_23.pdf",
+      "answer_sha256": "7fbbca95aa792bd29f223bc73836b235c49964cd8e579c35f6a576e8250d80a6"
+    },
+    "101a0af81310443202f471298cd251bd5b19259b6568e019682982327af006b5": {
+      "filename": "616dbabab1ec7f11da4888cc_HS_Business_Management_Administration_Cluster_Sample_Exam_2017.pdf",
+      "answer_sha256": "35971001a4c5328ae0e852a29555d3af283a3d5be94fca5faa150d0f57a5e286"
+    },
+    "1167e060f94a9b962b3cc7dcdd3f4bde361124393ab94d4517eb9292071fbb05": {
+      "filename": "68e01834f1bc9671a5dd255d_67c1d6a639574efcac4ebd96_24-25_Marketing-District-Exam.pdf",
+      "answer_sha256": "3cad45d3582ffea2173bee47f5d60965b55859b3589ef6aecf41903b7d045b53"
+    },
+    "14fa75f7346cdbc8b27efeede9a7f31cd4876c22d2e53f48232455b9041e6515": {
+      "filename": "616dbd7afd66de41088ae3f3_HS_Entrepreneurship_Sample_Exam.pdf",
+      "answer_sha256": "aeb7990802919c1ddae8c9f84392e14b03c1b7edc64ca24d94c501360ddc1314"
+    },
+    "153ffbc44a6a7e6eec17413efebbd601552e45bd74238e1b644dee2bef38c0ec": {
+      "filename": "68e016a7311d5a62f0543adc_67c1d68ac7bf2c1ccdb27759_24-25_Hospitality-District-Exam.pdf",
+      "answer_sha256": "06b1be9b5be36509937df2e1e20010f9719db93ebd667e5d8005eb6e4360b523"
+    },
+    "167cf77a39314fee32ad0610b6ac72df9db63ed3c1725437ef3049e5ec0f1df8": {
+      "filename": "616dbd6259ef8bd23c296877_HS_Finance_Cluster_Sample_Exam_21.pdf",
+      "answer_sha256": "940345d66c5d78b3f5a3aa8ae6065198ef27f1c6d1cdd5e90269c1775bf232eb"
+    },
+    "17b9385e8eb73a05e283a91894f8f96a1497e0be5fe23a36b00ddc6296191133": {
+      "filename": "616dbac7ec20fce01ca65f1e_HS_Business_Management_Cluster_Sample_Exam_21.pdf",
+      "answer_sha256": "4b6553a9fc2f2b9c0b6e2e4067a4a494fef09a174ffb3d2a8e561749950dd28d"
+    },
+    "1cfcf72787a6b02cce3780ec3dc95ca74001386308eef2d4082fc9f814638845": {
+      "filename": "616dbd33552c99403cfcaa0f_HS_Hospitality_Cluster_Sample_Exam_2018.pdf",
+      "answer_sha256": "23aa6c9c9213df39dc5f36ae9c041763f04ccda5912f40e791c160afafcd0f5d"
+    },
+    "21aae39ef9028f498bd598c919afd84da80a2f4f1d47c4083d5e3162697d9c8b": {
+      "filename": "616dbd96dcca4ddfcf85e509_HS_Marketing_Cluster_Sample_Exam_2018.pdf",
+      "answer_sha256": "ca85e8f0e745ac49df77c702fdd1fa834f3737755133617764164adde6e1cf8c"
+    },
+    "2332075f506d7c3b125586d5d7e1478bb52339f7622dfaf91677f32b412ded2b": {
+      "filename": "616dbd5d8eb0b139f4aba64f_HS_Finance_Cluster_Sample_Exam.pdf",
+      "answer_sha256": "7e59aa7eb8e30fbfb57b01e9304a82f5c2f8d1cbd6ed65483c0a1fb1ec8c9361"
+    },
+    "24a44990d127ba850f6733b6e1054fba262db1c6efab2a8e9d9f32edc0e858c1": {
+      "filename": "62e04d104e79bb3d6f9ce11b_HS_Finance_Cluster_Sample_Exam_22.pdf",
+      "answer_sha256": "ade6675eb6ffcfecc46d0625877c117af1c91efe8aa4e6066f3c406a7ace21bf"
+    },
+    "2a1e6d450c41045342e0796a0b50b0d704c1e2efe9adfe408dda2c59e0ecd0d4": {
+      "filename": "6886e66075c6026ba3153a16_C25_HS_Entre_exam.pdf",
+      "answer_sha256": "0499e6a669d898251f4b09e77cb264fd45e349c907c06590e6f636d5534bd0b9"
+    },
+    "33803d7119c597ad63f914861a04bbe72d3e35f363dd3de895092a850a870355": {
+      "filename": "66be69312830f50c368e2a32_HS_Hospitality_Tourism_Cluster_Sample_Exam_24.pdf",
+      "answer_sha256": "ad193cdae5f900afe121ad2e81a3676e6763aef4f838686ded496ac61a42cc89"
+    },
+    "379e5756f9fa98d586648108af75bf7a7442f1836900e554553684fef271b4e2": {
+      "filename": "64b1789fca09338c6730a263_HS_Hospitality_Tourism_Cluster_Sample_Exam_23.pdf",
+      "answer_sha256": "3e4f4a0097d4ff3f4a2c410e1208008f2e840761cbd8f73e26e68aedb228187a"
+    },
+    "3dc54028690cf8fb80bcce6e25a1991a696c97c2e8f5e15a161796032eee1218": {
+      "filename": "616dbd7cfc41b8c649ee2aaa_HS_Entrepreneurship_Sample_Exam_20.pdf",
+      "answer_sha256": "337e176dd9fc29159df1c752c84948f4e949b2adb7c3d23f8220468453a9d6f1"
+    },
+    "3f341328d5f4f86e5fad1d6feee6d82cbc771a08d44fda8f2f513c63909fdae5": {
+      "filename": "616dbd3155f928911021226b_HS_Hospitality_Cluster_Sample_Exam_2017.pdf",
+      "answer_sha256": "55f641bdeeaf359caddcf1829b4c5b8784596b66ab84fc44ebf836d8fd89b4ef"
+    },
+    "4fc90adad065561aef3a6ace0d30fc58abc6316730baae97ae847a7f18545f2c": {
+      "filename": "616dbd3e09bfd22124eb1434_HS_Hospitality_Tourism_Cluster_Sample_Exam.pdf",
+      "answer_sha256": "4a75ed3019ecea3efb6bfc26935e523dc6b095a674487fa57f053f8846e60fa8"
+    },
+    "531c4ad7bb6fd3e3dd3638d1e669e77778aac67064b2318f96c7aa5b2b290891": {
+      "filename": "62e048c1406c8fea650d71f8_HS_Marketing_Cluster_Sample_Exam_22.pdf",
+      "answer_sha256": "5ed2035fce178598844ad2beac817ac9f8485df943fcf7376ff0405e2e1a17d2"
+    },
+    "63e77af3aa5d9bd41e9d3446e4f8e08ac67be1670106f77ab55b73ed460d08d8": {
+      "filename": "6886e64343b685091de31875_C25_HS_FIN_exam.pdf",
+      "answer_sha256": "85caeb64f59fd9b67e1382218c6a43f1b35b86c47fd213d639bab293e386d360"
+    },
+    "6606dc5773659a82639146385baabda194351817c0d31cf1e7b84683f0126bf9": {
+      "filename": "64b1794fad5970013dfc0c27_HS_Business_Management_Cluster_Sample_Exam_23.pdf",
+      "answer_sha256": "a61c0d2a00c8cbdd9bd74767a6ebcf1d035cead7ee156f476952039b9ac938f6"
+    },
+    "6c5ee1618802b659754902cb23bd41c04a874b46b0e8ba7575852d6f9ecbc58e": {
+      "filename": "66be694c08c3c7a92e6c0d4c_HS_Marketing_Cluster_Sample_Exam_24.pdf",
+      "answer_sha256": "9236ce7a212bfd7b03dbaef8fdfeb68741a611fc31730ebf88f27f92cf31104b"
+    },
+    "7f658e2187cdd13bd6ef17b69adb7f4d9291a2c7b156c3f14a8b65908daf91db": {
+      "filename": "616dbd7ff339b285cf04ef31_HS_Entrepreneurship_Sample_Exam_21.pdf",
+      "answer_sha256": "0567938b1fa40e0acb097589940458156feaa905927a97cdd1f51ef4255ba345"
+    },
+    "85a41e83909b108e49d82baf3af0970bfb71ce36a25f02dfd455d01887edf9b2": {
+      "filename": "616dbd76286465ddcddcb1b0_HS_Entrepreneurship_Sample_Exam_2018.pdf",
+      "answer_sha256": "8e68ceebdc1a3f03b7e16b148c5e5f39b23783cda1afead07b1afea7c4fadc70"
+    },
+    "8baee6c2dd8cd1e3e934126a814eb023a39ee782c5fb4021e85eaeec684c869f": {
+      "filename": "68e016bde1e7ca023b7ccd0c_67c1d710e252d5f3c3e2087d_24-25_Finance-District-Exam.pdf",
+      "answer_sha256": "6bfd921d00ea510af56d8e5a6374ba338de19acf80119fbb41d067c853f1b1a2"
+    },
+    "8cb710a374f70bcbcfe12a5e44e0b124c8921a2f6987ddbcb17354848c7b25b4": {
+      "filename": "66be6944eb07b2b1763c605d_HS_Entrepreneurship_Sample_Exam_24.pdf",
+      "answer_sha256": "06beb38a8f8b411c4931ff30fc367928dd2c9f1ddbcac8ec1fa88b81919b81da"
+    },
+    "8f041dbda3319018ae30bb038a4425521753656a111783d6f3abefcf6a274a3c": {
+      "filename": "616dbb0d5cd5e7d6f5dd6d26_HS_Business_Management_Cluster_Sample_Exam_19.pdf",
+      "answer_sha256": "8bad67ea83fce1be8807098d7dafdd40de61e81a58179ca5790914904d5e4ca3"
+    },
+    "8ff66d4751cddb92db228dd09ccf65c55b0bba49ff7e84d78dcab29a7affe795": {
+      "filename": "616dbd593e1173d4b5f1e2b5_HS_Finance_Cluster_Sample_Exam_2018.pdf",
+      "answer_sha256": "0262ea44af1767b3827a9fdef128974956a8f23958e6d3ad00206947657c64a4"
+    },
+    "93844d84a6db188b32dcf130998f0a6fffccd0ad0cbade5ac151b1a3046c498a": {
+      "filename": "6886e685e6ade6405c14c0c8_C25_HS_MKTG_exam.pdf",
+      "answer_sha256": "8142a58a00e16e9b4ef10c284dc7867182a7e6d085b722b9ee45c2280e186cea"
+    },
+    "9b57ea0a42d514b0075217d13024f0d8f90d282c3b68fdd3397e1ae584886648": {
+      "filename": "6886e6a575c6026ba3157639_C25_HS_BMA_exam.pdf",
+      "answer_sha256": "08fe214f56441e68f6325b075dcac49f8af91c47bfceff2c57431533a3ffcfc9"
+    },
+    "9b8ed8aa52be86b8486246e50f104691b5f925d08bd5527b5866786a72373bb7": {
+      "filename": "616dbd3709bfd2ba59eb0baa_HS_Hospitality_Tourism_Cluster_Sample_Exam_20.pdf",
+      "answer_sha256": "ee74578aea4ede8c873e375df5f0a0627d6fb5317fe6e1eac17cc002cfbb51f0"
+    },
+    "9d26eb8ab578709ab4d6054fb363f9cab79e6e6d9a37fd5c8b780207539c2ce6": {
+      "filename": "616dbd9955f92821ac216fca_HS_Marketing_Cluster_Sample_Exam.pdf",
+      "answer_sha256": "cdeee9a2984ed6125a049736f22eaf6e0f588229f852d82b1469cc6d5b6c1041"
+    },
+    "a2bc42a96dd604713969bfd9e776fc75734f667d594310cf831ddb6695f93614": {
+      "filename": "66be69553dc05323ec1c376a_HS_Business_Management_Cluster_Sample_Exam_24.pdf",
+      "answer_sha256": "7fd240c5a7a6fab0b6d6e0f87190b11bc6f3d200010923de84f34e623b77f643"
+    },
+    "aacff3765432e95e68279756ec8fa40660d2229c41ab9843f4323b77ac262bb0": {
+      "filename": "616dbd55aafdb9dfeefc4f9e_HS_Finance_Cluster_Sample_Exam_2017.pdf",
+      "answer_sha256": "1a96ed83f813d4a9fe0d923558b4242a9e4bb3cf547fd4353eb5947c4fc522d0"
+    },
+    "acad9ceb9966524f56c64ffb3d5b84b52d8b0d02bd404cf897a657e09c3171ac": {
+      "filename": "6886e61d75c6026ba315033c_C25_HS_HOSP_exam.pdf",
+      "answer_sha256": "8aa08e46441c2e76308b3f13e0445df57762bf9bbb3329eba4e5d9403ffdb3bf"
+    },
+    "b4d373cf06f8393ef25de2b82d3b9c75ddfee58adde1aec9d629ef7ac76ce4ea": {
+      "filename": "68e018479230a376c2296d07_67c1d6648bc25fcebcdbbaee_24-25_BMA-District-Exam.pdf",
+      "answer_sha256": "e9c5983f96f6fb5388f2925452961d03b0ed69071ad60f0feb5a3b26b7251cf5"
+    },
+    "bc612b30cd541e3e2eae4c67eb21d5f591f233a6469c1f5691777ce2df2580b7": {
+      "filename": "616dbd3966d80c9935cd870a_HS_Hospitality_Tourism_Cluster_Sample_Exam_21.pdf",
+      "answer_sha256": "85119de3215cbdb54d64a2a5b4702d4207d611c21689a13843c8c993082b63a0"
+    },
+    "bcdfcf2f59de65ecc61b263c2a83644776630f4c73beedd7a9fc21783ad50d9a": {
+      "filename": "616dbd5f2e9186f657cdebe4_HS_Finance_Cluster_Sample_Exam_20.pdf",
+      "answer_sha256": "ce32199ef7c09040d4db60f421808dc55489293f7ec88ef9789034276abc5021"
+    },
+    "c3d855dc5fcce233adb9ea7c2b5b2e32fb81750a4c4ba7e452517abb9dd3c955": {
+      "filename": "62e04d48adf8c94afb66d6c4_HS_Business_Management_Cluster_Sample_Exam_22.pdf",
+      "answer_sha256": "735c3ae79d70e2a5abb8b772e268f23fd0beed8f934fcdf3f238b60a3e80aca4"
+    },
+    "d73421b35b39ba5f021978832ec221d8f4f1305e9e81889af082ee964cf03df7": {
+      "filename": "616dbd9c09bfd2ececeb8c9b_HS_Marketing_Cluster_Sample_Exam_20.pdf",
+      "answer_sha256": "6fcd61e24ae60c259a20548fec8489be8db4f2753c5f2eac9399ddca31cf3a37"
+    },
+    "d842979d2a52600d1e4747f001d900ff89aba3ca75fc21021bd590c508602267": {
+      "filename": "616dbac3da869c8c908e8d35_HS_Business_Management_Cluster_Sample_Exam_20.pdf",
+      "answer_sha256": "988f40bc6e5b06d37a0431d7f22767a390140726670e708c1b55ba6bb4d80e5f"
+    },
+    "d958c5923bdcb3b17d9d228103ff4cf994d4c67d50028db1798ad71292fceac1": {
+      "filename": "62e04d31232b5a236d383652_HS_Entrepreneurship_Sample_Exam_22.pdf",
+      "answer_sha256": "cb60594c4e73fe16f08ff42712b3cfa55277d66154aec4fec853565f1b9f16c1"
+    },
+    "ddfc9594cadf7724ac81c8df2236c97a96db046e0501401507f55386fc230c80": {
+      "filename": "66be69393d9c7a0ccf119f5e_HS_Finance_Cluster_Sample_Exam_24.pdf",
+      "answer_sha256": "a00babb477f8538aef466b1f4fa02589e0e3cd7b947065db84329a7bddfd410a"
+    },
+    "e2d43998894bda2036ba8ce2dce12a00c1c1248e7a021aeae0b8be84c3d2e71a": {
+      "filename": "68e016de93943eae1ee1be10_67c1d6bcee16ad4f3fd05cc6_24-25_Entre-District-Exam.pdf",
+      "answer_sha256": "cc4ee0861aba0bae307cbb5619825fd4e93d4c718ce836f6145d4c711c736b42"
+    },
+    "e644fd794031bef3bbec08b2b5f3d1c92b51afd6f99d67958791070344add62a": {
+      "filename": "616dbd9366d80cc59bcddb00_HS_Marketing_Cluster_Sample_Exam_2017.pdf",
+      "answer_sha256": "f9865a984391da22c46084f52f3a3757b701aaf4df361ef5f234ed61257ff67a"
+    },
+    "efeaaf40f50722131c828064655be943e7fd9fbee3b0998e90638f8a56457b24": {
+      "filename": "616dbd9eab8cf45080461acc_HS_Marketing_Cluster_Sample_Exam_21.pdf",
+      "answer_sha256": "7fc157e3347cb2c1118ec5a9c755a91abfc5df9cc3f6166ded1875f784bdaaea"
+    },
+    "f80f6a8516b1b4dec02814e64a984a5abd935df85176157ff73175a2956fd8aa": {
+      "filename": "616dbabe9b520b5c1ccdcc83_HS_Business_Management_Administration_Cluster_Sample_Exam_2018.pdf",
+      "answer_sha256": "350f0c7fc7309cdbf873f7499625d22185cd824de0b9ff46a9ecf828fa66142c"
+    },
+    "f8be4b259c7992adef2aaa28f990e791d3533e11b26ef966f8b05aa934311e75": {
+      "filename": "64b179342cbd63151825ff49_HS_Marketing_Cluster_Sample_Exam_23.pdf",
+      "answer_sha256": "094d91dc5b371c060e9991ae3f4613957600402494fe7efe9a522d7f4179d2b0"
+    },
+    "fc866c77f37ef6e99a4987b7f291e2e107372f5c4cc4aa69cc3871f0aae01e1f": {
+      "filename": "64b17916ad5970013dfbf477_HS_Entrepreneurship_Sample_Exam_23.pdf",
+      "answer_sha256": "5333360cfc4dbe4820aa36c641336834728d2c4691535b81ad5860a52d8e1484"
+    },
+    "ffc6f11e15e983a666692adebd8e839a892d9816009d7664e2e72a32d19e7b3b": {
+      "filename": "62e04cfbcff4ab05412fddea_HS_Hospitality_Tourism_Cluster_Sample_Exam_22.pdf",
+      "answer_sha256": "ed490301ebba7eadf4e88e310cf85313d552f22962ce0e9646ea32f1c91d1c7c"
+    }
+  }
+}

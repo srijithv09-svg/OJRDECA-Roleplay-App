@@ -1,6 +1,11 @@
 <!-- BEGIN:nextjs-agent-rules -->
-# Next.js version-specific guidance
-Read relevant guides in `node_modules/next/dist/docs/` before changing framework behavior. This app uses Next.js 16 App Router.
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
 <!-- END:nextjs-agent-rules -->
 
 # OJR DECA Prep Database
@@ -16,6 +21,7 @@ Internal preparation library for Owen J. Roberts High School DECA. The current p
 - Practice uses approved uploaded PDFs. Reference includes uploaded PI documents, cluster guides, and exam blueprints.
 - Roleplay practice supports a preparation timer, written notes, self-reflection, partner feedback, confidence, and optional audio recordings.
 - Exam answers are graded server-side using manually managed answer keys; unanswered questions count as incorrect.
+- Admins/advisors may read the explicitly printed PDF answer key into a preview without AI. Review, apply, and save are separate steps. Grading requires exactly questions 1–100; missing or duplicate answers never enable grading.
 - Preserve existing data unless the user explicitly authorizes a reset. The user authorized a content reset on 2026-10-06; resources, answer keys, attempts, recordings, and retired Learn/AI tables were cleared after a local recovery export. Accounts and roles were preserved. Historical SQL migrations stay intact.
 - `docs/ojr-deca-roleplay-prep-rebuild-plan.md` is historical, superseded by this direction.
 
@@ -61,3 +67,5 @@ Light/dark themes use tokens in `src/app/globals.css`, the `dark` class on `<htm
 ## Verification
 
 Run `npm run lint`, `npx tsc --noEmit`, and `npm run build` after changes. `npx next typegen` regenerates route declarations after removing routes. Against a running server, run `npm run smoke:routes`. `npm run check:db` verifies the active tables without writing data. Smoke tests don't prove authenticated flows; report the limits of browser or API checks honestly.
+
+`npm run test:answer-keys` checks extraction, readiness, and response-limit regressions. `npm run verify:answer-key-corpus` checks all local exam PDFs against independently read answer hashes; PDFs remain ignored. `npm run test:resource-upload`, `npm run test:resource-metadata`, and `npm run test:resource-listing` cover upload recovery, classification, and large libraries. `npm run test:browser` runs isolated student/admin browser fixtures on port 3103; it mocks backend requests and does not write production data.

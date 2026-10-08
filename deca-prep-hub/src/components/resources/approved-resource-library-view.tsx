@@ -243,7 +243,7 @@ export function ApprovedResourceLibraryView({
         </div>
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm">
           <p className="text-[var(--muted)]" role="status">
-            {hasFilters ? `${filteredResources.length} of ${resources.length}` : resources.length} {emptyLabel}
+            {hasFilters ? `${filteredResources.length} of ${resources.length}` : resources.length} {resources.length === 1 ? emptyLabel.replace(/s$/, "") : emptyLabel}
           </p>
           {hasFilters ? <button className="inline-flex min-h-9 items-center font-medium text-primary" onClick={clearFilters} type="button">Clear filters</button> : null}
         </div>

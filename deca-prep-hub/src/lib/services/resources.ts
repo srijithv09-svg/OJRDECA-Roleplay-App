@@ -135,28 +135,28 @@ export const ResourcesService = {
   } = {}): Promise<ResourceListItem[]> {
     const supabase = getSupabaseClient();
 
-    let query = supabase
-      .from("resources")
-      .select(resourceColumns)
-      .order("year", { ascending: false })
-      .order("title", { ascending: true });
+    const resources: ResourceListItem[] = [];
+    const pageSize = 1000;
+    for (let offset = 0; ; offset += pageSize) {
+      let query = supabase
+        .from("resources")
+        .select(resourceColumns)
+        .order("year", { ascending: false })
+        .order("title", { ascending: true })
+        .order("id", { ascending: true })
+        .range(offset, offset + pageSize - 1);
 
-    if (resourceType) {
-      query = query.eq("resource_type", resourceType);
+      if (resourceType) query = query.eq("resource_type", resourceType);
+      if (approvalStatus) query = query.eq("approval_status", approvalStatus);
+
+      const { data, error } = await withDebugTimeout(query, "Resources list");
+      if (error) {
+        logDeveloperError("[resources] list failed", error);
+        throw new Error(getFriendlyErrorMessage(error, "Unable to load resources."));
+      }
+      resources.push(...(data ?? []));
+      if ((data?.length ?? 0) < pageSize) return resources;
     }
-
-    if (approvalStatus) {
-      query = query.eq("approval_status", approvalStatus);
-    }
-
-    const { data, error } = await withDebugTimeout(query, "Resources list");
-
-    if (error) {
-      logDeveloperError("[resources] list failed", error);
-      throw new Error(getFriendlyErrorMessage(error, "Unable to load resources."));
-    }
-
-    return data ?? [];
   },
 
   async listApprovedRoleplays(): Promise<ResourceListItem[]> {
@@ -180,23 +180,28 @@ export const ResourcesService = {
   }): Promise<PublicResourceListItem[]> {
     const supabase = getSupabaseClient();
 
-    const { data, error } = await withDebugTimeout(
-      supabase
-        .from("resources")
-        .select(publicResourceColumns)
-        .eq("approval_status", "approved")
-        .eq("resource_type", resourceType)
-        .order("year", { ascending: false })
-        .order("title", { ascending: true }),
-      "Approved public resources",
-    );
-
-    if (error) {
-      logDeveloperError("[resources] approved public list failed", error);
-      throw new Error(getFriendlyErrorMessage(error, "Unable to load approved resources."));
+    const resources: PublicResourceListItem[] = [];
+    const pageSize = 1000;
+    for (let offset = 0; ; offset += pageSize) {
+      const { data, error } = await withDebugTimeout(
+        supabase
+          .from("resources")
+          .select(publicResourceColumns)
+          .eq("approval_status", "approved")
+          .eq("resource_type", resourceType)
+          .order("year", { ascending: false })
+          .order("title", { ascending: true })
+          .order("id", { ascending: true })
+          .range(offset, offset + pageSize - 1),
+        "Approved public resources",
+      );
+      if (error) {
+        logDeveloperError("[resources] approved public list failed", error);
+        throw new Error(getFriendlyErrorMessage(error, "Unable to load approved resources."));
+      }
+      resources.push(...(data ?? []));
+      if ((data?.length ?? 0) < pageSize) return resources;
     }
-
-    return data ?? [];
   },
 
   async listRecentApprovedResources(limit = 6): Promise<ResourceListItem[]> {

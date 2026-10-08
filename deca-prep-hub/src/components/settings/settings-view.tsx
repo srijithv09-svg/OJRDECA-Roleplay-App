@@ -124,6 +124,7 @@ export function SettingsView() {
               Main cluster
               <select
                 className="min-h-11 rounded-md border border-slate-200 bg-white px-3 text-sm font-normal text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                disabled={isSavingCluster || !profile}
                 onChange={(event) => setSelectedCluster(event.target.value as DecaClusterPreference | "")}
                 value={selectedCluster}
               >

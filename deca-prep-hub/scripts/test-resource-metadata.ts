@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { detectResourceMetadata, textClearlyIndicatesReference } from "../src/lib/resources/metadata-detection";
 import { uploadResourceBatch } from "../src/lib/resources/upload";
+import { normalizeResourceUploadMetadata } from "../src/lib/resources/upload-metadata";
 
 test("reference labels take priority over event codes and exam keywords", () => {
   for (const filename of [
@@ -37,4 +38,25 @@ test("a manually assigned reference type reaches the upload endpoint without per
     return Response.json({ uploadedCount: 1, results: [{ resource: { id: "reference-resource" } }] });
   });
   assert.equal(result.uploadedCount, 1);
+});
+
+test("reviewed empty metadata survives upload while omitted fields retain filename detection", () => {
+  const filename = "MCS_2025_Roleplay.pdf";
+  const detected = normalizeResourceUploadMetadata(filename);
+  assert.equal(detected.event_code, "MCS");
+  assert.equal(detected.year, 2025);
+  const cleared = normalizeResourceUploadMetadata(filename, {
+    original_filename: filename, event_code: null, year: null, instructional_area: "", cluster: "",
+  });
+  assert.equal(cleared.event_code, null);
+  assert.equal(cleared.event_name, null);
+  assert.equal(cleared.event_category, null);
+  assert.equal(cleared.year, null);
+  assert.equal(cleared.instructional_area, null);
+  assert.equal(cleared.cluster, null);
+  const selected = normalizeResourceUploadMetadata(filename, { original_filename: filename, event_code: " act ", resource_type: "reference" });
+  assert.equal(selected.event_code, "ACT");
+  assert.equal(selected.cluster, "Finance");
+  assert.equal(selected.instructional_area, null);
+  assert.equal(selected.year, 2025);
 });

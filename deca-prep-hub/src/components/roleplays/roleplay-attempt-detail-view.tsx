@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
@@ -292,15 +292,24 @@ function DeleteAttemptDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    dialog?.showModal();
+    return () => dialog?.close();
+  }, []);
+
   return (
-    <div
-      aria-modal="true"
-      className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4"
-      role="dialog"
+    <dialog
+      aria-labelledby="delete-attempt-title"
+      className="m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-md bg-card p-0 text-foreground"
+      onCancel={onCancel}
+      ref={dialogRef}
     >
       <Card className="w-full max-w-lg">
         <Badge tone="amber">Delete attempt</Badge>
-        <h2 className="mt-4 text-xl font-semibold text-slate-950">
+        <h2 className="mt-4 text-xl font-semibold text-slate-950" id="delete-attempt-title">
           Remove this roleplay attempt?
         </h2>
         <p className="mt-2 text-sm leading-6 text-slate-600">
@@ -325,7 +334,7 @@ function DeleteAttemptDialog({
           </button>
         </div>
       </Card>
-    </div>
+    </dialog>
   );
 }
 

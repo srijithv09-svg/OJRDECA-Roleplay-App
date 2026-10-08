@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import {
@@ -64,6 +64,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const isAuthEntryPage = isLoginPage || isRootPage || isAuthCallbackPage;
   const [authState, setAuthState] = useState<"checking" | "allowed" | "blocked">("checking");
   const [profile, setProfile] = useState<Profile | null>(null);
+  const mobileNavRef = useRef<HTMLElement>(null);
   const visibleNavItems = navItems.filter((item) => !item.adminOnly || isAdminRole(profile?.role));
   const displayName = getProfileDisplayName(profile) ?? profile?.email ?? "Student";
   const profileInitials = getProfileInitials(profile);
@@ -193,6 +194,15 @@ export function AppShell({ children }: { children: ReactNode }) {
     };
   }, [isAuthEntryPage, isLoginPage, router]);
 
+  useEffect(() => {
+    const nav = mobileNavRef.current;
+    const activeLink = nav?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!nav || !activeLink) return;
+    const navBounds = nav.getBoundingClientRect();
+    const linkBounds = activeLink.getBoundingClientRect();
+    nav.scrollLeft += linkBounds.left - navBounds.left - (navBounds.width - linkBounds.width) / 2;
+  }, [pathname, authState]);
+
   async function handleSignOut() {
     const supabase = getSupabaseClient();
 
@@ -288,7 +298,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
           </div>
 
-          <nav aria-label="Main navigation" className="flex gap-1 overflow-x-auto border-t border-border px-3 py-2 lg:hidden">
+          <nav aria-label="Main navigation" className="flex gap-1 overflow-x-auto border-t border-border px-3 py-2 lg:hidden" ref={mobileNavRef}>
             {visibleNavItems.map((item) => {
               const active = isActive(pathname, item.href);
 

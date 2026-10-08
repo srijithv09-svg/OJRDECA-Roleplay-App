@@ -7,7 +7,7 @@
   --card: #ffffff;
   --card-muted: #f0f0ed;
   --border: #dedfda;
-  --border-strong: #a6a9a2;
+  --border-strong: #888d86;
   --primary: #812e3e;
   --primary-text: #812e3e;
   --primary-hover: #672231;
@@ -77,7 +77,7 @@ body {
   color: var(--primary-text);
 }
 
-:where(a, button, input, select, textarea):focus-visible {
+:where(a, button, input, select, textarea, summary):focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 3px;
 }
@@ -127,6 +127,11 @@ body {
 .app-nav-link[aria-current="page"] { background: var(--primary-soft); color: var(--primary-text); font-weight: 600; }
 .skip-link { position: fixed; top: 0.5rem; left: 0.5rem; z-index: 100; transform: translateY(-160%); }
 .skip-link:focus { transform: translateY(0); }
+.exam-progress { appearance: none; display: block; height: 0.375rem; border: 0; border-radius: 999px; overflow: hidden; background: var(--card-muted); accent-color: var(--primary); }
+.exam-progress::-webkit-progress-bar { background: var(--card-muted); }
+.exam-progress::-webkit-progress-value { background: var(--primary); }
+.exam-progress::-moz-progress-bar { background: var(--primary); }
+dialog::backdrop { background: rgb(0 0 0 / 0.5); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
@@ -254,6 +259,8 @@ textarea {
   border-color: var(--border) !important;
   color: var(--foreground) !important;
 }
+
+.dark .ui-field { border-color: var(--border-strong) !important; }
 
 .dark option {
   background-color: var(--card);

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
@@ -85,8 +85,6 @@ export function ExamTakeView() {
         : [],
     [answers, exam],
   );
-  const progressPercentage =
-    exam && exam.questionCount > 0 ? Math.round((answeredCount / exam.questionCount) * 100) : 0;
 
   function retryLoad() {
     setIsLoading(true);
@@ -216,7 +214,7 @@ export function ExamTakeView() {
           <>
             <LinkButton href={`/resources/${exam.resource.id}`}>Resource detail</LinkButton>
             <button
-              className="inline-flex min-h-10 items-center justify-center rounded-md border border-blue-200 bg-blue-50 px-3 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 disabled:text-blue-300"
+              className="ui-button ui-button-secondary"
               disabled={openingPdf}
               onClick={() => void openPdf()}
               type="button"
@@ -226,7 +224,7 @@ export function ExamTakeView() {
           </>
         }
         description="Enter your answers from the exam PDF. Unanswered questions count as incorrect."
-        eyebrow="Take exam"
+        eyebrow="Exam practice"
         title={exam.resource.title}
       />
 
@@ -243,119 +241,61 @@ export function ExamTakeView() {
         />
       ) : null}
 
-      <section className="grid gap-5 xl:grid-cols-[320px_1fr]">
-        <Card>
-          <CardHeader eyebrow="Progress" title="Answer entry" />
-          <div className="space-y-4">
-            <div className="flex flex-wrap gap-2">
-              <Badge tone="blue">{exam.resource.cluster ?? "Cluster TBD"}</Badge>
-              <Badge>{exam.resource.year ?? "Year TBD"}</Badge>
-            </div>
-            <div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-semibold text-slate-800">
-                  {answeredCount} / {exam.questionCount} answered
-                </span>
-                <span className="text-slate-500">{progressPercentage}%</span>
-              </div>
-              <div className="mt-2 h-3 rounded-full bg-slate-100">
-                <div
-                  className="h-3 rounded-full bg-blue-700 transition-all"
-                  style={{ width: `${progressPercentage}%` }}
-                />
-              </div>
-            </div>
-            <div className="rounded-lg bg-slate-50 p-3 text-sm">
-              <p className="font-semibold text-slate-800">Question count</p>
-              <p className="mt-1 text-slate-600">{exam.questionCount}</p>
-            </div>
-            <div className="rounded-lg bg-slate-50 p-3 text-sm">
-              <p className="font-semibold text-slate-800">Unanswered</p>
-              <p
-                className={`mt-1 text-2xl font-bold ${
-                  unansweredCount > 0 ? "text-amber-700" : "text-emerald-700"
-                }`}
-              >
-                {unansweredCount}
-              </p>
-              {unansweredCount > 0 ? (
-                <button
-                  className="mt-3 min-h-9 rounded-md border border-amber-200 bg-white px-3 text-xs font-semibold text-amber-700 transition hover:bg-amber-50"
-                  onClick={scrollToFirstUnanswered}
-                  type="button"
-                >
-                  Review unanswered
-                </button>
-              ) : null}
-            </div>
-            <button
-              className="min-h-11 w-full rounded-md bg-blue-700 px-4 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:bg-blue-300"
-              disabled={isSubmitting}
-              onClick={startSubmitReview}
-              type="button"
-            >
+      <section className="grid items-start gap-5 xl:grid-cols-[15rem_minmax(0,1fr)]">
+        <Card className="xl:sticky xl:top-24">
+          <CardHeader title="Your progress" />
+          <p className="text-sm text-[var(--muted)]">{[exam.resource.cluster, exam.resource.year].filter(Boolean).join(" · ")}</p>
+          <div className="mt-5">
+            <p className="text-sm font-semibold" role="status">{answeredCount} of {exam.questionCount} answered</p>
+            <progress aria-label="Exam answers completed" className="exam-progress mt-3 w-full" max={exam.questionCount} value={answeredCount} />
+            <p className="mt-2 text-sm text-[var(--muted)]">{unansweredCount} unanswered</p>
+          </div>
+          <div className="mt-5 flex flex-col gap-2">
+            {unansweredCount > 0 ? <button className="ui-button ui-button-secondary" onClick={scrollToFirstUnanswered} type="button">Review unanswered</button> : null}
+            <button className="ui-button ui-button-primary" disabled={isSubmitting} onClick={startSubmitReview} type="button">
               {isSubmitting ? "Submitting..." : "Review and submit"}
             </button>
           </div>
         </Card>
 
         <Card>
-          <CardHeader eyebrow="Answers" title="Question grid" />
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <CardHeader title="Answer sheet" />
+          <p className="mb-5 text-sm text-[var(--muted)]">Select one answer for each question in the PDF.</p>
+          <div className="grid gap-x-6 gap-y-2 2xl:grid-cols-2">
             {exam.questions.map((question) => {
               const selectedAnswer = answers[question.question_number];
               const shouldHighlightUnanswered = showUnansweredWarnings && !selectedAnswer;
-
               return (
-                <div
-                  className={`rounded-lg border p-3 shadow-sm transition ${
-                    shouldHighlightUnanswered
-                      ? "border-amber-300 bg-amber-50 ring-2 ring-amber-100"
-                      : selectedAnswer
-                        ? "border-emerald-100 bg-white"
-                        : "border-slate-100 bg-white"
-                  }`}
+                <fieldset
+                  className={`min-w-0 scroll-mt-36 border-b py-3 ${shouldHighlightUnanswered ? "border-amber-300" : "border-border"}`}
                   id={`question-${question.question_number}`}
                   key={question.question_number}
                 >
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <p className="font-semibold text-slate-950">
-                      Question {question.question_number}
-                    </p>
-                    <Badge tone={selectedAnswer ? "green" : "amber"}>
-                      {selectedAnswer ? "Answered" : "Needs answer"}
-                    </Badge>
+                  <legend className="sr-only">Question {question.question_number}</legend>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span aria-hidden="true" className="w-7 shrink-0 text-sm font-semibold tabular-nums">{question.question_number}.</span>
+                    <div className="flex flex-1 gap-1.5 sm:gap-2">
+                      {answerOptions.map((answer) => (
+                        <button
+                          aria-label={`Question ${question.question_number}, answer ${answer}`}
+                          aria-pressed={selectedAnswer === answer}
+                          className={`ui-button min-w-10 flex-1 !px-2 sm:flex-none ${selectedAnswer === answer ? "ui-button-primary" : "ui-button-secondary"}`}
+                          key={answer}
+                          onClick={() => setQuestionAnswer(question.question_number, answer)}
+                          type="button"
+                        >{answer}</button>
+                      ))}
+                    </div>
+                    <button
+                      aria-label={`Clear answer for question ${question.question_number}`}
+                      className="inline-flex min-h-10 items-center text-xs font-medium text-[var(--muted)] hover:text-primary disabled:opacity-40"
+                      disabled={!selectedAnswer}
+                      onClick={() => setQuestionAnswer(question.question_number, undefined)}
+                      type="button"
+                    >Clear</button>
                   </div>
-                  {shouldHighlightUnanswered ? (
-                    <p className="mb-3 rounded-md bg-white px-3 py-2 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">
-                      This question will be marked incorrect if left blank.
-                    </p>
-                  ) : null}
-                  <div className="grid grid-cols-5 gap-2">
-                    {answerOptions.map((answer) => (
-                      <button
-                        className={`min-h-10 rounded-md border px-2 text-sm font-semibold transition ${
-                          selectedAnswer === answer
-                            ? "border-blue-700 bg-blue-700 text-white"
-                            : "border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:text-blue-700"
-                        }`}
-                        aria-pressed={selectedAnswer === answer}
-                        key={answer}
-                        onClick={() => setQuestionAnswer(question.question_number, answer)}
-                        type="button"
-                      >
-                        {answer}
-                      </button>
-                    ))}
-                  </div>
-                  <button
-                    className="mt-3 min-h-9 rounded-md border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-600 transition hover:border-blue-200 hover:text-blue-700"
-                    onClick={() => setQuestionAnswer(question.question_number, undefined)}
-                    type="button"
-                  >
-                    Clear answer
-                  </button>
-                </div>
+                  {shouldHighlightUnanswered ? <p className="mt-2 text-xs text-amber-700">Unanswered — counts as incorrect.</p> : null}
+                </fieldset>
               );
             })}
           </div>
@@ -381,18 +321,26 @@ function SubmitConfirmationDialog({
   unansweredQuestions: number[];
 }) {
   const unansweredCount = unansweredQuestions.length;
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    dialog?.showModal();
+    return () => dialog?.close();
+  }, []);
 
   return (
-    <div
-      aria-modal="true"
-      className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4"
-      role="dialog"
+    <dialog
+      aria-labelledby="submit-exam-title"
+      className="m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-xl overflow-y-auto rounded-md bg-card p-0 text-foreground"
+      onCancel={onCancel}
+      ref={dialogRef}
     >
       <Card className="w-full max-w-xl">
         <Badge tone={unansweredCount > 0 ? "amber" : "green"}>
           {unansweredCount > 0 ? "Review needed" : "Ready to grade"}
         </Badge>
-        <h2 className="mt-4 text-xl font-semibold text-slate-950">
+        <h2 className="mt-4 text-xl font-semibold text-slate-950" id="submit-exam-title">
           Submit this exam for grading?
         </h2>
         <p className="mt-2 text-sm leading-6 text-slate-600">
@@ -419,7 +367,7 @@ function SubmitConfirmationDialog({
 
         <div className="mt-5 flex flex-wrap justify-end gap-2">
           <button
-            className="min-h-10 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
+            className="ui-button ui-button-secondary"
             disabled={isSubmitting}
             onClick={onCancel}
             type="button"
@@ -427,7 +375,7 @@ function SubmitConfirmationDialog({
             Keep editing
           </button>
           <button
-            className="min-h-10 rounded-md bg-blue-700 px-4 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:bg-blue-300"
+            className="ui-button ui-button-primary"
             disabled={isSubmitting}
             onClick={onConfirm}
             type="button"
@@ -436,14 +384,14 @@ function SubmitConfirmationDialog({
           </button>
         </div>
       </Card>
-    </div>
+    </dialog>
   );
 }
 
 function LinkButton({ children, href }: { children: ReactNode; href: string }) {
   return (
     <Link
-      className="inline-flex min-h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
+      className="ui-button ui-button-secondary"
       href={href}
     >
       {children}

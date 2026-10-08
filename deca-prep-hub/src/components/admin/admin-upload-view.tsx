@@ -3,7 +3,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Card, CardHeader } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { isAdminRole } from "@/lib/auth";
 import { decaEvents, getDecaEventByCode } from "@/lib/deca/events";
@@ -14,6 +14,7 @@ import { uploadResourceBatch, type UploadDraft, type UploadProgress, type Upload
 import type { Profile, SupabaseResourceType } from "@/lib/types";
 
 const resourceTypeOptions: SupabaseResourceType[] = ["roleplay", "exam", "reference", "unknown"];
+const typeLabels: Record<SupabaseResourceType, string> = { roleplay: "Roleplay", exam: "Exam", reference: "Reference", unknown: "Unclassified" };
 
 function draftFromFile(file: File): UploadDraft {
   return {
@@ -91,6 +92,7 @@ export function AdminUploadView() {
         }
 
         const selectedEvent = getDecaEventByCode(patch.event_code);
+        const eventWasCleared = patch.event_code !== undefined && !patch.event_code?.trim();
         const nextResourceType = patch.resource_type ?? draft.resource_type;
 
         return {
@@ -99,13 +101,13 @@ export function AdminUploadView() {
           cluster: selectedEvent ? selectedEvent.cluster : patch.cluster ?? draft.cluster,
           event_category: selectedEvent
             ? selectedEvent.category
-            : patch.event_category ?? draft.event_category,
-          event_code: patch.event_code === "" ? null : patch.event_code ?? draft.event_code,
-          event_name: selectedEvent ? selectedEvent.name : patch.event_name ?? draft.event_name,
+            : eventWasCleared ? null : patch.event_category ?? draft.event_category,
+          event_code: patch.event_code !== undefined ? patch.event_code?.trim().toUpperCase() || null : draft.event_code,
+          event_name: selectedEvent ? selectedEvent.name : eventWasCleared ? null : patch.event_name ?? draft.event_name,
           instructional_area:
             nextResourceType !== "roleplay"
               ? null
-              : patch.instructional_area ?? draft.instructional_area,
+              : patch.instructional_area !== undefined ? patch.instructional_area : draft.instructional_area,
           resource_type: nextResourceType,
         };
       }),
@@ -187,26 +189,26 @@ export function AdminUploadView() {
             <LinkButton href="/admin/resources">Review pending resources</LinkButton>
           </>
         }
-        description="Upload PDFs, review detected metadata, and create pending resources for approval."
+        description="Choose your PDFs, check their details, then send them to the approval queue."
         eyebrow="Admin"
-        title="Upload Resource"
+        title="Upload resources"
       />
 
       {error ? (
         <Card className="border-red-200 bg-red-50">
-          <p className="font-semibold text-red-950">Upload issue</p>
-          <p className="mt-2 text-sm leading-6 text-red-800">{error}</p>
+          <p className="font-semibold text-red-950" role="alert">Upload issue: {error}</p>
+
         </Card>
       ) : null}
 
       {uploadResponse ? (
         <Card>
-          <p className="font-semibold text-slate-950">
+          <p className="font-semibold text-slate-950" role="status">
             Uploaded {uploadResponse.uploadedCount} resource
             {uploadResponse.uploadedCount === 1 ? "" : "s"}.
           </p>
           <p className="mt-2 text-sm leading-6 text-slate-700">
-            {uploadResponse.failedCount} failed. New resources are pending until approved.
+            {uploadResponse.failedCount > 0 ? `${uploadResponse.failedCount} failed. Only those files remain below for retry.` : "All files are ready for review."} New resources stay hidden until approved.
           </p>
           {uploadResponse.failedCount > 0 ? (
             <ul className="mt-3 space-y-2 text-sm text-red-800">
@@ -235,200 +237,76 @@ export function AdminUploadView() {
         </Card>
       ) : null}
 
-      <fieldset disabled={isUploading} className="min-w-0 space-y-6">
-        <Card>
-          <CardHeader eyebrow="PDF intake" title="Select files" />
+      <fieldset disabled={isUploading} className="min-w-0 space-y-5">
+        <legend className="sr-only">Choose and review PDF uploads</legend>
+        <section className="rounded-md border border-border bg-card p-4 sm:p-5" aria-labelledby="select-files-title">
+          <h2 className="font-semibold" id="select-files-title">1. Choose PDFs</h2>
           <label
-            className="grid min-h-44 cursor-pointer place-items-center rounded-lg border border-dashed border-blue-300 bg-blue-50 p-6 text-center transition hover:bg-blue-100"
+            className="mt-4 flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-[var(--border-strong)] bg-card-muted p-5 text-center transition hover:border-primary focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-primary"
             onDragOver={(event) => event.preventDefault()}
-            onDrop={(event) => {
-              event.preventDefault();
-              addFiles(event.dataTransfer.files);
-            }}
+            onDrop={(event) => { event.preventDefault(); addFiles(event.dataTransfer.files); }}
           >
-            <input
-              accept="application/pdf,.pdf"
-              className="sr-only"
-              multiple
-              onChange={(event) => {
-                if (event.target.files) {
-                  addFiles(event.target.files);
-                  event.target.value = "";
-                }
-              }}
-              type="file"
-            />
-            <span className="text-base font-semibold text-blue-800">
-              Drop PDFs here or choose files
-            </span>
-            <span className="mt-2 text-sm text-blue-700">
-              PDFs upload one at a time. Resources stay hidden from students until approved.
-            </span>
+            <input accept="application/pdf,.pdf" aria-label="Choose PDF files" className="sr-only" multiple onChange={(event) => { if (event.target.files) { addFiles(event.target.files); event.target.value = ""; } }} type="file" />
+            <span className="font-semibold text-primary">Choose files <span className="font-normal text-[var(--muted-foreground)]">or drop PDFs here</span></span>
+            <span className="mt-2 text-sm text-[var(--muted)]">Select several PDFs at once. Each file uploads separately.</span>
           </label>
-        </Card>
+        </section>
 
         {drafts.length > 0 ? (
-          <Card>
-            <CardHeader eyebrow="Review" title="Detected metadata" />
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1100px] text-left text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 text-xs uppercase tracking-[0.14em] text-slate-500">
-                    <th className="py-3 pr-3">Original filename</th>
-                    <th className="py-3 pr-3">Title</th>
-                    <th className="py-3 pr-3">Type</th>
-                    <th className="py-3 pr-3">Year</th>
-                    <th className="py-3 pr-3">Cluster</th>
-                    <th className="py-3 pr-3">Event code</th>
-                    <th className="py-3 pr-3">Event name</th>
-                    <th className="py-3 pr-3">Category</th>
-                    <th className="py-3 pr-3">Notes</th>
-                    <th className="py-3 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {drafts.map((draft) => (
-                    <tr className="border-b border-slate-100 last:border-b-0" key={draft.id}>
-                      <td className="max-w-56 py-3 pr-3 font-medium text-slate-700">
-                        {draft.original_filename}
-                      </td>
-                      <td className="py-3 pr-3">
-                        <input
-                          className="h-10 w-56 rounded-md border border-slate-200 px-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                          onChange={(event) => updateDraft(draft.id, { title: event.target.value })}
-                          value={draft.title}
-                        />
-                      </td>
-                      <td className="py-3 pr-3">
-                        <select
-                          className="h-10 rounded-md border border-slate-200 bg-white px-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                          onChange={(event) =>
-                            updateDraft(draft.id, {
-                              resource_type: event.target.value as SupabaseResourceType,
-                            })
-                          }
-                          value={draft.resource_type}
-                        >
-                          {resourceTypeOptions.map((type) => (
-                            <option key={type} value={type}>
-                              {type}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="py-3 pr-3">
-                        <input
-                          className="h-10 w-24 rounded-md border border-slate-200 px-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                          onChange={(event) =>
-                            updateDraft(draft.id, {
-                              year: event.target.value ? Number(event.target.value) : null,
-                            })
-                          }
-                          type="number"
-                          value={draft.year ?? ""}
-                        />
-                      </td>
-                      <td className="py-3 pr-3">
-                        <input
-                          className="h-10 w-44 rounded-md border border-slate-200 px-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                          onChange={(event) => updateDraft(draft.id, { cluster: event.target.value })}
-                          value={draft.cluster ?? ""}
-                        />
-                      </td>
-                      <td className="py-3 pr-3">
-                        <select
-                          className="h-10 w-40 rounded-md border border-slate-200 bg-white px-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                          onChange={(event) =>
-                            updateDraft(draft.id, { event_code: event.target.value || null })
-                          }
-                          value={draft.event_code ?? ""}
-                        >
-                          <option value="">No event matched - choose manually</option>
-                          {decaEvents.map((event) => (
-                            <option key={event.code} value={event.code}>
-                              {event.code} - {event.name}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="py-3 pr-3">
-                        <input
-                          className="h-10 w-64 rounded-md border border-slate-200 px-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                          onChange={(event) =>
-                            updateDraft(draft.id, { event_name: event.target.value })
-                          }
-                          value={draft.event_name ?? ""}
-                        />
-                      </td>
-                      <td className="py-3 pr-3">
-                        <input
-                          className="h-10 w-52 rounded-md border border-slate-200 px-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                          onChange={(event) =>
-                            updateDraft(draft.id, { event_category: event.target.value })
-                          }
-                          value={draft.event_category ?? ""}
-                        />
-                      </td>
-                      <td className="max-w-64 py-3 pr-3 text-xs leading-5 text-slate-500">
-                        {draft.import_notes} Confidence: {Math.round(draft.confidence_score * 100)}%
-                      </td>
-                      <td className="py-3 text-right">
-                        <button
-                          className="min-h-10 rounded-md border border-red-200 bg-white px-3 text-sm font-semibold text-red-700 transition hover:bg-red-50"
-                          onClick={() => removeDraft(draft.id)}
-                          type="button"
-                        >
-                          Remove
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          <section aria-labelledby="review-files-title" className="overflow-hidden rounded-md border border-border bg-card">
+            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border p-4 sm:p-5">
+              <div>
+                <h2 className="font-semibold" id="review-files-title">2. Review {drafts.length} {drafts.length === 1 ? "file" : "files"}</h2>
+                <p className="mt-1 text-sm text-[var(--muted)]">Check the title and resource type. Open more details to adjust the event, cluster, or year.</p>
+              </div>
+              <button className="ui-button ui-button-secondary" onClick={() => { setDrafts([]); setUploadResponse(null); }} type="button">Clear files</button>
             </div>
-
-            <div className="mt-5 flex flex-wrap justify-end gap-2">
-              <button
-                className="min-h-11 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
-                onClick={() => {
-                  setDrafts([]);
-                  setUploadResponse(null);
-                }}
-                type="button"
-              >
-                Clear
-              </button>
-              <button
-                className="min-h-11 rounded-md bg-blue-700 px-4 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300"
-                disabled={!canUpload || isUploading}
-                onClick={() => void uploadDrafts()}
-                type="button"
-              >
-                {isUploading ? "Uploading..." : "Upload and create pending resources"}
-              </button>
+            <div className="divide-y divide-[var(--border)]">
+              {drafts.map((draft, index) => (
+                <UploadDraftCard draft={draft} index={index} key={draft.id} onRemove={() => removeDraft(draft.id)} onUpdate={(patch) => updateDraft(draft.id, patch)} />
+              ))}
             </div>
-          </Card>
+            <div className="flex flex-col gap-3 border-t border-border bg-card-muted p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+              <p className="text-sm text-[var(--muted-foreground)]">{canUpload ? "Files will be pending until you approve them." : "Add a title to every file before uploading."}</p>
+              <button className="ui-button ui-button-primary shrink-0" disabled={!canUpload || isUploading} onClick={() => void uploadDrafts()} type="button">{isUploading ? "Uploading…" : uploadResponse?.failedCount ? `Retry ${drafts.length} ${drafts.length === 1 ? "file" : "files"}` : `Upload ${drafts.length} ${drafts.length === 1 ? "file" : "files"}`}</button>
+            </div>
+          </section>
         ) : null}
       </fieldset>
     </>
   );
 }
 
-function LinkButton({
-  children,
-  className,
-  href,
-}: {
-  children: ReactNode;
-  className?: string;
-  href: string;
-}) {
+function UploadDraftCard({ draft, index, onRemove, onUpdate }: { draft: UploadDraft; index: number; onRemove: () => void; onUpdate: (patch: Partial<DetectedResourceMetadata>) => void }) {
   return (
-    <Link
-      className={`inline-flex min-h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700 ${className ?? ""}`}
-      href={href}
-    >
-      {children}
-    </Link>
+    <article className="min-w-0 space-y-4 p-4 sm:p-5" aria-label={`File ${index + 1}: ${draft.original_filename}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="break-all text-xs text-[var(--muted)]">{draft.original_filename}</p>
+          <p className="mt-1 text-xs text-[var(--muted)]">{(draft.file.size / 1024 / 1024).toFixed(2)} MB</p>
+        </div>
+        <button aria-label={`Remove ${draft.original_filename}`} className="ui-button ui-button-secondary shrink-0" onClick={onRemove} type="button">Remove</button>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_180px]">
+        <label className="ui-label">Title<input className="ui-field" onChange={(event) => onUpdate({ title: event.target.value })} required value={draft.title} /></label>
+        <label className="ui-label">Resource type<select className="ui-field" onChange={(event) => onUpdate({ resource_type: event.target.value as SupabaseResourceType })} value={draft.resource_type}>{resourceTypeOptions.map((type) => <option key={type} value={type}>{typeLabels[type]}</option>)}</select></label>
+      </div>
+      {draft.resource_type === "reference" ? <p className="text-sm text-[var(--muted-foreground)]">This document will appear in Reference once approved.</p> : draft.resource_type === "unknown" ? <p className="text-sm text-amber-800">Choose a resource type so students can find this document.</p> : null}
+      <details>
+        <summary className="w-fit cursor-pointer py-1 text-sm font-medium text-[var(--muted-foreground)]">More details<span className="ml-2 font-normal text-[var(--muted)]">{[draft.event_code, draft.cluster, draft.year].filter(Boolean).join(" · ")}</span></summary>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <label className="ui-label sm:col-span-2">Event<select className="ui-field" onChange={(event) => onUpdate({ event_code: event.target.value })} value={draft.event_code ?? ""}><option value="">No specific event</option>{decaEvents.map((event) => <option key={event.code} value={event.code}>{event.code} — {event.name}</option>)}</select></label>
+          <label className="ui-label">Year<input className="ui-field" onChange={(event) => onUpdate({ year: event.target.value ? Number(event.target.value) : null })} type="number" value={draft.year ?? ""} /></label>
+          <label className="ui-label">Cluster<input className="ui-field" onChange={(event) => onUpdate({ cluster: event.target.value })} value={draft.cluster ?? ""} /></label>
+          <label className="ui-label">Event name<input className="ui-field" onChange={(event) => onUpdate({ event_name: event.target.value })} value={draft.event_name ?? ""} /></label>
+          <label className="ui-label">Event category<input className="ui-field" onChange={(event) => onUpdate({ event_category: event.target.value })} value={draft.event_category ?? ""} /></label>
+          {draft.resource_type === "roleplay" ? <label className="ui-label sm:col-span-2 lg:col-span-3">Instructional area<input className="ui-field" onChange={(event) => onUpdate({ instructional_area: event.target.value })} value={draft.instructional_area ?? ""} /></label> : null}
+        </div>
+      </details>
+    </article>
   );
+}
+
+function LinkButton({ children, className, href }: { children: ReactNode; className?: string; href: string }) {
+  return <Link className={`ui-button ui-button-secondary ${className ?? ""}`} href={href}>{children}</Link>;
 }
