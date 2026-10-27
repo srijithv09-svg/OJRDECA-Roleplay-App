@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { DECA_EXAM_QUESTION_COUNT, getExamKeyStatus } from "@/lib/exams/answer-key-status";
-import { requireAuthenticatedSchoolUser } from "@/lib/server/api-auth";
+import { requireAuthenticatedUser } from "@/lib/server/api-auth";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import type { ExamCorrectAnswer, ExamSelectedAnswer } from "@/lib/types";
 
@@ -62,7 +62,7 @@ function parseSubmittedAnswers(payload: unknown) {
 }
 
 export async function POST(request: Request, context: RouteContext) {
-  const { error: authError, user } = await requireAuthenticatedSchoolUser(request);
+  const { error: authError, user } = await requireAuthenticatedUser(request);
 
   if (authError || !user) {
     return NextResponse.json({ error: authError }, { status: 401 });

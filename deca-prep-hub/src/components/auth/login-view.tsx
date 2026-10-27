@@ -3,7 +3,6 @@
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
-import { DOMAIN_ERROR_MESSAGE, SCHOOL_EMAIL_DOMAIN } from "@/lib/auth";
 import { getSiteOrigin } from "@/lib/site-url";
 import { getSupabaseClient } from "@/lib/supabase/client";
 
@@ -13,7 +12,6 @@ export function LoginView() {
   const [error, setError] = useState<string | null>(null);
   const loginError = searchParams.get("error");
   const callbackErrorMessage = searchParams.get("message");
-  const domainError = loginError === "domain" || loginError === "unauthorized_domain";
   const authError = loginError === "auth" || loginError === "auth_callback_failed";
 
   useEffect(() => {
@@ -36,9 +34,6 @@ export function LoginView() {
 
     const { error: signInError } = await supabase.auth.signInWithOAuth({
       options: {
-        queryParams: {
-          hd: SCHOOL_EMAIL_DOMAIN.replace("@", ""),
-        },
         redirectTo,
       },
       provider: "google",
@@ -64,7 +59,7 @@ export function LoginView() {
             OJR DECA Prep Database
           </h1>
           <p className="mt-4 text-base leading-7 text-slate-600">
-            Sign in with your Owen J. Roberts school Google account to access
+            Sign in with your Google account to access
             uploaded exams, roleplay scenarios, and cluster reference materials.
           </p>
           <div className="mt-6 grid gap-3 text-sm text-slate-600 sm:grid-cols-3">
@@ -86,12 +81,6 @@ export function LoginView() {
               <p className="mt-1 text-sm text-slate-500">Owen J. Roberts DECA portal</p>
             </div>
           </div>
-
-          {domainError ? (
-            <div className="mt-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm font-medium leading-6 text-red-800">
-              {DOMAIN_ERROR_MESSAGE}
-            </div>
-          ) : null}
 
           {authError ? (
             <div className="mt-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm font-medium leading-6 text-red-800">
@@ -118,7 +107,7 @@ export function LoginView() {
           </button>
 
           <p className="mt-4 text-sm leading-6 text-slate-500">
-            Access is limited to email addresses ending in {SCHOOL_EMAIL_DOMAIN}.
+            Any Google account can sign in. An OJR school email is not required.
           </p>
         </div>
       </section>

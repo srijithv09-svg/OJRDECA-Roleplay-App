@@ -7,7 +7,7 @@ import type { ExamAttempt, ExamAttemptAnswer, ResourceListItem, RoleplayAttempt 
 loadEnvConfig(process.cwd());
 const baseURL = "http://localhost:3103";
 const host = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).hostname;
-const user = { id: "00000000-0000-0000-0000-000000000001", email: "fixture@ojrsd.net", aud: "authenticated", role: "authenticated", app_metadata: {}, user_metadata: {} };
+const user = { id: "00000000-0000-0000-0000-000000000001", email: "fixture@gmail.com", aud: "authenticated", role: "authenticated", app_metadata: {}, user_metadata: {} };
 const profile = { ...user, role: "student", selected_cluster: null, created_at: "2026-10-01T00:00:00Z", updated_at: null };
 const resource = (id: string, title: string, type: ResourceListItem["resource_type"], status = "approved"): ResourceListItem => ({
   id, title, resource_type: type, approval_status: status, cluster: "Marketing", event_code: type === "roleplay" ? "MCS" : null,

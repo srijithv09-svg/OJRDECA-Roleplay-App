@@ -6,12 +6,7 @@ import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
-import {
-  DOMAIN_ERROR_MESSAGE,
-  getRoleLabel,
-  isAdminRole,
-  isAllowedSchoolEmail,
-} from "@/lib/auth";
+import { getRoleLabel, isAdminRole } from "@/lib/auth";
 import { getProfileDisplayName, getProfileInitials } from "@/lib/profile-display";
 import { getCurrentProfile } from "@/lib/services/profiles";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -92,20 +87,6 @@ export function AppShell({ children }: { children: ReactNode }) {
         return;
       }
 
-      const email = session.user.email;
-
-      if (!isAllowedSchoolEmail(email)) {
-        await supabase.auth.signOut();
-
-        if (!isActive) {
-          return;
-        }
-
-        setAuthState(isAuthEntryPage ? "allowed" : "blocked");
-        router.replace(`/login?error=domain`);
-        return;
-      }
-
       try {
         const nextProfile = await getCurrentProfile();
 
@@ -150,17 +131,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           router.replace("/login");
         }
 
-        return;
-      }
-
-      if (!isAllowedSchoolEmail(session.user.email)) {
-        void supabase.auth.signOut().finally(() => {
-          if (isActive) {
-            setProfile(null);
-            setAuthState(isAuthEntryPage ? "allowed" : "blocked");
-            router.replace("/login?error=domain");
-          }
-        });
         return;
       }
 
@@ -223,7 +193,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (authState !== "allowed") {
     return (
       <FullPageAuthState
-        detail={authState === "blocked" ? DOMAIN_ERROR_MESSAGE : "Signing you in..."}
+        detail={authState === "blocked" ? "Please sign in to continue." : "Signing you in..."}
       />
     );
   }

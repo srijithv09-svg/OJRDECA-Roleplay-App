@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isDecaClusterPreference } from "@/lib/deca/clusters";
-import { requireAuthenticatedSchoolUser } from "@/lib/server/api-auth";
+import { requireAuthenticatedUser } from "@/lib/server/api-auth";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 
 type RequestBody = {
@@ -8,7 +8,7 @@ type RequestBody = {
 };
 
 export async function PATCH(request: Request) {
-  const { error: authError, user } = await requireAuthenticatedSchoolUser(request);
+  const { error: authError, user } = await requireAuthenticatedUser(request);
 
   if (authError || !user) {
     return NextResponse.json({ error: authError ?? "Authentication required." }, { status: 401 });

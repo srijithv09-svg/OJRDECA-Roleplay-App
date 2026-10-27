@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAuthenticatedSchoolUser } from "@/lib/server/api-auth";
+import { requireAuthenticatedUser } from "@/lib/server/api-auth";
 import { buildStudentAnalytics } from "@/lib/server/exam-analytics";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import type {
@@ -10,7 +10,7 @@ import type {
 } from "@/lib/types";
 
 export async function GET(request: Request) {
-  const { error: authError, user } = await requireAuthenticatedSchoolUser(request);
+  const { error: authError, user } = await requireAuthenticatedUser(request);
 
   if (authError || !user) {
     return NextResponse.json({ error: authError }, { status: 401 });

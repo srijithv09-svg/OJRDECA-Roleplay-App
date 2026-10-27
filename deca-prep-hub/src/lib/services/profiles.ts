@@ -1,4 +1,3 @@
-import { isAllowedSchoolEmail } from "@/lib/auth";
 import type { DecaClusterPreference } from "@/lib/deca/clusters";
 import { getFriendlyErrorMessage, logDeveloperError } from "@/lib/errors";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -75,11 +74,6 @@ export async function getCurrentProfile(): Promise<Profile | null> {
     return null;
   }
 
-  if (!isAllowedSchoolEmail(user.email)) {
-    await supabase.auth.signOut();
-    return null;
-  }
-
   const { data, error } = await supabase.rpc("ensure_current_profile");
 
   if (error) {
@@ -103,11 +97,6 @@ export async function getCurrentOwnProfile(): Promise<Profile | null> {
   }
 
   if (!user) {
-    return null;
-  }
-
-  if (!isAllowedSchoolEmail(user.email)) {
-    await supabase.auth.signOut();
     return null;
   }
 

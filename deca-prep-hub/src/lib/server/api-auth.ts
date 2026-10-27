@@ -1,4 +1,4 @@
-import { isAdminRole, isAllowedSchoolEmail } from "@/lib/auth";
+import { isAdminRole } from "@/lib/auth";
 import { getSupabaseAdminClient, getSupabaseServerClient } from "@/lib/supabase/server";
 import type { Profile } from "@/lib/types";
 
@@ -33,7 +33,7 @@ export function getBearerToken(request: Request) {
   return match?.[1] ?? null;
 }
 
-export async function requireAuthenticatedSchoolUser(request: Request) {
+export async function requireAuthenticatedUser(request: Request) {
   const token = getBearerToken(request);
 
   if (!token) {
@@ -50,15 +50,11 @@ export async function requireAuthenticatedSchoolUser(request: Request) {
     };
   }
 
-  if (!isAllowedSchoolEmail(data.user.email)) {
-    return { error: "A valid @ojrsd.net account is required.", user: null };
-  }
-
   return { error: null, user: data.user };
 }
 
 export async function requireAdminRequester(request: Request) {
-  const { error: authError, user } = await requireAuthenticatedSchoolUser(request);
+  const { error: authError, user } = await requireAuthenticatedUser(request);
 
   if (authError || !user) {
     return {

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getExamKeyStatus } from "@/lib/exams/answer-key-status";
-import { requireAuthenticatedSchoolUser } from "@/lib/server/api-auth";
+import { requireAuthenticatedUser } from "@/lib/server/api-auth";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 
 type RouteContext = {
@@ -8,7 +8,7 @@ type RouteContext = {
 };
 
 export async function GET(request: Request, context: RouteContext) {
-  const { error: authError } = await requireAuthenticatedSchoolUser(request);
+  const { error: authError } = await requireAuthenticatedUser(request);
 
   if (authError) {
     return NextResponse.json({ error: authError }, { status: 401 });

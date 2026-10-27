@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getFriendlyErrorMessage, logDeveloperError } from "@/lib/errors";
-import { requireAuthenticatedSchoolUser } from "@/lib/server/api-auth";
+import { requireAuthenticatedUser } from "@/lib/server/api-auth";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import type { RoleplayAttemptInput, RoleplayAttemptSummary } from "@/lib/types";
 
@@ -75,7 +75,7 @@ function toSummary(row: {
 }
 
 export async function GET(request: Request, context: RouteContext) {
-  const { error: authError, user } = await requireAuthenticatedSchoolUser(request);
+  const { error: authError, user } = await requireAuthenticatedUser(request);
 
   if (authError || !user) {
     return NextResponse.json({ error: authError }, { status: 401 });
@@ -125,7 +125,7 @@ export async function GET(request: Request, context: RouteContext) {
 }
 
 export async function POST(request: Request, context: RouteContext) {
-  const { error: authError, user } = await requireAuthenticatedSchoolUser(request);
+  const { error: authError, user } = await requireAuthenticatedUser(request);
 
   if (authError || !user) {
     return NextResponse.json({ error: authError }, { status: 401 });

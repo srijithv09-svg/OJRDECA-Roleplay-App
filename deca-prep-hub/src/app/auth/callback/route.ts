@@ -1,10 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { isAllowedSchoolEmail } from "@/lib/auth";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 function redirectToLogin(
   request: NextRequest,
-  error: "auth_callback_failed" | "unauthorized_domain",
+  error: "auth_callback_failed",
   message?: string,
 ) {
   const url = new URL("/login", request.url);
@@ -54,11 +53,6 @@ export async function GET(request: NextRequest) {
       "auth_callback_failed",
       userError?.message ?? "No user was returned after Google sign-in.",
     );
-  }
-
-  if (!isAllowedSchoolEmail(user.email)) {
-    await supabase.auth.signOut();
-    return redirectToLogin(request, "unauthorized_domain");
   }
 
   const { error: profileError } = await supabase.rpc("ensure_current_profile");

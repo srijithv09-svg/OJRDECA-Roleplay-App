@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { sanitizeStorageFilename } from "@/lib/resources/metadata-detection";
 import { normalizeResourceUploadMetadata, type UploadMetadataInput } from "@/lib/resources/upload-metadata";
 import { isAdminRole } from "@/lib/auth";
-import { requireAuthenticatedSchoolUser } from "@/lib/server/api-auth";
+import { requireAuthenticatedUser } from "@/lib/server/api-auth";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import type { ResourceListItem } from "@/lib/types";
 
@@ -48,7 +48,7 @@ async function verifyAdmin(userId: string) {
 }
 
 export async function POST(request: Request) {
-  const { error: authError, user } = await requireAuthenticatedSchoolUser(request);
+  const { error: authError, user } = await requireAuthenticatedUser(request);
 
   if (authError || !user) {
     return NextResponse.json({ error: authError ?? "Unauthorized." }, { status: 401 });

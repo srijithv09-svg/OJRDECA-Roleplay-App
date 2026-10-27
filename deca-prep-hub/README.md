@@ -8,7 +8,7 @@ The Owen J. Roberts DECA chapter's preparation library for uploaded exams, rolep
 - **Reference:** approved performance indicator documents, cluster guides, and other uploaded materials, searchable by topic and filterable by cluster/year.
 - **Management:** admins and advisors upload PDFs, review metadata, approve resources, create answer keys, and manage account roles.
 
-Access requires a school Google account ending in `@ojrsd.net`. Students see approved materials and their own attempts. The app contains no AI generation, extraction, or feedback functionality.
+Access requires a Google account; any email domain is accepted. Students see approved materials and their own attempts. The app contains no AI generation, extraction, or feedback functionality.
 
 ## Development
 
@@ -32,6 +32,6 @@ npm run check:db
 npm run smoke:routes
 ```
 
-The last check needs a running server; set `SMOKE_BASE_URL` for a different port. It checks active routes, removed routes, and unauthenticated API guards. Authenticated upload/approval/practice flows still require a school account.
+The last check needs a running server; set `SMOKE_BASE_URL` for a different port. It checks active routes, removed routes, and unauthenticated API guards. Authenticated practice flows require a Google account; upload and approval require an admin or advisor role.
 
 Historical migrations are retained to preserve existing databases. Removing learning and AI code does not delete saved database records or uploaded files. No new migration is needed for this simplification.

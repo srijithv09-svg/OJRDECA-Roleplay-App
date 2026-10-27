@@ -35,7 +35,7 @@ Environment: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_
 ## Authentication and permissions
 
 - Preserve Google OAuth with `@supabase/ssr` PKCE cookie storage and server `/auth/callback` code exchange.
-- Only `@ojrsd.net` accounts may use the app. Never expose the service role key in browser code or a `NEXT_PUBLIC_*` variable.
+- Google accounts from any email domain may use the app; an OJR school email is not required. New profiles start as students. Never expose the service role key in browser code or a `NEXT_PUBLIC_*` variable.
 - Use `isAdminRole(role)` for management gates; both `admin` and `advisor` have the same current management privileges. Students cannot upload, approve, edit answer keys, or manage roles.
 - Sensitive operations verify the requesting user on the server before using privileged clients. Never trust user-editable metadata for authorization.
 - Use the current user's own profile for access checks. Avoid recursive profiles RLS policies; admin-wide user operations use server routes.
